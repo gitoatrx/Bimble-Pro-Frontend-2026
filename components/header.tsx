@@ -3,17 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const router = useRouter();
-
-  function openClinicOnboarding() {
-    setMobileMenuOpen(false);
-    router.push("/onboarding");
-  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-card/80 backdrop-blur-md">
@@ -45,6 +38,12 @@ export function Header() {
             >
               For Clinics
             </Link>
+            <Link
+              href="/login"
+              className="text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
+            >
+              Clinic Login
+            </Link>
           </nav>
 
           <div className="hidden items-center gap-3 md:flex">
@@ -54,12 +53,13 @@ export function Header() {
             >
               Book Demo
             </Button>
-            <Button
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={openClinicOnboarding}
+            <Link
+              href="/onboarding"
+              onClick={() => setMobileMenuOpen(false)}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Clinic Register
-            </Button>
+            </Link>
           </div>
 
           <button
@@ -96,6 +96,13 @@ export function Header() {
               >
                 For Clinics
               </Link>
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
+              >
+                Clinic Login
+              </Link>
               <div className="flex flex-col gap-2 pt-4">
                 <Button
                   variant="outline"
@@ -103,12 +110,13 @@ export function Header() {
                 >
                   Book Demo
                 </Button>
-                <Button
-                  className="w-full bg-primary text-primary-foreground"
-                  onClick={openClinicOnboarding}
+                <Link
+                  href="/onboarding"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  Clinic LogIn
-                </Button>
+                  Clinic Register
+                </Link>
               </div>
             </nav>
           </div>

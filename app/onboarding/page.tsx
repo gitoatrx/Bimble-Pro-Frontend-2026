@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { GooglePlacesAddressInput } from "@/components/clinic-access/google-places-address-input";
 import { FieldError } from "@/components/clinic-access/field-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { submitClinicLogin, submitClinicOnboarding } from "@/lib/api/clinic";
+import { submitClinicOnboarding } from "@/lib/api/clinic";
+import {
+  readClinicOnboardingState,
+  storeClinicCredentials,
+  storeClinicOnboardingState,
+} from "@/lib/clinic/session";
 import {
   clinicTypeOptions,
   formatPhoneNumber,
@@ -20,7 +25,6 @@ import {
 } from "@/lib/clinic/onboarding";
 import type {
   ClinicAddressSelection,
-  ClinicCredentials,
   ClinicOnboardingFormData,
   FieldErrors,
   OnboardingStepKey,
@@ -56,12 +60,18 @@ export default function ClinicOnboardingPage() {
     {},
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [credentials, setCredentials] = useState<ClinicCredentials | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showPin, setShowPin] = useState(false);
+
+  useEffect(() => {
+    const storedState = readClinicOnboardingState();
+
+    if (!storedState) {
+      return;
+    }
+
+    setStep(storedState.step);
+    setFormData(storedState.formData);
+  }, []);
 
   function setField<K extends keyof ClinicOnboardingFormData>(
     field: K,
@@ -70,7 +80,6 @@ export default function ClinicOnboardingPage() {
     setFormData((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: "" }));
     setSubmitError("");
-    setLoginError("");
   }
 
   function getStepIndex(currentStep: OnboardingStepKey) {
@@ -105,35 +114,6 @@ export default function ClinicOnboardingPage() {
       postalCode: "",
     }));
     setSubmitError("");
-    setLoginError("");
-  }
-
-  async function handleGoToLogin() {
-    if (!credentials) {
-      return;
-    }
-
-    setIsLoggingIn(true);
-    setLoginError("");
-
-    try {
-      const loginResponse = await submitClinicLogin(credentials);
-      const redirectUrl = loginResponse.bootstrapUrl || loginResponse.appUrl;
-
-      if (!redirectUrl) {
-        throw new Error("Clinic login succeeded, but no redirect URL was returned.");
-      }
-
-      window.location.assign(redirectUrl);
-    } catch (error) {
-      setLoginError(
-        error instanceof Error
-          ? error.message
-          : "We could not log the clinic in right now. Please try again.",
-      );
-    } finally {
-      setIsLoggingIn(false);
-    }
   }
 
   async function handleContinue() {
@@ -157,9 +137,12 @@ export default function ClinicOnboardingPage() {
 
     try {
       const nextCredentials = await submitClinicOnboarding(formData);
-      setShowPassword(false);
-      setShowPin(false);
-      setCredentials(nextCredentials);
+      storeClinicOnboardingState({
+        step,
+        formData,
+      });
+      storeClinicCredentials(nextCredentials);
+      window.location.assign("/login");
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -410,138 +393,12 @@ export default function ClinicOnboardingPage() {
     );
   }
 
-  function renderCredentialsCard() {
-    if (!credentials) {
-      return null;
-    }
-
-    return (
-      <div className="max-w-xl space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-900">
-              Clinic Name
-            </label>
-            <Input
-              value={credentials.clinicName}
-              readOnly
-              className={neutralFieldClassName}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-slate-900">
-              Username
-            </label>
-            <Input
-              value={credentials.username}
-              readOnly
-              className={neutralFieldClassName}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <label className="block text-sm font-medium text-slate-900">
-                Password
-              </label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-auto px-0 text-primary hover:bg-transparent hover:text-primary/80"
-                onClick={() => setShowPassword((current) => !current)}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-                {showPassword ? "Hide" : "Show"}
-              </Button>
-            </div>
-            <Input
-              type={showPassword ? "text" : "password"}
-              value={credentials.password}
-              readOnly
-              className={neutralFieldClassName}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <label className="block text-sm font-medium text-slate-900">
-                PIN
-              </label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-auto px-0 text-primary hover:bg-transparent hover:text-primary/80"
-                onClick={() => setShowPin((current) => !current)}
-              >
-                {showPin ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-                {showPin ? "Hide" : "Show"}
-              </Button>
-            </div>
-            <Input
-              type={showPin ? "text" : "password"}
-              value={credentials.pin}
-              readOnly
-              className={neutralFieldClassName}
-            />
-          </div>
-        </div>
-
-        <FieldError message={loginError} />
-
-        <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 sm:min-w-36"
-            onClick={() => {
-              setShowPassword(false);
-              setShowPin(false);
-              setCredentials(null);
-            }}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-
-          <Button
-            type="button"
-            className="h-12 flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => {
-              void handleGoToLogin();
-            }}
-            disabled={isLoggingIn}
-          >
-            {isLoggingIn ? "Logging in..." : "Login"}
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   const isFirstStep = step === onboardingStepOrder[0];
   const isFinalStep = step === onboardingStepOrder[onboardingStepOrder.length - 1];
-  const activeStepIndex = credentials
-    ? onboardingStepOrder.length - 1
-    : getStepIndex(step);
+  const activeStepIndex = getStepIndex(step);
   const progressWidth = `${((activeStepIndex + 1) / onboardingStepOrder.length) * 100}%`;
-  const currentStepTitle = credentials
-    ? "Clinic access"
-    : onboardingStepTitles[step];
-  const currentStepHelper = credentials
-    ? "Review the generated login details."
-    : onboardingStepHelpers[step];
+  const currentStepTitle = onboardingStepTitles[step];
+  const currentStepHelper = onboardingStepHelpers[step];
 
   return (
     <ClinicFlowShell backHref="/" backLabel="Back to home">
@@ -563,56 +420,52 @@ export default function ClinicOnboardingPage() {
         </div>
       </div>
 
-      {credentials ? (
-        renderCredentialsCard()
-      ) : (
-        <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <form
-            className="space-y-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void handleContinue();
-            }}
-          >
-            {renderStepFields()}
+      <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <form
+          className="space-y-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleContinue();
+          }}
+        >
+          {renderStepFields()}
 
-            <FieldError message={submitError} />
+          <FieldError message={submitError} />
 
-            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-              {!isFirstStep ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-12 sm:min-w-32"
-                  onClick={handleBack}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Back
-                </Button>
-              ) : null}
-
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+            {!isFirstStep ? (
               <Button
-                type="submit"
-                className="h-12 flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-                disabled={isSubmitting}
+                type="button"
+                variant="outline"
+                className="h-12 sm:min-w-32"
+                onClick={handleBack}
               >
-                {isFinalStep ? (
-                  isSubmitting ? (
-                    "Submitting..."
-                  ) : (
-                    "Submit onboarding"
-                  )
-                ) : (
-                  <>
-                    Continue
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
+                <ArrowLeft className="h-4 w-4" />
+                Back
               </Button>
-            </div>
-          </form>
-        </div>
-      )}
+            ) : null}
+
+            <Button
+              type="submit"
+              className="h-12 flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+              disabled={isSubmitting}
+            >
+              {isFinalStep ? (
+                isSubmitting ? (
+                  "Submitting..."
+                ) : (
+                  "Submit onboarding"
+                )
+              ) : (
+                <>
+                  Continue
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </div>
     </ClinicFlowShell>
   );
 }
