@@ -1,5 +1,30 @@
 export type OnboardingStepKey = "clinic" | "location" | "operations";
 
+export type ClinicPlanId = "standard" | "premium";
+
+export type ClinicPlan = {
+  id: ClinicPlanId;
+  name: string;
+  subtitle: string;
+  priceLabel: string;
+  billingInterval: string;
+  trialDays: number;
+  features: string[];
+  recommended?: boolean;
+};
+
+export type ClinicBillingFormData = {
+  cardholderName: string;
+  cardNumber: string;
+  expiryDate: string;
+  cvc: string;
+  billingPostalCode: string;
+};
+
+export type ClinicBillingState = {
+  billingToken: string;
+};
+
 export type ClinicOnboardingFormData = {
   clinicLegalName: string;
   clinicDisplayName: string;
@@ -41,6 +66,8 @@ export type ClinicRegisterRequest = {
   phone_number: string;
   clinic_type: string;
   services_provided: string[];
+  plan_id: ClinicPlanId;
+  billing_token: string;
 };
 
 export type ClinicRegisterResponse = {

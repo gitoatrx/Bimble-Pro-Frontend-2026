@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { submitClinicOnboarding } from "@/lib/api/clinic";
 import {
+  readClinicBillingState,
   readClinicOnboardingState,
+  readClinicSelectedPlan,
   storeClinicCredentials,
   storeClinicOnboardingState,
 } from "@/lib/clinic/session";
@@ -24,8 +26,10 @@ import {
   validateClinicOnboardingStep,
 } from "@/lib/clinic/onboarding";
 import type {
+  ClinicBillingState,
   ClinicAddressSelection,
   ClinicOnboardingFormData,
+  ClinicPlan,
   FieldErrors,
   OnboardingStepKey,
 } from "@/lib/clinic/types";
@@ -61,17 +65,51 @@ export default function ClinicOnboardingPage() {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState<ClinicPlan | null>(null);
+  const [billingState, setBillingState] = useState<ClinicBillingState | null>(
+    null,
+  );
+  const [isFlowReady, setIsFlowReady] = useState(false);
 
   useEffect(() => {
+    const storedPlan = readClinicSelectedPlan();
+    const storedBillingState = readClinicBillingState();
+
+    if (!storedPlan) {
+      window.location.replace("/onboarding/plan");
+      return;
+    }
+
+    if (!storedBillingState) {
+      window.location.replace("/onboarding/billing");
+      return;
+    }
+
+    setSelectedPlan(storedPlan);
+    setBillingState(storedBillingState);
+
     const storedState = readClinicOnboardingState();
 
     if (!storedState) {
+      setIsFlowReady(true);
       return;
     }
 
     setStep(storedState.step);
     setFormData(storedState.formData);
+    setIsFlowReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!isFlowReady) {
+      return;
+    }
+
+    storeClinicOnboardingState({
+      step,
+      formData,
+    });
+  }, [formData, isFlowReady, step]);
 
   function setField<K extends keyof ClinicOnboardingFormData>(
     field: K,
@@ -136,7 +174,14 @@ export default function ClinicOnboardingPage() {
     setSubmitError("");
 
     try {
-      const nextCredentials = await submitClinicOnboarding(formData);
+      if (!selectedPlan || !billingState) {
+        throw new Error("Clinic billing details are missing. Please restart the flow.");
+      }
+
+      const nextCredentials = await submitClinicOnboarding(formData, {
+        planId: selectedPlan.id,
+        billingToken: billingState.billingToken,
+      });
       storeClinicOnboardingState({
         step,
         formData,
@@ -400,8 +445,20 @@ export default function ClinicOnboardingPage() {
   const currentStepTitle = onboardingStepTitles[step];
   const currentStepHelper = onboardingStepHelpers[step];
 
+  if (!isFlowReady) {
+    return (
+      <ClinicFlowShell backHref="/onboarding/billing" backLabel="Back to billing">
+        <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <p className="text-sm leading-6 text-slate-600">
+            Preparing clinic setup...
+          </p>
+        </div>
+      </ClinicFlowShell>
+    );
+  }
+
   return (
-    <ClinicFlowShell backHref="/" backLabel="Back to home">
+    <ClinicFlowShell backHref="/onboarding/billing" backLabel="Back to billing">
       <div className="mb-6 max-w-xl space-y-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
@@ -418,6 +475,17 @@ export default function ClinicOnboardingPage() {
             style={{ width: progressWidth }}
           />
         </div>
+
+        {selectedPlan ? (
+          <div className="flex flex-wrap gap-2 pt-2 text-xs text-slate-600">
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 shadow-sm">
+              Plan: {selectedPlan.name}
+            </span>
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 shadow-sm">
+              {selectedPlan.trialDays}-day trial active
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

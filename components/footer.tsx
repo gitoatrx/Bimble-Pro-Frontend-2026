@@ -60,7 +60,7 @@ export function Footer() {
             <ul className="space-y-3">
               <li>
                 <Link
-                  href="#"
+                  href="/onboarding/plan"
                   className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
                   Clinic Onboarding
@@ -68,7 +68,7 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="#"
+                  href="/login"
                   className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
                   Provider Login

@@ -8,12 +8,19 @@ import type {
   ClinicOnboardingFormData,
   ClinicRegisterRequest,
   ClinicRegisterResponse,
+  ClinicPlanId,
 } from "@/lib/clinic/types";
+
+type ClinicBillingSubmission = {
+  planId: ClinicPlanId;
+  billingToken: string;
+};
 
 export async function submitClinicOnboarding(
   payload: ClinicOnboardingFormData,
+  billing: ClinicBillingSubmission,
 ) {
-  const registerPayload = buildClinicRegisterPayload(payload);
+  const registerPayload = buildClinicRegisterPayload(payload, billing);
   const response = await apiRequest<
     ClinicRegisterResponse,
     ClinicRegisterRequest

@@ -1,6 +1,7 @@
 import type {
   ClinicOnboardingFormData,
   ClinicRegisterRequest,
+  ClinicPlanId,
   FieldErrors,
   OnboardingStepKey,
 } from "@/lib/clinic/types";
@@ -106,6 +107,10 @@ export function parseServicesProvided(value: string) {
 
 export function buildClinicRegisterPayload(
   formData: ClinicOnboardingFormData,
+  billing: {
+    planId: ClinicPlanId;
+    billingToken: string;
+  },
 ): ClinicRegisterRequest {
   return {
     clinic_legal_name: formData.clinicLegalName.trim(),
@@ -119,6 +124,8 @@ export function buildClinicRegisterPayload(
     phone_number: formData.phoneNumber.replace(/\D/g, ""),
     clinic_type: mapClinicTypeToApiValue(formData.clinicType),
     services_provided: parseServicesProvided(formData.servicesProvided),
+    plan_id: billing.planId,
+    billing_token: billing.billingToken,
   };
 }
 

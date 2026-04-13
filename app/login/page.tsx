@@ -70,7 +70,7 @@ export default function ClinicLoginPage() {
 
   if (!hasLoadedCredentials) {
     return (
-      <ClinicFlowShell backHref="/onboarding" backLabel="Back to onboarding">
+      <ClinicFlowShell backHref="/onboarding/plan" backLabel="Back to plans">
         <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <p className="text-sm leading-6 text-slate-600">
             Loading clinic login details...
@@ -81,7 +81,7 @@ export default function ClinicLoginPage() {
   }
 
   return (
-    <ClinicFlowShell backHref="/onboarding" backLabel="Back to onboarding">
+    <ClinicFlowShell backHref="/onboarding/plan" backLabel="Back to plans">
       <div className="mb-6 max-w-xl">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
           {loginStepTitle}
@@ -93,7 +93,7 @@ export default function ClinicLoginPage() {
         isLoggingIn={isLoggingIn}
         loginError={loginError}
         onBack={() => {
-          window.location.assign("/onboarding");
+          window.location.assign("/onboarding/plan");
         }}
         onLogin={() => {
           void handleGoToLogin();

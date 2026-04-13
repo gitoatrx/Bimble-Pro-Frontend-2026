@@ -18,7 +18,9 @@ function hasRequiredRegisterFields(payload: ClinicRegisterRequest) {
       payload.phone_number.trim() &&
       payload.clinic_type.trim() &&
       Array.isArray(payload.services_provided) &&
-      payload.services_provided.length > 0,
+      payload.services_provided.length > 0 &&
+      (payload.plan_id === "standard" || payload.plan_id === "premium") &&
+      payload.billing_token.trim(),
   );
 }
 
@@ -58,7 +60,10 @@ export async function POST(request: Request) {
 
   if (!hasRequiredRegisterFields(payload)) {
     return NextResponse.json(
-      { message: "Please submit all required clinic onboarding fields." },
+      {
+        message:
+          "Please complete the clinic, plan, and billing steps before submitting onboarding.",
+      },
       { status: 400 },
     );
   }
