@@ -5,18 +5,19 @@ type ButtonVariant = "default" | "outline" | "secondary" | "ghost";
 type ButtonSize = "default" | "sm" | "lg" | "icon";
 
 const variantClasses: Record<ButtonVariant, string> = {
-  default: "bg-primary text-primary-foreground hover:bg-primary/90",
+  default:
+    "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:shadow-md",
   outline:
-    "border border-border bg-background text-foreground hover:bg-accent/10",
+    "border border-border bg-white text-foreground hover:bg-accent/40 hover:border-primary/30",
   secondary:
     "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-  ghost: "text-foreground hover:bg-accent/10",
+  ghost: "text-foreground hover:bg-accent/40",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  default: "h-9 px-4 py-2",
-  sm: "h-8 rounded-md px-3 text-sm",
-  lg: "h-10 rounded-md px-6",
+  default: "h-11 px-5",
+  sm: "h-9 rounded-md px-4 text-sm",
+  lg: "h-12 rounded-xl px-6",
   icon: "size-9",
 };
 
@@ -37,7 +38,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
         variantClasses[variant],
         sizeClasses[size],
         className,

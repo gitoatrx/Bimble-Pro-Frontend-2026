@@ -8,27 +8,22 @@ const faqs = [
   {
     question: "Does the AI make medical decisions?",
     answer:
-      "No. Your doctor remains the final authority, reviewing and signing all AI-generated notes and prescriptions. The AI is a documentation assistant, not a decision-maker.",
+      "No. Your doctor remains the final authority, reviewing and signing all AI-generated notes and prescriptions. The AI is there to reduce documentation work, not replace clinical judgment.",
   },
   {
-    question: "Is my medicine delivery really guaranteed in an hour?",
+    question: "How does Secure OTP verification work?",
     answer:
-      'Yes, when selecting "Bimble Priority Delivery" during your booking flow. Our delivery network is optimized for speed while maintaining medication safety and proper handling.',
+      "When a patient books an appointment, Bimble sends a one-time password to the registered phone number so only verified patients can complete the booking.",
   },
   {
-    question: "Can I manage my family's health here?",
+    question: "Can patients manage appointments and follow-up on mobile?",
     answer:
-      "Yes, the Patient Dashboard allows you to manage exclusive profiles for family members securely. Each profile maintains its own medical history and appointment records.",
-  },
+      "Yes. Patients can confirm, cancel, or modify bookings, message their provider, review results, and stay on top of next steps from a mobile-friendly patient home.",
+    },
   {
-    question: "How does the OTP verification work?",
+    question: "Does Bimble fit into existing clinic workflows?",
     answer:
-      "When you book an appointment, we send a one-time password to your registered phone number. This ensures that only verified patients can book appointments, eliminating ghost bookings and no-shows.",
-  },
-  {
-    question: "What happens to my consultation recording?",
-    answer:
-      "Your consultation is processed in real-time by our Ambient AI to generate medical notes. The recording is encrypted and stored securely according to HIPAA standards. You can request deletion at any time.",
+      "Yes. Bimble is designed to support booking, intake, reminders, documentation, and delivery without forcing teams to rebuild their entire process.",
   },
 ];
 
@@ -36,18 +31,21 @@ export function FAQSection() {
   const [openItem, setOpenItem] = useState<number | null>(0);
 
   return (
-    <section className="bg-card py-20">
-      <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-12 text-center">
-          <h2 className="mb-4 text-3xl font-bold text-foreground sm:text-4xl">
+    <section id="faq" className="py-20">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto mb-12 max-w-3xl text-center">
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.28em] text-primary">
+            Reassurance
+          </p>
+          <h2 className="font-display text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
             Frequently Asked Questions
           </h2>
-          <p className="text-muted-foreground">
-            Everything you need to know about Bimble.
+          <p className="mt-4 text-base leading-7 text-muted-foreground sm:text-lg">
+            Everything you need to know about Bimble before getting started.
           </p>
         </div>
 
-        <div className="w-full">
+        <div className="overflow-hidden rounded-[2rem] border border-border bg-white shadow-sm">
           {faqs.map((faq, index) => {
             const isOpen = openItem === index;
 
@@ -55,11 +53,13 @@ export function FAQSection() {
               <div key={faq.question} className="border-b border-border">
                 <button
                   type="button"
-                  className="flex w-full items-start justify-between gap-4 py-4 text-left text-sm font-medium text-foreground transition-colors hover:text-primary"
+                  className="flex w-full items-start justify-between gap-4 px-5 py-5 text-left text-sm font-medium text-foreground transition-colors hover:text-primary sm:px-6"
                   aria-expanded={isOpen}
                   onClick={() => setOpenItem(isOpen ? null : index)}
                 >
-                  <span>{faq.question}</span>
+                  <span className="max-w-2xl text-base font-semibold leading-6">
+                    {faq.question}
+                  </span>
                   <ChevronDown
                     className={cn(
                       "mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
@@ -68,7 +68,7 @@ export function FAQSection() {
                   />
                 </button>
                 {isOpen ? (
-                  <div className="pb-4 text-sm text-muted-foreground">
+                  <div className="px-5 pb-5 text-sm leading-7 text-muted-foreground sm:px-6">
                     {faq.answer}
                   </div>
                 ) : null}

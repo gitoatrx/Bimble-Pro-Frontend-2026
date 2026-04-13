@@ -1,21 +1,23 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Montserrat } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const montserrat = Montserrat({
+  variable: "--font-montserrat",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Bimble | Healthcare That Looks You in the Eye",
+  title: "Bimble Canada — Book Your Appointment Today",
   description:
-    "Experience healthcare that prioritizes human connection with AI-assisted documentation, verified bookings, and faster medicine delivery.",
+    "Find and book same-day or next-day appointments at top-rated clinics across Canada.",
 };
 
 export default function RootLayout({
@@ -26,9 +28,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${montserrat.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-background font-sans text-foreground antialiased">
+      <body className="min-h-full overflow-hidden bg-[#FAFCFB] text-[#0D2237] antialiased">
         {children}
       </body>
     </html>

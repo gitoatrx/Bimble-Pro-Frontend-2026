@@ -2,68 +2,76 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronRight, Menu, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const navItems = [
+  { href: "#who-we-serve", label: "For Patients" },
+  { href: "#clinics", label: "For Clinics" },
+  { href: "#faq", label: "Resources" },
+  { href: "/login", label: "Sign in" },
+];
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-card/80 backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full border-b border-border/70 bg-white/85 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <span className="text-lg font-bold text-primary-foreground">B</span>
+        <div className="flex h-18 items-center justify-between py-3">
+          <Link
+            href="/"
+            className="flex items-center gap-3"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-sm font-bold text-primary-foreground shadow-sm">
+              B
             </div>
-            <span className="text-xl font-bold text-foreground">Bimble</span>
+            <div className="leading-tight">
+              <span className="block text-lg font-semibold text-foreground">
+                Bimble
+              </span>
+              <span className="block text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
+                Healthcare platform
+              </span>
+            </div>
           </Link>
 
-          <nav className="hidden items-center gap-8 md:flex">
-            <Link
-              href="#services"
-              className="text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
-            >
-              Care Services
-            </Link>
-            <Link
-              href="#delivery"
-              className="text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
-            >
-              For patients
-            </Link>
-            <Link
-              href="#providers"
-              className="text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
-            >
-              For Clinics
-            </Link>
-            <Link
-              href="/login"
-              className="text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
-            >
-              Clinic Login
-            </Link>
+          <nav className="hidden items-center gap-8 lg:flex">
+            {navItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="text-sm font-medium text-foreground/75 transition-colors hover:text-foreground"
+              >
+                {item.label}
+              </Link>
+            ))}
           </nav>
 
-          <div className="hidden items-center gap-3 md:flex">
-            <Button
-              variant="outline"
-              className="border-foreground/20 text-foreground hover:bg-foreground/5"
+          <div className="hidden items-center gap-3 lg:flex">
+            <Link
+              href="/login"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-white px-5 text-sm font-semibold text-foreground transition-all hover:border-primary/30 hover:bg-accent/40"
             >
-              Book Demo
-            </Button>
+              Sign in
+            </Link>
+            <Link
+              href="#book-demo"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-white px-5 text-sm font-semibold text-foreground transition-all hover:border-primary/30 hover:bg-accent/40"
+            >
+              Book a Demo
+            </Link>
             <Link
               href="/onboarding/plan"
-              onClick={() => setMobileMenuOpen(false)}
-              className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90"
             >
               Clinic Register
             </Link>
           </div>
 
           <button
-            className="p-2 text-foreground md:hidden"
+            className="rounded-xl border border-border bg-white p-2.5 text-foreground shadow-sm lg:hidden"
             aria-label="Toggle navigation menu"
             onClick={() => setMobileMenuOpen((open) => !open)}
           >
@@ -76,44 +84,36 @@ export function Header() {
         </div>
 
         {mobileMenuOpen && (
-          <div className="border-t border-border py-4 md:hidden">
-            <nav className="flex flex-col gap-4">
-              <Link
-                href="#services"
-                className="text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
-              >
-                Care Services
-              </Link>
-              <Link
-                href="#delivery"
-                className="text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
-              >
-                For patients
-              </Link>
-              <Link
-                href="#providers"
-                className="text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
-              >
-                For Clinics
-              </Link>
-              <Link
-                href="/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
-              >
-                Clinic Login
-              </Link>
-              <div className="flex flex-col gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  className="w-full border-foreground/20 text-foreground"
+          <div className="border-t border-border/70 pb-5 pt-4 lg:hidden">
+            <nav className="flex flex-col gap-2">
+              {navItems.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center justify-between rounded-xl px-4 py-3 text-sm font-medium transition-colors",
+                    item.href === "/login"
+                      ? "text-foreground/75 hover:bg-accent/40 hover:text-foreground"
+                      : "text-foreground/85 hover:bg-accent/40 hover:text-foreground",
+                  )}
                 >
-                  Book Demo
-                </Button>
+                  <span>{item.label}</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </Link>
+              ))}
+              <div className="mt-3 grid gap-2">
+                <Link
+                  href="#book-demo"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-white px-5 text-sm font-semibold text-foreground transition-all hover:border-primary/30 hover:bg-accent/40"
+                >
+                  Book a Demo
+                </Link>
                 <Link
                   href="/onboarding/plan"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90"
                 >
                   Clinic Register
                 </Link>
