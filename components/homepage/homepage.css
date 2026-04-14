@@ -195,7 +195,7 @@
   border-radius: 16px;
   box-shadow: 0 4px 32px rgba(15,31,61,0.10);
   display: flex; align-items: stretch;
-  overflow: hidden; max-width: 680px; margin: 0 auto 0;
+  overflow: hidden; width: 100%; max-width: 860px; margin: 0 auto;
 }
 
 .hp-search-field {
@@ -750,8 +750,21 @@
   .hp-footer-bottom { flex-direction: column; text-align: center; }
 }
 
+@media (max-width: 600px) {
+  .hp-search-box {
+    flex-direction: column; border-radius: 16px; overflow: visible;
+  }
+  .hp-search-field {
+    border-right: none; border-bottom: 1px solid #e8edf8;
+    border-radius: 14px 14px 0 0; height: 56px;
+  }
+  .hp-search-btn {
+    border-radius: 0 0 14px 14px; height: 52px;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 480px) {
   .hp-specialties-grid { grid-template-columns: 1fr; }
   .hp-hero-h1 { font-size: 30px; }
-  .hp-trust-chips { gap: 6px; }
 }
