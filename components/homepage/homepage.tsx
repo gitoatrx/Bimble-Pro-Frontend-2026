@@ -140,8 +140,8 @@ export function Homepage() {
         <section className="hp-hero" id="find-care">
           <div className="hp-hero-inner">
             <h1 className="hp-hero-h1">
-              Book a doctor&rsquo;s appointment<br />
-              in under <em>2 minutes.</em>
+              See a doctor today.<br />
+              Confirmed in <em>minutes.</em>
             </h1>
 
             {/* Search bar — clean single-line, no stacked labels */}
