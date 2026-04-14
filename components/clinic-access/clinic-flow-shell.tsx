@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "@/components/brand-mark";
 
 type ClinicFlowShellProps = {
   backHref: string;
@@ -21,9 +22,7 @@ export function ClinicFlowShell({
       <header className="sticky top-0 z-40 border-b border-border/70 bg-white/85 backdrop-blur-xl">
         <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-lg font-bold text-primary-foreground shadow-sm">
-              B
-            </div>
+            <BrandMark size={40} priority className="h-10 w-10" />
             <div className="leading-tight">
               <span className="block font-display text-lg font-semibold text-foreground">
                 Bimble

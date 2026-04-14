@@ -18,6 +18,11 @@ export const metadata: Metadata = {
   title: "Bimble | Connected healthcare booking",
   description:
     "Bimble connects booking, secure verification, documentation, and follow-up for calmer healthcare workflows.",
+  icons: {
+    icon: "/bimble-logo.png",
+    shortcut: "/bimble-logo.png",
+    apple: "/bimble-logo.png",
+  },
 };
 
 export default function RootLayout({

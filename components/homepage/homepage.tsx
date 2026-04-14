@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { CalendarDays, Home, MapPin, Search } from "lucide-react";
+import { BrandMark } from "@/components/brand-mark";
 import {
   clinicBenefits,
   clinicCards,
@@ -44,20 +45,7 @@ export function Homepage() {
     <div className="homepage-page">
       <nav>
         <Link href="#hero" className="nav-logo">
-          <div className="nav-logo-icon">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
+          <BrandMark size={40} priority className="h-10 w-10" />
           Bimble
         </Link>
 
@@ -145,7 +133,7 @@ export function Homepage() {
                         padding: "5px 12px",
                         borderRadius: "20px",
                         fontWeight: 500,
-                        border: "1px solid rgba(11,94,80,0.12)",
+                        border: "1px solid rgba(31,79,255,0.12)",
                       }}
                     >
                       {item}
@@ -682,21 +670,8 @@ export function Homepage() {
       <footer>
         <div className="footer-top">
           <div>
-            <Link href="/" className="nav-logo footer-brand">
-              <div className="nav-logo-icon">
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                </svg>
-              </div>
+        <Link href="/" className="nav-logo footer-brand">
+              <BrandMark size={40} className="h-10 w-10" />
               <span>Bimble</span>
             </Link>
             <p className="footer-brand-desc">
