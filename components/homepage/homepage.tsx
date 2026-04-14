@@ -214,23 +214,6 @@ export function Homepage() {
               </button>
             </div>
 
-            {/* How it dispatches — Uber-like flow */}
-            <div className="hp-dispatch-steps">
-              <div className="hp-dispatch-step">
-                <div className="hp-dispatch-step-icon">1</div>
-                You describe what you need
-              </div>
-              <span className="hp-dispatch-arrow">→</span>
-              <div className="hp-dispatch-step">
-                <div className="hp-dispatch-step-icon">2</div>
-                We match you with a verified doctor
-              </div>
-              <span className="hp-dispatch-arrow">→</span>
-              <div className="hp-dispatch-step">
-                <div className="hp-dispatch-step-icon done">✓</div>
-                Appointment confirmed
-              </div>
-            </div>
           </div>
         </section>
 
