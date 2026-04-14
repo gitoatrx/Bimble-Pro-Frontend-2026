@@ -6,8 +6,6 @@ import { ArrowRight, CalendarDays, MapPin, Search } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import {
   bcCities,
-  careTypes,
-  clinicCards,
   faqs,
   howItWorks,
   navItems,
@@ -142,98 +140,67 @@ export function Homepage() {
         <section className="hp-hero" id="find-care">
           <div className="hp-hero-inner">
             <h1 className="hp-hero-h1">
-              Find a doctor in BC<br />
-              who can see you <em>today.</em>
+              Book a doctor&rsquo;s appointment<br />
+              in under <em>2 minutes.</em>
             </h1>
 
             <p className="hp-hero-sub">
-              Search clinics and specialists across British Columbia accepting new patients.
-              MSP accepted. No phone calls. No hold music.
+              Tell us what you need. We match you with a verified BC doctor
+              and confirm your appointment — no hold music, no callbacks.
             </p>
 
-            {/* Search bar */}
-            <div className="hp-search-box" id="find-care-form">
+            {/* Search bar — clean single-line, no stacked labels */}
+            <div className="hp-search-box">
               <div className="hp-search-field">
                 <Search size={17} strokeWidth={2} />
-                <div className="hp-search-field-inner">
-                  <label htmlFor="care-input">Type of care</label>
-                  <input
-                    id="care-input"
-                    type="text"
-                    value={careQuery}
-                    onChange={(e) => setCareQuery(e.target.value)}
-                    placeholder="e.g. Family Doctor, Walk-In…"
-                    autoComplete="off"
-                  />
-                </div>
+                <input
+                  type="text"
+                  value={careQuery}
+                  onChange={(e) => setCareQuery(e.target.value)}
+                  placeholder="What type of care do you need?"
+                  autoComplete="off"
+                />
               </div>
 
               <div className="hp-search-field" style={{ position: "relative" }}>
-                <MapPin size={17} strokeWidth={2} style={{ color: geoStatus === "loading" ? "var(--blue)" : undefined }} />
-                <div className="hp-search-field-inner">
-                  <label htmlFor="location-input">
-                    {geoStatus === "loading" ? "Detecting your location…" : "City or region in BC"}
-                  </label>
-                  <input
-                    id="location-input"
-                    ref={locationInputRef}
-                    type="text"
-                    value={locationQuery}
-                    onChange={(e) => {
-                      setLocationQuery(e.target.value);
-                      setShowCitySuggestions(true);
-                    }}
-                    onFocus={() => setShowCitySuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowCitySuggestions(false), 150)}
-                    placeholder={geoStatus === "loading" ? "" : "e.g. Vancouver, Kelowna…"}
-                    autoComplete="off"
-                  />
-                </div>
+                <MapPin
+                  size={17}
+                  strokeWidth={2}
+                  style={{ color: geoStatus === "loading" ? "#1f4fff" : undefined }}
+                />
+                <input
+                  ref={locationInputRef}
+                  type="text"
+                  value={locationQuery}
+                  onChange={(e) => { setLocationQuery(e.target.value); setShowCitySuggestions(true); }}
+                  onFocus={() => setShowCitySuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowCitySuggestions(false), 150)}
+                  placeholder={geoStatus === "loading" ? "Detecting location…" : "City in BC"}
+                  autoComplete="off"
+                />
 
-                {/* City suggestions dropdown */}
                 {showCitySuggestions && filteredCities.length > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "100%",
-                      left: 0,
-                      right: 0,
-                      background: "var(--white)",
-                      border: "1px solid var(--border-dark)",
-                      borderRadius: "var(--r-md)",
-                      boxShadow: "var(--shadow-lg)",
-                      zIndex: 50,
-                      overflow: "hidden",
-                      marginTop: "6px",
-                    }}
-                  >
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0,
+                    background: "#fff", border: "1px solid #d0d8f0",
+                    borderRadius: "12px", boxShadow: "0 8px 32px rgba(15,31,61,0.12)",
+                    zIndex: 50, overflow: "hidden",
+                  }}>
                     {filteredCities.map((city) => (
                       <button
                         key={city}
                         type="button"
                         onMouseDown={() => handleSelectCity(city)}
                         style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "10px 16px",
-                          fontSize: "14px",
-                          color: "var(--navy)",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          transition: "background 0.1s",
+                          width: "100%", textAlign: "left", padding: "10px 16px",
+                          fontSize: "14px", color: "#0f1f3d", background: "none",
+                          border: "none", cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: "8px",
                         }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = "var(--blue-pale)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = "none";
-                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#eef2ff"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "none"; }}
                       >
-                        <MapPin size={13} style={{ color: "var(--muted)", flexShrink: 0 }} />
+                        <MapPin size={13} style={{ color: "#8896b4", flexShrink: 0 }} />
                         {city}, BC
                       </button>
                     ))}
@@ -243,35 +210,26 @@ export function Homepage() {
 
               <button type="button" className="hp-search-btn">
                 <Search size={15} strokeWidth={2.5} />
-                Search
+                Find care
               </button>
             </div>
 
-            {/* Trust chips */}
-            <div className="hp-trust-chips">
-              {[
-                "Free for patients",
-                "MSP accepted everywhere",
-                "Verified BC clinics",
-                "Real-time availability",
-                "No booking fee",
-              ].map((chip) => (
-                <span key={chip} className="hp-trust-chip">
-                  <span className="hp-trust-chip-check">✓</span>
-                  {chip}
-                </span>
-              ))}
-            </div>
-
-            {/* Quick specialty pills */}
-            <div className="hp-quick-specialties">
-              {specialties.slice(0, 6).map((s) => (
-                <button key={s.slug} type="button" className="hp-quick-specialty"
-                  onClick={() => setCareQuery(s.name)}>
-                  <span className="hp-quick-specialty-icon">{s.icon}</span>
-                  {s.name}
-                </button>
-              ))}
+            {/* How it dispatches — Uber-like flow */}
+            <div className="hp-dispatch-steps">
+              <div className="hp-dispatch-step">
+                <div className="hp-dispatch-step-icon">1</div>
+                You describe what you need
+              </div>
+              <span className="hp-dispatch-arrow">→</span>
+              <div className="hp-dispatch-step">
+                <div className="hp-dispatch-step-icon">2</div>
+                We match you with a verified doctor
+              </div>
+              <span className="hp-dispatch-arrow">→</span>
+              <div className="hp-dispatch-step">
+                <div className="hp-dispatch-step-icon done">✓</div>
+                Appointment confirmed
+              </div>
             </div>
           </div>
         </section>
@@ -391,68 +349,6 @@ export function Homepage() {
           </div>
         </section>
 
-        {/* ══ FEATURED CLINICS ═════════════════════ */}
-        <section className="hp-clinics" id="find-care">
-          <div className="hp-clinics-inner">
-            <div className="hp-section-head reveal">
-              <div className="hp-section-label">Featured Clinics</div>
-              <h2 className="hp-section-h2">Verified BC clinics with real availability</h2>
-              <p className="hp-section-sub">
-                Every clinic is verified, MSP-confirmed, and showing live slots. If it&rsquo;s open, it&rsquo;s open.
-              </p>
-            </div>
-
-            <div className="hp-clinics-grid reveal">
-              {clinicCards.map((clinic) => (
-                <div key={clinic.name} className="hp-clinic-card">
-                  <div className="hp-clinic-card-head">
-                    <div className="hp-clinic-card-icon-wrap">{clinic.icon}</div>
-                    <div className="hp-clinic-card-meta">
-                      <div className="hp-clinic-card-type">{clinic.type}</div>
-                      <div className="hp-clinic-card-name">{clinic.name}</div>
-                      <div className="hp-clinic-card-location">{clinic.location}</div>
-                    </div>
-                  </div>
-
-                  <div className="hp-clinic-card-body">
-                    <div className="hp-clinic-card-rating">
-                      <span className="hp-clinic-card-stars">★★★★★</span>
-                      {clinic.rating}
-                      <span className="hp-clinic-card-reviews">({clinic.reviewCount} reviews)</span>
-                    </div>
-
-                    <div className="hp-clinic-card-tags">
-                      {clinic.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className={`hp-clinic-card-tag${tag === "New Patients" || tag === "No Appointment" || tag === "Open Now" ? " green" : ""}`}
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="hp-clinic-availability">
-                      <div className="hp-clinic-availability-dot" />
-                      {clinic.availability}
-                    </div>
-
-                    <Link href="#find-care" className="hp-clinic-book-btn">
-                      <CalendarDays size={14} strokeWidth={2.5} />
-                      Book Appointment
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="hp-clinics-cta">
-              <Link href="#find-care" className="hp-btn-ghost">
-                View all BC clinics <ArrowRight size={14} />
-              </Link>
-            </div>
-          </div>
-        </section>
 
         {/* ══ WHY BIMBLE ═══════════════════════════ */}
         <section className="hp-why">
