@@ -141,13 +141,6 @@ export function Homepage() {
         {/* ══ HERO ══════════════════════════════════ */}
         <section className="hp-hero" id="find-care">
           <div className="hp-hero-inner">
-            <div className="hp-hero-badge">
-              <div className="hp-badge">
-                <div className="hp-badge-dot" />
-                BC&rsquo;s healthcare booking platform — free for patients
-              </div>
-            </div>
-
             <h1 className="hp-hero-h1">
               Find a doctor in BC<br />
               who can see you <em>today.</em>

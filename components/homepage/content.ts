@@ -45,9 +45,6 @@ export type Stat = {
 };
 
 export const navItems = [
-  { href: "#find-care", label: "Find a Doctor" },
-  { href: "#specialties", label: "Specialties" },
-  { href: "#how-it-works", label: "How It Works" },
   { href: "#for-clinics", label: "For Clinics" },
 ];
 
