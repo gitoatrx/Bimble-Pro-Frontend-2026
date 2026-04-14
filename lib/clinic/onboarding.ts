@@ -1,7 +1,6 @@
 import type {
   ClinicOnboardingFormData,
   ClinicRegisterRequest,
-  ClinicPlanId,
   FieldErrors,
   OnboardingStepKey,
 } from "@/lib/clinic/types";
@@ -107,25 +106,21 @@ export function parseServicesProvided(value: string) {
 
 export function buildClinicRegisterPayload(
   formData: ClinicOnboardingFormData,
-  billing: {
-    planId: ClinicPlanId;
-    billingToken: string;
-  },
+  planCode: string,
 ): ClinicRegisterRequest {
   return {
+    clinic_name: formData.clinicDisplayName.trim(),
     clinic_legal_name: formData.clinicLegalName.trim(),
     clinic_display_name: formData.clinicDisplayName.trim(),
-    established_year: Number(formData.establishedYear),
-    address: formData.address.trim(),
-    city: formData.city.trim(),
-    province: formData.province.trim(),
-    postal_code: formData.postalCode.trim().toUpperCase(),
     email: formData.email.trim(),
-    phone_number: formData.phoneNumber.replace(/\D/g, ""),
-    clinic_type: mapClinicTypeToApiValue(formData.clinicType),
-    services_provided: parseServicesProvided(formData.servicesProvided),
-    plan_id: billing.planId,
-    billing_token: billing.billingToken,
+    phone: formData.phoneNumber.replace(/\D/g, ""),
+    address: formData.address.trim() || undefined,
+    city: formData.city.trim() || undefined,
+    province: formData.province.trim() || undefined,
+    postal_code: formData.postalCode.trim().toUpperCase() || undefined,
+    clinic_type: formData.clinicType ? mapClinicTypeToApiValue(formData.clinicType) : undefined,
+    established_year: formData.establishedYear ? Number(formData.establishedYear) : undefined,
+    plan_code: planCode,
   };
 }
 

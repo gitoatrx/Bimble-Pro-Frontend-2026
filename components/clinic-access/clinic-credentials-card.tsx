@@ -5,32 +5,29 @@ import { ArrowLeft, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { FieldError } from "@/components/clinic-access/field-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { ClinicCredentials } from "@/lib/clinic/types";
-
-type ClinicLoginField = "clinicName" | "username" | "password" | "pin";
+import type { ClinicLoginFormData } from "@/lib/clinic/types";
 
 type ClinicCredentialsCardProps = {
-  credentials: ClinicCredentials;
+  formData: ClinicLoginFormData;
   isLoggingIn?: boolean;
   loginError?: string;
   onBack: () => void;
   onLogin: () => void;
-  onCredentialsChange: (field: ClinicLoginField, value: string) => void;
+  onFieldChange: (field: keyof ClinicLoginFormData, value: string) => void;
 };
 
 const neutralFieldClassName =
   "h-12 !border-border !bg-white !text-foreground !shadow-none focus-visible:ring-primary/20";
 
 export function ClinicCredentialsCard({
-  credentials,
+  formData,
   isLoggingIn = false,
   loginError,
   onBack,
   onLogin,
-  onCredentialsChange,
+  onFieldChange,
 }: ClinicCredentialsCardProps) {
   const [showPassword, setShowPassword] = useState(false);
-  const [showPin, setShowPin] = useState(false);
 
   return (
     <form
@@ -44,30 +41,38 @@ export function ClinicCredentialsCard({
     >
       <div className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor="clinicName" className="block text-sm font-medium text-foreground">
-            Clinic Name
+          <label
+            htmlFor="clinicSlug"
+            className="block text-sm font-medium text-foreground"
+          >
+            Clinic Slug
           </label>
           <Input
-            id="clinicName"
-            value={credentials.clinicName}
-            onChange={(event) =>
-              onCredentialsChange("clinicName", event.target.value)
-            }
+            id="clinicSlug"
+            placeholder="my-clinic"
+            value={formData.clinicSlug}
+            onChange={(event) => onFieldChange("clinicSlug", event.target.value)}
             autoComplete="organization"
             className={neutralFieldClassName}
+            autoFocus
           />
+          <p className="text-xs text-muted-foreground">
+            The unique identifier for your clinic (e.g.{" "}
+            <code className="rounded bg-slate-100 px-1 py-0.5">bimble-downtown</code>).
+          </p>
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="username" className="block text-sm font-medium text-foreground">
+          <label
+            htmlFor="username"
+            className="block text-sm font-medium text-foreground"
+          >
             Username
           </label>
           <Input
             id="username"
-            value={credentials.username}
-            onChange={(event) =>
-              onCredentialsChange("username", event.target.value)
-            }
+            value={formData.username}
+            onChange={(event) => onFieldChange("username", event.target.value)}
             autoComplete="username"
             className={neutralFieldClassName}
           />
@@ -75,7 +80,10 @@ export function ClinicCredentialsCard({
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <label htmlFor="password" className="block text-sm font-medium text-foreground">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-foreground"
+            >
               Password
             </label>
             <Button
@@ -96,48 +104,9 @@ export function ClinicCredentialsCard({
           <Input
             id="password"
             type={showPassword ? "text" : "password"}
-            value={credentials.password}
-            onChange={(event) =>
-              onCredentialsChange("password", event.target.value)
-            }
+            value={formData.password}
+            onChange={(event) => onFieldChange("password", event.target.value)}
             autoComplete="current-password"
-            className={neutralFieldClassName}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <label htmlFor="pin" className="block text-sm font-medium text-foreground">
-              PIN
-            </label>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-auto px-0 text-primary hover:bg-transparent hover:text-primary/80"
-              onClick={() => setShowPin((current) => !current)}
-            >
-              {showPin ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-              {showPin ? "Hide" : "Show"}
-            </Button>
-          </div>
-          <Input
-            id="pin"
-            type={showPin ? "text" : "password"}
-            value={credentials.pin}
-            inputMode="numeric"
-            maxLength={4}
-            onChange={(event) =>
-              onCredentialsChange(
-                "pin",
-                event.target.value.replace(/\D/g, "").slice(0, 4),
-              )
-            }
-            autoComplete="one-time-code"
             className={neutralFieldClassName}
           />
         </div>
@@ -157,11 +126,8 @@ export function ClinicCredentialsCard({
         </Button>
 
         <Button
-          type="button"
+          type="submit"
           className="h-12 flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-          onClick={() => {
-            onLogin();
-          }}
           disabled={isLoggingIn}
         >
           {isLoggingIn ? "Logging in..." : "Login"}

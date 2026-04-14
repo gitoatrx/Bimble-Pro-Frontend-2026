@@ -10,11 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { submitClinicOnboarding } from "@/lib/api/clinic";
 import {
-  readClinicBillingState,
   readClinicOnboardingState,
   readClinicSelectedPlan,
-  storeClinicCredentials,
   storeClinicOnboardingState,
+  storeClinicSignupResult,
 } from "@/lib/clinic/session";
 import {
   clinicTypeOptions,
@@ -26,7 +25,6 @@ import {
   validateClinicOnboardingStep,
 } from "@/lib/clinic/onboarding";
 import type {
-  ClinicBillingState,
   ClinicAddressSelection,
   ClinicOnboardingFormData,
   ClinicPlan,
@@ -66,27 +64,17 @@ export default function ClinicOnboardingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [selectedPlan, setSelectedPlan] = useState<ClinicPlan | null>(null);
-  const [billingState, setBillingState] = useState<ClinicBillingState | null>(
-    null,
-  );
   const [isFlowReady, setIsFlowReady] = useState(false);
 
   useEffect(() => {
     const storedPlan = readClinicSelectedPlan();
-    const storedBillingState = readClinicBillingState();
 
     if (!storedPlan) {
       window.location.replace("/onboarding/plan");
       return;
     }
 
-    if (!storedBillingState) {
-      window.location.replace("/onboarding/billing");
-      return;
-    }
-
     setSelectedPlan(storedPlan);
-    setBillingState(storedBillingState);
 
     const storedState = readClinicOnboardingState();
 
@@ -174,25 +162,20 @@ export default function ClinicOnboardingPage() {
     setSubmitError("");
 
     try {
-      if (!selectedPlan || !billingState) {
-        throw new Error("Clinic billing details are missing. Please restart the flow.");
+      if (!selectedPlan) {
+        throw new Error("No plan selected. Please go back and choose a plan.");
       }
 
-      const nextCredentials = await submitClinicOnboarding(formData, {
-        planId: selectedPlan.id,
-        billingToken: billingState.billingToken,
-      });
-      storeClinicOnboardingState({
-        step,
-        formData,
-      });
-      storeClinicCredentials(nextCredentials);
-      window.location.assign("/login");
+      const signupResult = await submitClinicOnboarding(formData, selectedPlan.id);
+      storeClinicSignupResult(signupResult);
+
+      // Redirect to Stripe Checkout to complete payment
+      window.location.assign(signupResult.stripeCheckoutUrl);
     } catch (error) {
       setSubmitError(
         error instanceof Error
           ? error.message
-          : "We could not generate clinic credentials right now. Please try again.",
+          : "We could not complete registration right now. Please try again.",
       );
     } finally {
       setIsSubmitting(false);
@@ -447,7 +430,7 @@ export default function ClinicOnboardingPage() {
 
   if (!isFlowReady) {
     return (
-      <ClinicFlowShell backHref="/onboarding/billing" backLabel="Back to billing">
+      <ClinicFlowShell backHref="/onboarding/plan" backLabel="Back to plans">
         <div className="max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <p className="text-sm leading-6 text-slate-600">
             Preparing clinic setup...
@@ -458,7 +441,7 @@ export default function ClinicOnboardingPage() {
   }
 
   return (
-    <ClinicFlowShell backHref="/onboarding/billing" backLabel="Back to billing">
+    <ClinicFlowShell backHref="/onboarding/plan" backLabel="Back to plans">
       <div className="mb-6 max-w-xl space-y-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
@@ -520,9 +503,9 @@ export default function ClinicOnboardingPage() {
             >
               {isFinalStep ? (
                 isSubmitting ? (
-                  "Submitting..."
+                  "Registering clinic..."
                 ) : (
-                  "Submit onboarding"
+                  "Register & continue to payment"
                 )
               ) : (
                 <>

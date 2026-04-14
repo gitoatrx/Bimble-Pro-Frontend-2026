@@ -1,15 +1,13 @@
 import type {
-  ClinicBillingState,
-  ClinicCredentials,
   ClinicOnboardingFormData,
   ClinicPlan,
+  ClinicSignupResult,
   OnboardingStepKey,
 } from "@/lib/clinic/types";
 
 const CLINIC_ONBOARDING_STATE_KEY = "bimble:clinic:onboarding-state";
 const CLINIC_SELECTED_PLAN_KEY = "bimble:clinic:selected-plan";
-const CLINIC_BILLING_STATE_KEY = "bimble:clinic:billing-state";
-const CLINIC_CREDENTIALS_KEY = "bimble:clinic:credentials";
+const CLINIC_SIGNUP_RESULT_KEY = "bimble:clinic:signup-result";
 
 export type StoredClinicOnboardingState = {
   step: OnboardingStepKey;
@@ -27,12 +25,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isClinicPlan(value: unknown): value is ClinicPlan {
   return (
     isRecord(value) &&
-    (value.id === "standard" || value.id === "premium") &&
+    typeof value.id === "string" &&
+    value.id.trim().length > 0 &&
     typeof value.name === "string" &&
     typeof value.subtitle === "string" &&
     typeof value.priceLabel === "string" &&
     typeof value.billingInterval === "string" &&
     typeof value.trialDays === "number" &&
+    typeof value.monthlyPriceCents === "number" &&
     Array.isArray(value.features) &&
     value.features.every((feature) => typeof feature === "string") &&
     (value.recommended === undefined || typeof value.recommended === "boolean")
@@ -58,23 +58,14 @@ function isClinicOnboardingFormData(
   );
 }
 
-function isClinicBillingState(value: unknown): value is ClinicBillingState {
+function isClinicSignupResult(value: unknown): value is ClinicSignupResult {
   return (
     isRecord(value) &&
-    typeof value.billingToken === "string" &&
-    value.billingToken.trim().length > 0
-  );
-}
-
-function isClinicCredentials(value: unknown): value is ClinicCredentials {
-  return (
-    isRecord(value) &&
-    typeof value.clinicName === "string" &&
-    typeof value.username === "string" &&
-    typeof value.password === "string" &&
-    typeof value.pin === "string" &&
-    (value.internalClinicCode === undefined ||
-      typeof value.internalClinicCode === "string")
+    typeof value.clinicId === "number" &&
+    typeof value.clinicCode === "string" &&
+    typeof value.slug === "string" &&
+    typeof value.stripeCheckoutUrl === "string" &&
+    typeof value.message === "string"
   );
 }
 
@@ -112,9 +103,7 @@ function removeSessionValue(key: string) {
   window.sessionStorage.removeItem(key);
 }
 
-export function storeClinicOnboardingState(
-  state: StoredClinicOnboardingState,
-) {
+export function storeClinicOnboardingState(state: StoredClinicOnboardingState) {
   writeSessionValue(CLINIC_ONBOARDING_STATE_KEY, state);
 }
 
@@ -135,7 +124,6 @@ export function readClinicOnboardingState() {
 
 export function storeClinicSelectedPlan(plan: ClinicPlan) {
   writeSessionValue(CLINIC_SELECTED_PLAN_KEY, plan);
-  removeSessionValue(CLINIC_BILLING_STATE_KEY);
 }
 
 export function readClinicSelectedPlan() {
@@ -153,39 +141,20 @@ export function readClinicSelectedPlan() {
   }
 }
 
-export function storeClinicBillingState(state: ClinicBillingState) {
-  writeSessionValue(CLINIC_BILLING_STATE_KEY, state);
+export function storeClinicSignupResult(result: ClinicSignupResult) {
+  writeSessionValue(CLINIC_SIGNUP_RESULT_KEY, result);
 }
 
-export function readClinicBillingState() {
-  const rawBillingState = readSessionValue(CLINIC_BILLING_STATE_KEY);
+export function readClinicSignupResult() {
+  const raw = readSessionValue(CLINIC_SIGNUP_RESULT_KEY);
 
-  if (!rawBillingState) {
+  if (!raw) {
     return null;
   }
 
   try {
-    const parsedBillingState: unknown = JSON.parse(rawBillingState);
-    return isClinicBillingState(parsedBillingState) ? parsedBillingState : null;
-  } catch {
-    return null;
-  }
-}
-
-export function storeClinicCredentials(credentials: ClinicCredentials) {
-  writeSessionValue(CLINIC_CREDENTIALS_KEY, credentials);
-}
-
-export function readStoredClinicCredentials() {
-  const rawCredentials = readSessionValue(CLINIC_CREDENTIALS_KEY);
-
-  if (!rawCredentials) {
-    return null;
-  }
-
-  try {
-    const parsedCredentials: unknown = JSON.parse(rawCredentials);
-    return isClinicCredentials(parsedCredentials) ? parsedCredentials : null;
+    const parsed: unknown = JSON.parse(raw);
+    return isClinicSignupResult(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -194,6 +163,5 @@ export function readStoredClinicCredentials() {
 export function clearClinicSessionState() {
   removeSessionValue(CLINIC_ONBOARDING_STATE_KEY);
   removeSessionValue(CLINIC_SELECTED_PLAN_KEY);
-  removeSessionValue(CLINIC_BILLING_STATE_KEY);
-  removeSessionValue(CLINIC_CREDENTIALS_KEY);
+  removeSessionValue(CLINIC_SIGNUP_RESULT_KEY);
 }

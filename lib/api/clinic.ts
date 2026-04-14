@@ -3,65 +3,43 @@ import { apiRequest } from "@/lib/api/request";
 import { buildClinicRegisterPayload } from "@/lib/clinic/onboarding";
 import { buildClinicLoginPayload } from "@/lib/clinic/login";
 import type {
-  ClinicCredentials,
+  ClinicLoginFormData,
   ClinicLoginResponse,
   ClinicOnboardingFormData,
   ClinicRegisterRequest,
   ClinicRegisterResponse,
-  ClinicPlanId,
+  ClinicSignupResult,
 } from "@/lib/clinic/types";
-
-type ClinicBillingSubmission = {
-  planId: ClinicPlanId;
-  billingToken: string;
-};
 
 export async function submitClinicOnboarding(
   payload: ClinicOnboardingFormData,
-  billing: ClinicBillingSubmission,
-) {
-  const registerPayload = buildClinicRegisterPayload(payload, billing);
-  const response = await apiRequest<
-    ClinicRegisterResponse,
-    ClinicRegisterRequest
-  >({
+  planCode: string,
+): Promise<ClinicSignupResult> {
+  const registerPayload = buildClinicRegisterPayload(payload, planCode);
+
+  const response = await apiRequest<ClinicRegisterResponse, ClinicRegisterRequest>({
     endpoint: API_ENDPOINTS.clinicOnboarding,
     method: "POST",
     body: registerPayload,
   });
 
   return {
-    clinicName: response.clinic_name,
-    username: response.username,
-    password: response.password,
-    pin: response.pin,
-    internalClinicCode: response.internal_clinic_code,
-  } satisfies ClinicCredentials;
+    clinicId: response.clinic_id,
+    clinicCode: response.clinic_code,
+    slug: response.slug,
+    stripeCheckoutUrl: response.stripe_checkout_url,
+    message: response.message,
+  };
 }
 
-type ClinicLoginApiResponse = {
-  clinic_name: string;
-  username: string;
-  app_url: string;
-  bootstrap_url: string;
-  message: string;
-};
+export async function submitClinicLogin(
+  formData: ClinicLoginFormData,
+): Promise<ClinicLoginResponse> {
+  const loginPayload = buildClinicLoginPayload(formData);
 
-export async function submitClinicLogin(credentials: ClinicCredentials) {
-  const loginPayload = buildClinicLoginPayload(credentials);
-  const response = await apiRequest<ClinicLoginApiResponse, typeof loginPayload>(
-    {
-      endpoint: API_ENDPOINTS.clinicLogin,
-      method: "POST",
-      body: loginPayload,
-    },
-  );
-
-  return {
-    clinicName: response.clinic_name,
-    username: response.username,
-    appUrl: response.app_url,
-    bootstrapUrl: response.bootstrap_url,
-    message: response.message,
-  } satisfies ClinicLoginResponse;
+  return apiRequest<ClinicLoginResponse, typeof loginPayload>({
+    endpoint: API_ENDPOINTS.clinicLogin,
+    method: "POST",
+    body: loginPayload,
+  });
 }

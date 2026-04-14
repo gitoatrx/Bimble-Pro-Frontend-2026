@@ -1,39 +1,25 @@
 import { NextResponse } from "next/server";
-import type { ClinicLoginRequest } from "@/lib/clinic/types";
+import type { ClinicLoginRequest, ClinicLoginResponse } from "@/lib/clinic/types";
 
-const CLINIC_LOGIN_API_URL =
-  process.env.CLINIC_LOGIN_API_URL ??
-  "http://127.0.0.1:8096/api/clinics/login";
+const BIMBLE_API_BASE_URL =
+  process.env.BIMBLE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
-function hasRequiredLoginFields(payload: ClinicLoginRequest) {
+function hasRequiredFields(payload: ClinicLoginRequest): boolean {
   return Boolean(
-    payload.clinic_name.trim() &&
-      payload.username.trim() &&
-      payload.password.trim() &&
-      /^\d{4}$/.test(payload.pin),
+    payload.clinic_slug?.trim() &&
+      payload.username?.trim() &&
+      payload.password?.trim(),
   );
 }
 
-function extractErrorMessage(data: unknown) {
-  if (
-    data &&
-    typeof data === "object" &&
-    "message" in data &&
-    typeof data.message === "string"
-  ) {
-    return data.message;
+function extractErrorMessage(data: unknown): string {
+  if (data && typeof data === "object") {
+    const obj = data as Record<string, unknown>;
+    if (typeof obj.detail === "string") return obj.detail;
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.error === "string") return obj.error;
   }
-
-  if (
-    data &&
-    typeof data === "object" &&
-    "error" in data &&
-    typeof data.error === "string"
-  ) {
-    return data.error;
-  }
-
-  return "Clinic login failed.";
+  return "Clinic login failed. Please check your credentials and try again.";
 }
 
 export async function POST(request: Request) {
@@ -43,20 +29,20 @@ export async function POST(request: Request) {
     payload = (await request.json()) as ClinicLoginRequest;
   } catch {
     return NextResponse.json(
-      { message: "Invalid clinic login payload." },
+      { message: "Invalid login payload." },
       { status: 400 },
     );
   }
 
-  if (!hasRequiredLoginFields(payload)) {
+  if (!hasRequiredFields(payload)) {
     return NextResponse.json(
-      { message: "Please submit all required clinic login fields." },
+      { message: "Clinic slug, username, and password are required." },
       { status: 400 },
     );
   }
 
   try {
-    const backendResponse = await fetch(CLINIC_LOGIN_API_URL, {
+    const backendResponse = await fetch(`${BIMBLE_API_BASE_URL}/clinic-auth/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -75,10 +61,12 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(responseData, { status: backendResponse.status });
+    return NextResponse.json(responseData as ClinicLoginResponse, {
+      status: backendResponse.status,
+    });
   } catch {
     return NextResponse.json(
-      { message: "We could not reach the clinic login service right now." },
+      { message: "Could not reach the login service. Please try again." },
       { status: 502 },
     );
   }

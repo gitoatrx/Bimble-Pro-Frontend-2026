@@ -15,7 +15,6 @@ import { ClinicPlanOptionCard } from "@/components/clinic-access/clinic-plan-opt
 import { Button } from "@/components/ui/button";
 import { API_ENDPOINTS } from "@/lib/api/endpoints";
 import { apiRequest } from "@/lib/api/request";
-import { defaultClinicPlans } from "@/lib/clinic/billing";
 import {
   readClinicSelectedPlan,
   storeClinicSelectedPlan,
@@ -26,47 +25,26 @@ import type {
 } from "@/lib/clinic/types";
 import { cn } from "@/lib/utils";
 
-const billingCycleCopy: Record<
-  ClinicPlan["id"],
-  Record<
-    ClinicBillingCycle,
-    {
-      subtitle: string;
-      priceLabel: string;
-      billingInterval: string;
-      savingsLabel: string;
-    }
-  >
-> = {
-  standard: {
-    monthly: {
-      subtitle: "Everything a clinic needs to get started.",
-      priceLabel: "CAD 149 / month",
-      billingInterval: "Billed monthly after the 90-day trial",
-      savingsLabel: "Flexible monthly billing",
-    },
-    annual: {
-      subtitle: "2 months free with annual billing.",
-      priceLabel: "CAD 1,490 / year",
+function getPricingForCycle(
+  plan: ClinicPlan,
+  cycle: ClinicBillingCycle,
+): { priceLabel: string; billingInterval: string; subtitle: string } {
+  if (cycle === "annual") {
+    const annualCents = plan.monthlyPriceCents * 10;
+    const annualCAD = (annualCents / 100).toLocaleString("en-CA", { minimumFractionDigits: 0 });
+    return {
+      priceLabel: `CAD ${annualCAD} / year`,
       billingInterval: "Billed annually after the 90-day trial",
-      savingsLabel: "Best value for growing teams",
-    },
-  },
-  premium: {
-    monthly: {
-      subtitle: "For clinics that want more automation and support.",
-      priceLabel: "CAD 249 / month",
-      billingInterval: "Billed monthly after the 90-day trial",
-      savingsLabel: "Flexible monthly billing",
-    },
-    annual: {
       subtitle: "2 months free with annual billing.",
-      priceLabel: "CAD 2,490 / year",
-      billingInterval: "Billed annually after the 90-day trial",
-      savingsLabel: "Best value for growing teams",
-    },
-  },
-};
+    };
+  }
+
+  return {
+    priceLabel: plan.priceLabel,
+    billingInterval: "Billed monthly after the 90-day trial",
+    subtitle: plan.subtitle,
+  };
+}
 
 const comparisonRows = [
   {
@@ -101,21 +79,10 @@ const comparisonRows = [
   },
 ];
 
-function buildPlanForCycle(plan: ClinicPlan, billingCycle: ClinicBillingCycle) {
-  const pricing = billingCycleCopy[plan.id][billingCycle];
-
-  return {
-    ...plan,
-    subtitle: pricing.subtitle,
-    priceLabel: pricing.priceLabel,
-    billingInterval: pricing.billingInterval,
-    billingCycle,
-  };
-}
 
 export default function ClinicPlanPage() {
   const router = useRouter();
-  const [plans, setPlans] = useState<ClinicPlan[]>(defaultClinicPlans);
+  const [plans, setPlans] = useState<ClinicPlan[]>([]);
   const [billingCycle, setBillingCycle] =
     useState<ClinicBillingCycle>("monthly");
   const [selectedPlanId, setSelectedPlanId] =
@@ -130,8 +97,8 @@ export default function ClinicPlanPage() {
       setBillingCycle(storedPlan.billingCycle ?? "monthly");
     } else {
       const recommendedPlan =
-        defaultClinicPlans.find((plan) => plan.recommended) ??
-        defaultClinicPlans[0];
+        plans.find((plan) => plan.recommended) ??
+        plans[0];
 
       if (recommendedPlan) {
         setSelectedPlanId(recommendedPlan.id);
@@ -159,7 +126,7 @@ export default function ClinicPlanPage() {
           }
         }
       } catch {
-        // Keep the local defaults when the plan endpoint is unavailable.
+        // Backend unavailable — plans will remain empty and UI shows a message.
       } finally {
         if (isActive) {
           setIsLoadingPlans(false);
@@ -175,7 +142,12 @@ export default function ClinicPlanPage() {
   }, []);
 
   const displayPlans = useMemo(
-    () => plans.map((plan) => buildPlanForCycle(plan, billingCycle)),
+    () =>
+      plans.map((plan) => ({
+        ...plan,
+        ...getPricingForCycle(plan, billingCycle),
+        billingCycle,
+      })),
     [billingCycle, plans],
   );
 
@@ -202,7 +174,7 @@ export default function ClinicPlanPage() {
     }
 
     storeClinicSelectedPlan(selectedPlan);
-    router.push("/onboarding/billing");
+    router.push("/onboarding");
   }
 
   return (
@@ -284,7 +256,11 @@ export default function ClinicPlanPage() {
 
               {isLoadingPlans ? (
                 <p className="text-sm font-medium text-muted-foreground">
-                  Refreshing plan options...
+                  Loading plans from backend...
+                </p>
+              ) : plans.length === 0 ? (
+                <p className="text-sm font-medium text-red-500">
+                  Could not load plans — make sure the backend is running at localhost:8000.
                 </p>
               ) : null}
             </div>
@@ -390,8 +366,8 @@ export default function ClinicPlanPage() {
                 <div className="mt-4 space-y-3">
                   {[
                     "Choose your preferred billing cycle.",
-                    "Enter card details on the next screen.",
-                    "Finish clinic setup after billing is confirmed.",
+                    "Fill in your clinic details on the next screen.",
+                    "Complete payment securely through Stripe to activate your account.",
                   ].map((step, index) => (
                     <div key={step} className="flex items-start gap-3">
                       <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
@@ -427,7 +403,7 @@ export default function ClinicPlanPage() {
                     Includes
                   </p>
                   <ul className="mt-3 space-y-2">
-                    {(selectedPlan?.features ?? defaultClinicPlans[0].features)
+                    {(selectedPlan?.features ?? [])
                       .slice(0, 3)
                       .map((feature) => (
                         <li
@@ -448,7 +424,7 @@ export default function ClinicPlanPage() {
                 onClick={handleContinue}
                 disabled={!selectedPlan}
               >
-                Continue to card details
+                Continue to clinic setup
                 <ArrowRight className="h-4 w-4" />
               </Button>
 

@@ -2,10 +2,11 @@ export type OnboardingStepKey = "clinic" | "location" | "operations";
 
 export type ClinicBillingCycle = "monthly" | "annual";
 
-export type ClinicPlanId = "standard" | "premium";
+// Plan ID is now a free-form string matching the backend plan_code (e.g. "standard", "premium")
+export type ClinicPlanId = string;
 
 export type ClinicPlan = {
-  id: ClinicPlanId;
+  id: ClinicPlanId;          // maps to backend plan_code
   name: string;
   subtitle: string;
   priceLabel: string;
@@ -14,18 +15,20 @@ export type ClinicPlan = {
   features: string[];
   recommended?: boolean;
   billingCycle?: ClinicBillingCycle;
+  monthlyPriceCents: number; // raw monthly price from backend for annual calc
 };
 
-export type ClinicBillingFormData = {
-  cardholderName: string;
-  cardNumber: string;
-  expiryDate: string;
-  cvc: string;
-  billingPostalCode: string;
-};
-
-export type ClinicBillingState = {
-  billingToken: string;
+// Raw response from GET /api/v1/plans
+export type BackendPlan = {
+  plan_id: number;
+  plan_code: string;
+  plan_name: string;
+  description: string | null;
+  base_seats: number;
+  monthly_price_cents: number;
+  extra_seat_price_cents: number;
+  is_active: boolean;
+  created_at: string;
 };
 
 export type ClinicOnboardingFormData = {
@@ -42,12 +45,20 @@ export type ClinicOnboardingFormData = {
   servicesProvided: string;
 };
 
-export type ClinicCredentials = {
-  clinicName: string;
+// Stored after a successful signup — used by login page
+export type ClinicSignupResult = {
+  clinicId: number;
+  clinicCode: string;
+  slug: string;
+  stripeCheckoutUrl: string;
+  message: string;
+};
+
+// Login form fields
+export type ClinicLoginFormData = {
+  clinicSlug: string;
   username: string;
   password: string;
-  pin: string;
-  internalClinicCode?: string;
 };
 
 export type ClinicAddressSelection = {
@@ -57,44 +68,47 @@ export type ClinicAddressSelection = {
   postalCode: string;
 };
 
+// POST /api/v1/clinics/signup — request
 export type ClinicRegisterRequest = {
+  clinic_name: string;
   clinic_legal_name: string;
   clinic_display_name: string;
-  established_year: number;
-  address: string;
-  city: string;
-  province: string;
-  postal_code: string;
   email: string;
-  phone_number: string;
-  clinic_type: string;
-  services_provided: string[];
-  plan_id: ClinicPlanId;
-  billing_token: string;
+  phone: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  postal_code?: string;
+  clinic_type?: string;
+  established_year?: number;
+  plan_code: string;
 };
 
+// POST /api/v1/clinics/signup — response
 export type ClinicRegisterResponse = {
-  clinic_name: string;
-  username: string;
-  password: string;
-  pin: string;
-  internal_clinic_code: string;
+  clinic_id: number;
+  clinic_code: string;
+  slug: string;
+  stripe_checkout_url: string;
+  queue_position: number;
   message: string;
 };
 
+// POST /api/v1/clinic-auth/login — request
 export type ClinicLoginRequest = {
-  clinic_name: string;
+  clinic_slug: string;
   username: string;
   password: string;
-  pin: string;
 };
 
+// POST /api/v1/clinic-auth/login — response
 export type ClinicLoginResponse = {
-  clinicName: string;
-  username: string;
-  appUrl: string;
-  bootstrapUrl: string;
-  message: string;
+  access_token: string;
+  token_type: string;
+  user_id: number;
+  clinic_slug: string;
+  doctor_id: number | null;
+  role: "clinic_user" | "doctor";
 };
 
 export type FieldErrors<T> = Partial<Record<keyof T, string>>;
