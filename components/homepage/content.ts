@@ -206,24 +206,24 @@ export const whyFeatures: Feature[] = [
 
 export const stats: Stat[] = [
   {
-    value: "1 in 5",
-    label: "BC residents has no family doctor",
-    sub: "We're fixing that.",
+    value: "6.5M",
+    label: "Canadians without a family doctor",
+    sub: "Bimble helps find one.",
   },
   {
     value: "27 wks",
-    label: "Average specialist wait in BC",
+    label: "Average specialist wait across Canada",
     sub: "Bimble finds faster.",
+  },
+  {
+    value: "46%",
+    label: "Can't get same-day care when needed",
+    sub: "Bimble changes that.",
   },
   {
     value: "< 2 min",
     label: "Average time to book on Bimble",
     sub: "No hold music.",
-  },
-  {
-    value: "500+",
-    label: "Verified BC clinics",
-    sub: "And growing weekly.",
   },
 ];
 
