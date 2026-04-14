@@ -144,11 +144,6 @@ export function Homepage() {
               in under <em>2 minutes.</em>
             </h1>
 
-            <p className="hp-hero-sub">
-              Tell us what you need. We match you with a verified BC doctor
-              and confirm your appointment — no hold music, no callbacks.
-            </p>
-
             {/* Search bar — clean single-line, no stacked labels */}
             <div className="hp-search-box">
               <div className="hp-search-field">
