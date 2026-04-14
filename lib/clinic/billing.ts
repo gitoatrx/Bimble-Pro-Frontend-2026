@@ -20,6 +20,7 @@ export const defaultClinicPlans: ClinicPlan[] = [
       "Core scheduling tools",
       "Email support",
     ],
+    billingCycle: "monthly",
   },
   {
     id: "premium",
@@ -35,6 +36,7 @@ export const defaultClinicPlans: ClinicPlan[] = [
       "Advanced workflow automation",
     ],
     recommended: true,
+    billingCycle: "monthly",
   },
 ];
 

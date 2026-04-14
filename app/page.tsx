@@ -1,11 +1,12 @@
+import type { Metadata } from "next";
+import { Homepage } from "@/components/homepage/homepage";
+
+export const metadata: Metadata = {
+  title: "Bimble Canada — Book Your Appointment Today",
+  description:
+    "Bimble connects booking, secure verification, documentation, and follow-up for calmer healthcare workflows.",
+};
+
 export default function HomePage() {
-  return (
-    <div className="h-dvh w-full overflow-hidden bg-[#FAFCFB]">
-      <iframe
-        title="CareConnect Canada homepage"
-        src="/healthcare-homepage.html"
-        className="block h-full w-full border-0"
-      />
-    </div>
-  );
+  return <Homepage />;
 }

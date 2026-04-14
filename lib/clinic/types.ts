@@ -1,5 +1,7 @@
 export type OnboardingStepKey = "clinic" | "location" | "operations";
 
+export type ClinicBillingCycle = "monthly" | "annual";
+
 export type ClinicPlanId = "standard" | "premium";
 
 export type ClinicPlan = {
@@ -11,6 +13,7 @@ export type ClinicPlan = {
   trialDays: number;
   features: string[];
   recommended?: boolean;
+  billingCycle?: ClinicBillingCycle;
 };
 
 export type ClinicBillingFormData = {

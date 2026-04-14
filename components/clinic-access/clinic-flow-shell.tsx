@@ -17,31 +17,36 @@ export function ClinicFlowShell({
   contentClassName,
 }: ClinicFlowShellProps) {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-              <span className="text-lg font-bold text-primary-foreground">B</span>
+    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-white/85 backdrop-blur-xl">
+        <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-lg font-bold text-primary-foreground shadow-sm">
+              B
             </div>
-            <span className="text-xl font-bold text-slate-900">Bimble</span>
+            <div className="leading-tight">
+              <span className="block font-display text-lg font-semibold text-foreground">
+                Bimble
+              </span>
+              <span className="block text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
+                Clinic workspace
+              </span>
+            </div>
           </Link>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-2xl">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className={cn("mx-auto w-full", contentClassName ?? "max-w-2xl")}>
           <Link
             href={backHref}
-            className="mb-6 inline-flex items-center gap-2 text-sm text-slate-500 transition-colors hover:text-slate-900"
+            className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-muted-foreground shadow-sm transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
             {backLabel}
           </Link>
 
-          <div className={cn("py-2", contentClassName)}>
-            {children}
-          </div>
+          <div className="py-2">{children}</div>
         </div>
       </main>
     </div>

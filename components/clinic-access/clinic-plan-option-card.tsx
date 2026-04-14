@@ -19,14 +19,14 @@ export function ClinicPlanOptionCard({
   return (
     <div
       className={cn(
-        "relative flex h-full flex-col rounded-2xl border bg-card p-5 shadow-sm transition-all",
+        "relative flex h-full flex-col rounded-[2rem] border bg-white p-6 shadow-sm transition-all duration-200",
         selected
-          ? "border-primary ring-2 ring-primary/20"
-          : "border-border hover:-translate-y-0.5 hover:border-primary/40",
+          ? "border-primary/40 ring-2 ring-primary/15 shadow-md"
+          : "border-border hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg",
       )}
     >
       {plan.recommended ? (
-        <div className="absolute top-4 right-4 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
+        <div className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground shadow-sm">
           <Sparkles className="h-3.5 w-3.5" />
           Recommended
         </div>
@@ -42,14 +42,14 @@ export function ClinicPlanOptionCard({
           </p>
         </div>
 
-        <div className="rounded-xl bg-primary/5 px-4 py-3">
+        <div className="rounded-2xl bg-primary/5 px-4 py-4">
           <p className="text-2xl font-semibold text-foreground">
             {plan.priceLabel}
           </p>
           <p className="text-sm text-muted-foreground">{plan.billingInterval}</p>
         </div>
 
-        <div className="rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+        <div className="rounded-2xl border border-border bg-slate-50 px-4 py-3 text-sm text-muted-foreground">
           Includes a {plan.trialDays}-day trial. Autopay starts after the trial
           ends.
         </div>
@@ -67,14 +67,14 @@ export function ClinicPlanOptionCard({
       <Button
         type="button"
         className={cn(
-          "mt-6 h-12",
+          "mt-6 h-12 rounded-2xl",
           selected
             ? "bg-primary text-primary-foreground hover:bg-primary/90"
             : "bg-foreground text-background hover:bg-foreground/90",
         )}
         onClick={onSelect}
       >
-        {selected ? "Continue with this plan" : "Choose plan"}
+        {selected ? "Selected plan" : "Choose this plan"}
       </Button>
     </div>
   );

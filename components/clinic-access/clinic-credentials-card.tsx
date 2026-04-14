@@ -19,7 +19,7 @@ type ClinicCredentialsCardProps = {
 };
 
 const neutralFieldClassName =
-  "h-12 !border-slate-200 !bg-white !text-slate-900 !shadow-none focus-visible:ring-primary/20";
+  "h-12 !border-border !bg-white !text-foreground !shadow-none focus-visible:ring-primary/20";
 
 export function ClinicCredentialsCard({
   credentials,
@@ -34,7 +34,7 @@ export function ClinicCredentialsCard({
 
   return (
     <form
-      className="max-w-xl space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+      className="max-w-xl space-y-6 rounded-[2rem] border border-border bg-white p-6 shadow-sm sm:p-8"
       onSubmit={(event) => {
         event.preventDefault();
         if (!isLoggingIn) {
@@ -44,7 +44,7 @@ export function ClinicCredentialsCard({
     >
       <div className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor="clinicName" className="block text-sm font-medium text-slate-900">
+          <label htmlFor="clinicName" className="block text-sm font-medium text-foreground">
             Clinic Name
           </label>
           <Input
@@ -59,7 +59,7 @@ export function ClinicCredentialsCard({
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="username" className="block text-sm font-medium text-slate-900">
+          <label htmlFor="username" className="block text-sm font-medium text-foreground">
             Username
           </label>
           <Input
@@ -75,7 +75,7 @@ export function ClinicCredentialsCard({
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <label htmlFor="password" className="block text-sm font-medium text-slate-900">
+            <label htmlFor="password" className="block text-sm font-medium text-foreground">
               Password
             </label>
             <Button
@@ -107,7 +107,7 @@ export function ClinicCredentialsCard({
 
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
-            <label htmlFor="pin" className="block text-sm font-medium text-slate-900">
+            <label htmlFor="pin" className="block text-sm font-medium text-foreground">
               PIN
             </label>
             <Button
