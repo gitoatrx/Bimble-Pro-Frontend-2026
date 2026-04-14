@@ -26,8 +26,8 @@
   --r-lg:        18px;
   --r-xl:        24px;
   --r-2xl:       32px;
-  --ff-display:  var(--font-display);
-  --ff-body:     var(--font-sans);
+  --ff-display:  var(--font-plus-jakarta, var(--font-dm-sans, sans-serif));
+  --ff-body:     var(--font-dm-sans, sans-serif);
 
   font-family: var(--ff-body);
   background: var(--bg);
@@ -38,7 +38,9 @@
 
 .hp *, .hp *::before, .hp *::after { box-sizing: border-box; }
 .hp a { text-decoration: none; color: inherit; }
-.hp button { cursor: pointer; border: none; background: none; font-family: inherit; }
+/* Don't reset button backgrounds — specific classes (hp-search-btn, etc.) handle their own */
+.hp button { cursor: pointer; border: none; font-family: inherit; }
+.hp button:not([class]) { background: none; }
 .hp ul { list-style: none; margin: 0; padding: 0; }
 
 /* ── Utilities ─────────────────────────────── */
@@ -69,14 +71,14 @@
 
 .hp-btn-primary {
   display: inline-flex; align-items: center; gap: 7px;
-  background: var(--blue); color: var(--white);
+  background: #1f4fff; color: #ffffff;
   font-size: 15px; font-weight: 600;
   padding: 13px 24px; border-radius: var(--r-md);
   transition: background 0.18s, transform 0.15s, box-shadow 0.18s;
   box-shadow: 0 2px 12px rgba(31,79,255,0.25);
 }
 .hp-btn-primary:hover {
-  background: var(--blue-dark); transform: translateY(-1px);
+  background: #1438d4; transform: translateY(-1px);
   box-shadow: 0 4px 20px rgba(31,79,255,0.35);
 }
 
@@ -142,12 +144,12 @@
 
 .hp-nav-cta {
   display: inline-flex; align-items: center; gap: 6px;
-  background: var(--blue); color: var(--white);
+  background: #1f4fff; color: #ffffff;
   font-size: 14px; font-weight: 600;
   padding: 9px 18px; border-radius: var(--r-sm);
   transition: background 0.15s, transform 0.12s;
 }
-.hp-nav-cta:hover { background: var(--blue-dark); transform: translateY(-1px); }
+.hp-nav-cta:hover { background: #1438d4; transform: translateY(-1px); }
 
 /* ══════════════════════════════════════════════
    HERO
@@ -183,9 +185,9 @@
 
 .hp-hero-h1 {
   font-family: var(--ff-display);
-  font-size: clamp(36px, 5.5vw, 60px);
-  font-weight: 700; line-height: 1.1;
-  letter-spacing: -0.03em; color: var(--navy);
+  font-size: clamp(38px, 5.5vw, 64px);
+  font-weight: 800; line-height: 1.08;
+  letter-spacing: -0.035em; color: var(--navy);
   margin: 0 0 20px;
 }
 
@@ -230,13 +232,14 @@
 
 .hp-search-btn {
   display: flex; align-items: center; gap: 8px;
-  background: var(--blue); color: var(--white);
+  background: #1f4fff; color: #ffffff;
   font-size: 15px; font-weight: 600;
-  padding: 0 28px; flex-shrink: 0;
+  padding: 0 32px; flex-shrink: 0;
   transition: background 0.15s;
   border-radius: 0 calc(var(--r-xl) - 1.5px) calc(var(--r-xl) - 1.5px) 0;
+  white-space: nowrap;
 }
-.hp-search-btn:hover { background: var(--blue-dark); }
+.hp-search-btn:hover { background: #1438d4; }
 
 /* Trust chips */
 .hp-trust-chips {
@@ -257,20 +260,21 @@
 /* Quick specialties */
 .hp-quick-specialties {
   display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+  max-width: 640px; margin: 0 auto;
 }
 
 .hp-quick-specialty {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 13px; font-weight: 500; color: var(--slate);
-  background: white; border: 1.5px solid var(--border);
-  border-radius: 100px; padding: 7px 14px;
-  transition: all 0.15s; cursor: pointer;
+  background: #ffffff; border: 1.5px solid var(--border);
+  border-radius: 100px; padding: 7px 15px;
+  transition: all 0.15s;
 }
 .hp-quick-specialty:hover {
   background: var(--blue-pale); border-color: rgba(31,79,255,0.3);
   color: var(--blue); transform: translateY(-1px);
 }
-.hp-quick-specialty-icon { font-size: 15px; }
+.hp-quick-specialty-icon { font-size: 14px; line-height: 1; }
 
 /* ══════════════════════════════════════════════
    STATS BAR
@@ -487,12 +491,12 @@
 
 .hp-clinic-book-btn {
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;
-  background: var(--blue); color: var(--white);
+  background: #1f4fff; color: #ffffff;
   font-size: 14px; font-weight: 600;
   padding: 11px 0; border-radius: var(--r-md);
   transition: background 0.15s;
 }
-.hp-clinic-book-btn:hover { background: var(--blue-dark); }
+.hp-clinic-book-btn:hover { background: #1438d4; }
 
 .hp-clinics-cta {
   text-align: center; margin-top: 40px;
@@ -631,7 +635,7 @@
 
 .hp-cta-banner-primary {
   display: inline-flex; align-items: center; gap: 7px;
-  background: var(--white); color: var(--blue);
+  background: #ffffff; color: #1f4fff;
   font-size: 15px; font-weight: 700;
   padding: 14px 28px; border-radius: var(--r-md);
   transition: transform 0.15s, box-shadow 0.15s;
