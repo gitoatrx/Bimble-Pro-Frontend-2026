@@ -24,11 +24,19 @@ export type BackendPlan = {
   plan_code: string;
   plan_name: string;
   description: string | null;
-  base_seats: number;
+  trial_days: number;
+  grace_days: number;
+  provider_limit: number | null;
   monthly_price_cents: number;
   extra_seat_price_cents: number;
+  premium_visibility_minutes: number;
+  standard_visibility_delay_minutes: number;
+  signup_available: boolean;
   is_active: boolean;
+  benefits: string[];
+  clinics_count: number;
   created_at: string;
+  updated_at: string;
 };
 
 export type ClinicOnboardingFormData = {
@@ -57,6 +65,7 @@ export type ClinicSignupResult = {
 // Login form fields
 export type ClinicLoginFormData = {
   clinicSlug: string;
+  pin: string;
   username: string;
   password: string;
 };
@@ -97,6 +106,7 @@ export type ClinicRegisterResponse = {
 // POST /api/v1/clinic-auth/login — request
 export type ClinicLoginRequest = {
   clinic_slug: string;
+  pin: string;
   username: string;
   password: string;
 };

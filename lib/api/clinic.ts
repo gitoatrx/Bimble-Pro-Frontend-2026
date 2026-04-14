@@ -18,7 +18,7 @@ export async function submitClinicOnboarding(
   const registerPayload = buildClinicRegisterPayload(payload, planCode);
 
   const response = await apiRequest<ClinicRegisterResponse, ClinicRegisterRequest>({
-    endpoint: API_ENDPOINTS.clinicOnboarding,
+    endpoint: API_ENDPOINTS.clinicSignup,
     method: "POST",
     body: registerPayload,
   });

@@ -79,6 +79,28 @@ export function ClinicCredentialsCard({
         </div>
 
         <div className="space-y-2">
+          <label
+            htmlFor="pin"
+            className="block text-sm font-medium text-foreground"
+          >
+            PIN
+          </label>
+          <Input
+            id="pin"
+            type="password"
+            value={formData.pin}
+            onChange={(event) => onFieldChange("pin", event.target.value)}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="1234"
+            className={neutralFieldClassName}
+          />
+          <p className="text-xs text-muted-foreground">
+            Enter the clinic PIN associated with this account.
+          </p>
+        </div>
+
+        <div className="space-y-2">
           <div className="flex items-center justify-between gap-3">
             <label
               htmlFor="password"

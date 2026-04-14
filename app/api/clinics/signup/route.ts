@@ -3,38 +3,40 @@ import {
   buildBackendApiUrl,
   extractBackendErrorMessage,
 } from "@/lib/api/backend";
-import type { ClinicLoginRequest, ClinicLoginResponse } from "@/lib/clinic/types";
+import type { ClinicRegisterRequest, ClinicRegisterResponse } from "@/lib/clinic/types";
 
-function hasRequiredFields(payload: ClinicLoginRequest): boolean {
+function hasRequiredFields(payload: ClinicRegisterRequest): boolean {
   return Boolean(
-    payload.clinic_slug?.trim() &&
-      payload.pin?.trim() &&
-      payload.username?.trim() &&
-      payload.password?.trim(),
+    payload.clinic_name?.trim() &&
+      payload.clinic_legal_name?.trim() &&
+      payload.clinic_display_name?.trim() &&
+      payload.email?.trim() &&
+      payload.phone?.trim() &&
+      payload.plan_code?.trim(),
   );
 }
 
 export async function POST(request: Request) {
-  let payload: ClinicLoginRequest;
+  let payload: ClinicRegisterRequest;
 
   try {
-    payload = (await request.json()) as ClinicLoginRequest;
+    payload = (await request.json()) as ClinicRegisterRequest;
   } catch {
     return NextResponse.json(
-      { message: "Invalid login payload." },
+      { message: "Invalid registration payload." },
       { status: 400 },
     );
   }
 
   if (!hasRequiredFields(payload)) {
     return NextResponse.json(
-      { message: "Clinic slug, PIN, username, and password are required." },
+      { message: "Please complete all required fields before submitting." },
       { status: 400 },
     );
   }
 
   try {
-    const backendResponse = await fetch(buildBackendApiUrl("/clinic-auth/login"), {
+    const backendResponse = await fetch(buildBackendApiUrl("/clinics/signup"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -51,19 +53,19 @@ export async function POST(request: Request) {
         {
           message: extractBackendErrorMessage(
             responseData,
-            "Clinic login failed. Please check your credentials and try again.",
+            "Clinic registration failed. Please try again.",
           ),
         },
         { status: backendResponse.status },
       );
     }
 
-    return NextResponse.json(responseData as ClinicLoginResponse, {
+    return NextResponse.json(responseData as ClinicRegisterResponse, {
       status: backendResponse.status,
     });
   } catch {
     return NextResponse.json(
-      { message: "Could not reach the login service. Please try again." },
+      { message: "Could not reach the registration service. Please try again." },
       { status: 502 },
     );
   }

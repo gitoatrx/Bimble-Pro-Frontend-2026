@@ -14,7 +14,7 @@ import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { ClinicPlanOptionCard } from "@/components/clinic-access/clinic-plan-option-card";
 import { Button } from "@/components/ui/button";
 import { API_ENDPOINTS } from "@/lib/api/endpoints";
-import { apiRequest } from "@/lib/api/request";
+import { ApiRequestError, apiRequest } from "@/lib/api/request";
 import {
   readClinicSelectedPlan,
   storeClinicSelectedPlan,
@@ -88,6 +88,7 @@ export default function ClinicPlanPage() {
   const [selectedPlanId, setSelectedPlanId] =
     useState<ClinicPlan["id"] | null>(null);
   const [isLoadingPlans, setIsLoadingPlans] = useState(true);
+  const [plansError, setPlansError] = useState<string | null>(null);
 
   useEffect(() => {
     const storedPlan = readClinicSelectedPlan();
@@ -95,14 +96,6 @@ export default function ClinicPlanPage() {
     if (storedPlan) {
       setSelectedPlanId(storedPlan.id);
       setBillingCycle(storedPlan.billingCycle ?? "monthly");
-    } else {
-      const recommendedPlan =
-        plans.find((plan) => plan.recommended) ??
-        plans[0];
-
-      if (recommendedPlan) {
-        setSelectedPlanId(recommendedPlan.id);
-      }
     }
 
     let isActive = true;
@@ -113,10 +106,26 @@ export default function ClinicPlanPage() {
           endpoint: API_ENDPOINTS.clinicPlans,
         });
 
-        if (isActive && Array.isArray(response) && response.length > 0) {
-          setPlans(response);
+        if (!isActive) {
+          return;
+        }
 
-          if (!storedPlan) {
+        if (Array.isArray(response) && response.length > 0) {
+          setPlans(response);
+          setPlansError(null);
+
+          const matchingStoredPlan = storedPlan
+            ? response.find((plan) => plan.id === storedPlan.id)
+            : null;
+
+          if (storedPlan && !matchingStoredPlan) {
+            const recommendedPlan =
+              response.find((plan) => plan.recommended) ?? response[0];
+
+            if (recommendedPlan) {
+              setSelectedPlanId(recommendedPlan.id);
+            }
+          } else if (!storedPlan) {
             const recommendedPlan =
               response.find((plan) => plan.recommended) ?? response[0];
 
@@ -124,9 +133,22 @@ export default function ClinicPlanPage() {
               setSelectedPlanId(recommendedPlan.id);
             }
           }
+
+          return;
         }
-      } catch {
-        // Backend unavailable — plans will remain empty and UI shows a message.
+
+        setPlans([]);
+        setPlansError("No plans are available right now.");
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setPlansError(
+          error instanceof ApiRequestError
+            ? error.message
+            : "Could not load plans right now. Please try again.",
+        );
       } finally {
         if (isActive) {
           setIsLoadingPlans(false);
@@ -258,9 +280,13 @@ export default function ClinicPlanPage() {
                 <p className="text-sm font-medium text-muted-foreground">
                   Loading plans from backend...
                 </p>
+              ) : plansError ? (
+                <p className="text-sm font-medium text-red-500">
+                  {plansError}
+                </p>
               ) : plans.length === 0 ? (
                 <p className="text-sm font-medium text-red-500">
-                  Could not load plans — make sure the backend is running at localhost:8000.
+                  No plans are available right now.
                 </p>
               ) : null}
             </div>

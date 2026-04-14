@@ -9,6 +9,7 @@ import type { ClinicLoginFormData } from "@/lib/clinic/types";
 
 const emptyForm: ClinicLoginFormData = {
   clinicSlug: "",
+  pin: "",
   username: "",
   password: "",
 };
@@ -60,7 +61,7 @@ export default function ClinicLoginPage() {
           Clinic Login
         </h1>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          Enter your clinic slug and credentials to sign in.
+          Enter your clinic slug, PIN, and credentials to sign in.
         </p>
       </div>
 
