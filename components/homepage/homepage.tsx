@@ -8,7 +8,6 @@ import {
   bcCities,
   faqs,
   howItWorks,
-  navItems,
   specialties,
   stats,
   testimonials,
@@ -36,10 +35,70 @@ async function reverseGeocodeCity(lat: number, lon: number): Promise<string | nu
   }
 }
 
+/* ── Animated stat counter ──────────────────── */
+
+type StatFormat = { prefix: string; target: number; suffix: string; decimals: number };
+
+function parseStatValue(value: string): StatFormat {
+  if (value.startsWith("< ")) {
+    const n = parseFloat(value.replace("< ", "").split(" ")[0]);
+    const suffix = value.replace(`< ${n}`, "");
+    return { prefix: "< ", target: n, suffix, decimals: 0 };
+  }
+  const match = value.match(/^([\d.]+)(.*)$/);
+  if (!match) return { prefix: "", target: 0, suffix: value, decimals: 0 };
+  const n = parseFloat(match[1]);
+  const decimals = match[1].includes(".") ? match[1].split(".")[1].length : 0;
+  return { prefix: "", target: n, suffix: match[2], decimals };
+}
+
+function AnimatedStat({ value, active }: { value: string; active: boolean }) {
+  const { prefix, target, suffix, decimals } = parseStatValue(value);
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    if (!active) return;
+    const duration = 1800;
+    const startTime = performance.now();
+
+    const tick = (now: number) => {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      setDisplay(eased * target);
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+  }, [active, target]);
+
+  const formatted = display.toFixed(decimals);
+  return <>{prefix}{formatted}{suffix}</>;
+}
+
 /* ── Component ──────────────────────────────── */
 
 export function Homepage() {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+  const [navScrolled, setNavScrolled] = useState(false);
+  const [statsActive, setStatsActive] = useState(false);
+  const statsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onScroll = () => setNavScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const el = statsRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setStatsActive(true); observer.disconnect(); } },
+      { threshold: 0.3 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Hero search state
   const [careQuery, setCareQuery] = useState("");
@@ -107,28 +166,22 @@ export function Homepage() {
     <div className="hp">
 
       {/* ══ NAV ══════════════════════════════════ */}
-      <nav className="hp-nav">
+      <nav className={`hp-nav${navScrolled ? " hp-nav--scrolled" : ""}`}>
         <div className="hp-nav-inner">
           <Link href="/" className="hp-nav-logo">
             <BrandMark size={36} priority className="h-9 w-9" />
             Bimble
           </Link>
 
-          <ul className="hp-nav-links">
-            {navItems.map((item) => (
-              <li key={item.label}>
-                <Link href={item.href}>{item.label}</Link>
-              </li>
-            ))}
-          </ul>
-
           <div className="hp-nav-actions">
-            <Link href="/login" className="hp-nav-signin">
-              Sign In
+            <Link href="/onboarding/plan" className="hp-nav-list">
+              List your practice
             </Link>
-            <Link href="#find-care" className="hp-nav-cta">
-              <CalendarDays size={14} strokeWidth={2.5} />
-              Find Care
+            <Link href="/login" className="hp-nav-signin">
+              Log in
+            </Link>
+            <Link href="/onboarding/plan" className="hp-nav-cta">
+              Sign up
             </Link>
           </div>
         </div>
@@ -213,11 +266,13 @@ export function Homepage() {
         </section>
 
         {/* ══ STATS BAR ════════════════════════════ */}
-        <div className="hp-stats">
+        <div className="hp-stats" ref={statsRef}>
           <div className="hp-stats-inner">
             {stats.map((stat) => (
               <div key={stat.label} className="hp-stat">
-                <div className="hp-stat-value">{stat.value}</div>
+                <div className="hp-stat-value">
+                  <AnimatedStat value={stat.value} active={statsActive} />
+                </div>
                 <div className="hp-stat-label">{stat.label}</div>
                 {stat.sub && <div className="hp-stat-sub">{stat.sub}</div>}
               </div>
