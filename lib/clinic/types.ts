@@ -103,22 +103,20 @@ export type ClinicRegisterResponse = {
   message: string;
 };
 
-// POST /api/v1/clinic-auth/login — request
+// POST /api/clinics/login — request
 export type ClinicLoginRequest = {
-  clinic_slug: string;
+  clinic_name: string;
   pin: string;
   username: string;
   password: string;
 };
 
-// POST /api/v1/clinic-auth/login — response
+// POST /api/clinics/login — response
 export type ClinicLoginResponse = {
-  access_token: string;
-  token_type: string;
-  user_id: number;
-  clinic_slug: string;
-  doctor_id: number | null;
-  role: "clinic_user" | "doctor";
+  clinic_name: string;
+  app_url: string;
+  bootstrap_url: string;
+  message: string;
 };
 
 export type FieldErrors<T> = Partial<Record<keyof T, string>>;

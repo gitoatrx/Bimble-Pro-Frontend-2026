@@ -45,11 +45,11 @@ export function ClinicCredentialsCard({
             htmlFor="clinicSlug"
             className="block text-sm font-medium text-foreground"
           >
-            Clinic Slug
+            Clinic Name
           </label>
           <Input
             id="clinicSlug"
-            placeholder="my-clinic"
+            placeholder="DR Ortho"
             value={formData.clinicSlug}
             onChange={(event) => onFieldChange("clinicSlug", event.target.value)}
             autoComplete="organization"
@@ -57,8 +57,7 @@ export function ClinicCredentialsCard({
             autoFocus
           />
           <p className="text-xs text-muted-foreground">
-            The unique identifier for your clinic (e.g.{" "}
-            <code className="rounded bg-slate-100 px-1 py-0.5">bimble-downtown</code>).
+            Use the clinic name exactly as registered in the backend.
           </p>
         </div>
 

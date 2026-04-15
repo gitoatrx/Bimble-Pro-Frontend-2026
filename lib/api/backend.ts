@@ -1,4 +1,4 @@
-const DEFAULT_BIMBLE_API_BASE_URL = "http://172.16.172.184:8000/api/v1";
+const DEFAULT_BIMBLE_API_BASE_URL = "http://172.16.172.197:8000/api/v1";
 
 function normalizeBackendBaseUrl(value: string | undefined) {
   const trimmed = value?.trim();
@@ -21,6 +21,13 @@ export function getBackendApiBaseUrl() {
 export function buildBackendApiUrl(path: string) {
   const cleanPath = path.replace(/^\/+/, "");
   return new URL(cleanPath, `${getBackendApiBaseUrl()}/`).toString();
+}
+
+export function buildBackendOriginUrl(path: string) {
+  const cleanPath = path.replace(/^\/+/, "");
+  const origin = new URL(getBackendApiBaseUrl()).origin;
+
+  return new URL(cleanPath, `${origin}/`).toString();
 }
 
 export function extractBackendErrorMessage(

@@ -32,17 +32,12 @@ export default function ClinicLoginPage() {
       const response = await submitClinicLogin(formData);
       clearClinicSessionState();
 
-      // Store JWT for use in subsequent clinic API calls
       if (typeof window !== "undefined") {
-        window.sessionStorage.setItem(
-          "bimble:clinic:access_token",
-          response.access_token,
-        );
-        window.sessionStorage.setItem("bimble:clinic:slug", response.clinic_slug);
+        window.sessionStorage.setItem("bimble:clinic:name", response.clinic_name);
+        window.sessionStorage.setItem("bimble:clinic:bootstrap_url", response.bootstrap_url);
       }
 
-      // TODO: replace with actual clinic app URL once known
-      window.location.assign(`/dashboard?clinic=${response.clinic_slug}`);
+      window.location.assign(response.app_url);
     } catch (error) {
       setLoginError(
         error instanceof Error
@@ -61,7 +56,7 @@ export default function ClinicLoginPage() {
           Clinic Login
         </h1>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          Enter your clinic slug, PIN, and credentials to sign in.
+          Enter your clinic name, PIN, and credentials to sign in.
         </p>
       </div>
 

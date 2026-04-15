@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { GooglePlacesAddressInput } from "@/components/clinic-access/google-places-address-input";
@@ -54,6 +55,7 @@ const neutralSelectClassName =
   "flex h-12 w-full rounded-md !border !border-slate-200 !bg-white px-3 py-2 text-sm text-slate-900 shadow-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/20";
 
 export default function ClinicOnboardingPage() {
+  const router = useRouter();
   const [step, setStep] = useState<OnboardingStepKey>("clinic");
   const [formData, setFormData] = useState<ClinicOnboardingFormData>(
     initialClinicOnboardingFormData,
@@ -169,8 +171,10 @@ export default function ClinicOnboardingPage() {
       const signupResult = await submitClinicOnboarding(formData, selectedPlan.id);
       storeClinicSignupResult(signupResult);
 
-      // Redirect to Stripe Checkout to complete payment
-      window.location.assign(signupResult.stripeCheckoutUrl);
+      // Stay inside the app and hand off to the local billing step.
+      router.push(
+        `/onboarding/billing?clinicCode=${encodeURIComponent(signupResult.clinicCode)}&clinicId=${encodeURIComponent(String(signupResult.clinicId))}&planId=${encodeURIComponent(selectedPlan.id)}&planName=${encodeURIComponent(selectedPlan.name)}&message=${encodeURIComponent(signupResult.message)}`,
+      );
     } catch (error) {
       setSubmitError(
         error instanceof Error
