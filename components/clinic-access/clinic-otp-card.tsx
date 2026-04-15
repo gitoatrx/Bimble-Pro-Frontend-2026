@@ -59,7 +59,7 @@ export function ClinicOtpCard({
 
   function handleOtpInput(value: string) {
     // Only allow digits, max 6 characters
-    const digits = value.replace(/\D/g, "").slice(0, 6);
+    const digits = value.replace(/\D/g, "").slice(0, 8);
     onOtpChange(digits);
   }
 
@@ -68,7 +68,7 @@ export function ClinicOtpCard({
       className="max-w-xl space-y-6 rounded-[2rem] border border-border bg-white p-6 shadow-sm sm:p-8"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!isVerifying && otpCode.length === 6) {
+        if (!isVerifying && otpCode.length === 8) {
           onVerify();
         }
       }}
@@ -93,11 +93,11 @@ export function ClinicOtpCard({
           id="otp-code"
           inputMode="numeric"
           autoComplete="one-time-code"
-          placeholder="000000"
+          placeholder="00000000"
           value={otpCode}
           onChange={(event) => handleOtpInput(event.target.value)}
           className={neutralFieldClassName}
-          maxLength={6}
+          maxLength={8}
         />
       </div>
 
