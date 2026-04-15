@@ -92,14 +92,15 @@ export default function BillingContent() {
           </div>
           <div className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-primary">
-              Payment confirmed
+              Registration received
             </p>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              Your clinic is being set up
+              Your clinic login is pending approval
             </h1>
             <p className="text-sm leading-6 text-muted-foreground">
-              Thank you! Your payment was received and your clinic is now in the
-              provisioning queue. This normally takes a few minutes.
+              Thank you for registering. Our team will review and activate your
+              clinic. Once approved, you will receive your login credentials by
+              email.
             </p>
           </div>
         </div>
@@ -117,8 +118,9 @@ export default function BillingContent() {
                 1
               </span>
               <span>
-                We are provisioning your clinic database, EMR, and login system
-                in the background. You do not need to stay on this page.
+                Your clinic is in the setup queue. We will configure your
+                database, EMR, and admin account in the background — no action
+                needed from you right now.
               </span>
             </li>
             <li className="flex items-start gap-3">
@@ -126,8 +128,11 @@ export default function BillingContent() {
                 2
               </span>
               <span>
-                Once setup is complete you will receive an email with your admin
-                username, temporary password, and login link.
+                <strong className="text-foreground">
+                  Once approved and ready
+                </strong>
+                , you will receive an email with your admin login credentials
+                and a direct link to sign in.
               </span>
             </li>
             <li className="flex items-start gap-3">
@@ -135,9 +140,9 @@ export default function BillingContent() {
                 3
               </span>
               <span>
-                Log in to your Bimble clinic portal and click{" "}
-                <strong>Open EMR</strong> to launch OSCAR without signing in
-                again.
+                Sign in to your Bimble clinic portal and click{" "}
+                <strong className="text-foreground">Open EMR</strong> to launch
+                OSCAR — no separate login required.
               </span>
             </li>
           </ol>
@@ -147,8 +152,10 @@ export default function BillingContent() {
         <div className="flex items-start gap-3 rounded-xl border border-border bg-blue-50/50 p-4">
           <Mail className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
           <p className="text-sm text-muted-foreground">
-            A confirmation email has been sent to you. If you don&#39;t see it
-            within a few minutes, check your spam folder or contact{" "}
+            A confirmation email has been sent to you. Keep an eye on your
+            inbox — your credentials will arrive there once the clinic is
+            approved. Check your spam folder if you don&#39;t see it, or
+            contact{" "}
             <a
               href="mailto:support@bimble.pro"
               className="text-primary underline underline-offset-2"
