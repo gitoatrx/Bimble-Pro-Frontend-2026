@@ -171,10 +171,17 @@ export default function ClinicOnboardingPage() {
       const signupResult = await submitClinicOnboarding(formData, selectedPlan.id);
       storeClinicSignupResult(signupResult);
 
-      // Stay inside the app and hand off to the local billing step.
-      router.push(
-        `/onboarding/billing?clinicCode=${encodeURIComponent(signupResult.clinicCode)}&clinicId=${encodeURIComponent(String(signupResult.clinicId))}&planId=${encodeURIComponent(selectedPlan.id)}&planName=${encodeURIComponent(selectedPlan.name)}&message=${encodeURIComponent(signupResult.message)}`,
-      );
+      // Redirect to Stripe checkout for payment.
+      // Stripe will redirect back to /onboarding/billing?success=1 on completion
+      // or /onboarding/billing?cancelled=1 if the user cancels.
+      if (signupResult.stripeCheckoutUrl) {
+        window.location.assign(signupResult.stripeCheckoutUrl);
+      } else {
+        // No Stripe URL (mock/dev mode) — go straight to billing confirmation
+        router.push(
+          `/onboarding/billing?success=1&clinic_id=${encodeURIComponent(String(signupResult.clinicId))}&clinic_code=${encodeURIComponent(signupResult.clinicCode)}`,
+        );
+      }
     } catch (error) {
       setSubmitError(
         error instanceof Error

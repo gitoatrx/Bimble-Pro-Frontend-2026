@@ -132,11 +132,16 @@ export type ClinicLoginRequest = {
 export type ClinicLoginResponse = {
   access_token: string;
   token_type: string;
-  user_id: number;
   clinic_slug: string;
-  doctor_id: number | null;
-  role: string;
-  app_url: string;
+  clinic_name: string;
+  username: string;
+  temp_password?: string | null;
+  temp_pin?: string | null;
+  dashboard_url: string;
+  app_url: string;          // bootstrap_url — opens OSCAR with auto-login
+  bootstrap_url: string;
+  emr_launch_url: string;
+  message: string;
 };
 
 export type ClinicLoginSession = {
