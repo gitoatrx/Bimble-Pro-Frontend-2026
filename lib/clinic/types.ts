@@ -70,11 +70,9 @@ export type ClinicSignupResult = {
   bootstrapUrl?: string;
 };
 
-// Login form fields
+// Login form fields (step 1 — email + password only; PIN/slug handled server-side)
 export type ClinicLoginFormData = {
-  clinicSlug: string;
-  pin: string;
-  username: string;
+  email: string;
   password: string;
 };
 
@@ -120,15 +118,32 @@ export type ClinicRegisterResponse = {
   bootstrap_url?: string;
 };
 
-// POST /api/v1/clinic-auth/login — request
+// POST /api/v1/clinic-auth/login — step 1 request (email + password)
 export type ClinicLoginRequest = {
-  clinic_slug: string;
-  pin: string;
-  username: string;
+  email: string;
   password: string;
 };
 
-// POST /api/v1/clinic-auth/login — response
+// POST /api/v1/clinic-auth/login — step 1 response (OTP dispatched)
+export type ClinicLoginStep1Response = {
+  requires_otp: boolean;
+  otp_token: string;
+  masked_email: string;
+  message: string;
+};
+
+// POST /api/v1/clinic-auth/verify-otp — request
+export type ClinicOtpVerifyRequest = {
+  otp_token: string;
+  otp_code: string;
+};
+
+// POST /api/v1/clinic-auth/resend-otp — request
+export type ClinicOtpResendRequest = {
+  otp_token: string;
+};
+
+// POST /api/v1/clinic-auth/verify-otp — response (full session)
 export type ClinicLoginResponse = {
   access_token: string;
   token_type: string;
