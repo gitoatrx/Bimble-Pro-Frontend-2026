@@ -33,8 +33,8 @@ export default function ClinicLoginPage() {
       clearClinicSessionState();
 
       if (typeof window !== "undefined") {
-        window.sessionStorage.setItem("bimble:clinic:name", response.clinic_name);
-        window.sessionStorage.setItem("bimble:clinic:bootstrap_url", response.bootstrap_url);
+        window.sessionStorage.setItem("bimble:clinic:name", response.clinic_slug);
+        window.sessionStorage.setItem("bimble:clinic:token", response.access_token);
       }
 
       window.location.assign(response.app_url);

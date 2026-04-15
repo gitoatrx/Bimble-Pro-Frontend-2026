@@ -4,7 +4,7 @@ export function buildClinicLoginPayload(
   formData: ClinicLoginFormData,
 ): ClinicLoginRequest {
   return {
-    clinic_name: formData.clinicSlug.trim(),
+    clinic_slug: formData.clinicSlug.trim(),
     pin: formData.pin.trim(),
     username: formData.username.trim(),
     password: formData.password,

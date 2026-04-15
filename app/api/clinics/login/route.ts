@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import {
-  buildBackendOriginUrl,
+  buildBackendApiUrl,
   extractBackendErrorMessage,
 } from "@/lib/api/backend";
 import type { ClinicLoginRequest, ClinicLoginResponse } from "@/lib/clinic/types";
 
 function hasRequiredFields(payload: ClinicLoginRequest): boolean {
   return Boolean(
-    payload.clinic_name?.trim() &&
+    payload.clinic_slug?.trim() &&
       payload.pin?.trim() &&
       payload.username?.trim() &&
       payload.password?.trim(),
@@ -28,13 +28,13 @@ export async function POST(request: Request) {
 
   if (!hasRequiredFields(payload)) {
     return NextResponse.json(
-      { message: "Clinic name, PIN, username, and password are required." },
+      { message: "Clinic slug, PIN, username, and password are required." },
       { status: 400 },
     );
   }
 
   try {
-    const backendResponse = await fetch(buildBackendOriginUrl("/api/clinics/login"), {
+    const backendResponse = await fetch(buildBackendApiUrl("/clinic-auth/login"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
