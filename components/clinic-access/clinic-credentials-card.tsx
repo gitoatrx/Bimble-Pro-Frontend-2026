@@ -28,6 +28,7 @@ export function ClinicCredentialsCard({
   onFieldChange,
 }: ClinicCredentialsCardProps) {
   const [showPassword, setShowPassword] = useState(false);
+  const [showPin, setShowPin] = useState(false);
 
   return (
     <form
@@ -56,9 +57,6 @@ export function ClinicCredentialsCard({
             className={neutralFieldClassName}
             autoFocus
           />
-          <p className="text-xs text-muted-foreground">
-            Use the clinic name exactly as registered in the backend.
-          </p>
         </div>
 
         <div className="space-y-2">
@@ -75,28 +73,6 @@ export function ClinicCredentialsCard({
             autoComplete="username"
             className={neutralFieldClassName}
           />
-        </div>
-
-        <div className="space-y-2">
-          <label
-            htmlFor="pin"
-            className="block text-sm font-medium text-foreground"
-          >
-            PIN
-          </label>
-          <Input
-            id="pin"
-            type="password"
-            value={formData.pin}
-            onChange={(event) => onFieldChange("pin", event.target.value)}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            placeholder="1234"
-            className={neutralFieldClassName}
-          />
-          <p className="text-xs text-muted-foreground">
-            Enter the clinic PIN associated with this account.
-          </p>
         </div>
 
         <div className="space-y-2">
@@ -128,6 +104,41 @@ export function ClinicCredentialsCard({
             value={formData.password}
             onChange={(event) => onFieldChange("password", event.target.value)}
             autoComplete="current-password"
+            className={neutralFieldClassName}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <label
+              htmlFor="pin"
+              className="block text-sm font-medium text-foreground"
+            >
+              PIN
+            </label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-auto px-0 text-primary hover:bg-transparent hover:text-primary/80"
+              onClick={() => setShowPin((current) => !current)}
+            >
+              {showPin ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+              {showPin ? "Hide" : "Show"}
+            </Button>
+          </div>
+          <Input
+            id="pin"
+            type={showPin ? "text" : "password"}
+            value={formData.pin}
+            onChange={(event) => onFieldChange("pin", event.target.value)}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="1234"
             className={neutralFieldClassName}
           />
         </div>

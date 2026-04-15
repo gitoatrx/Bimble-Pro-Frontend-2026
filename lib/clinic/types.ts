@@ -60,6 +60,14 @@ export type ClinicSignupResult = {
   slug: string;
   stripeCheckoutUrl: string;
   message: string;
+  clinicName?: string;
+  username?: string;
+  password?: string;
+  pin?: string;
+  tempPassword?: string;
+  tempPin?: string;
+  appUrl?: string;
+  bootstrapUrl?: string;
 };
 
 // Login form fields
@@ -98,9 +106,18 @@ export type ClinicRegisterResponse = {
   clinic_id: number;
   clinic_code: string;
   slug: string;
+  username?: string;
+  temp_password?: string;
+  temp_pin?: string;
   stripe_checkout_url: string;
+  clinic_login_url?: string;
   queue_position: number;
   message: string;
+  clinic_name?: string;
+  password?: string;
+  pin?: string;
+  app_url?: string;
+  bootstrap_url?: string;
 };
 
 // POST /api/v1/clinic-auth/login — request
@@ -120,6 +137,12 @@ export type ClinicLoginResponse = {
   doctor_id: number | null;
   role: string;
   app_url: string;
+};
+
+export type ClinicLoginSession = {
+  clinicSlug: string;
+  accessToken: string;
+  appUrl: string;
 };
 
 export type FieldErrors<T> = Partial<Record<keyof T, string>>;

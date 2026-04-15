@@ -1,4 +1,5 @@
 import type {
+  ClinicLoginSession,
   ClinicOnboardingFormData,
   ClinicPlan,
   ClinicSignupResult,
@@ -8,11 +9,19 @@ import type {
 const CLINIC_ONBOARDING_STATE_KEY = "bimble:clinic:onboarding-state";
 const CLINIC_SELECTED_PLAN_KEY = "bimble:clinic:selected-plan";
 const CLINIC_SIGNUP_RESULT_KEY = "bimble:clinic:signup-result";
+const CLINIC_LOGIN_SESSION_KEY = "bimble:clinic:login-session";
 
 export type StoredClinicOnboardingState = {
   step: OnboardingStepKey;
   formData: ClinicOnboardingFormData;
 };
+
+export type ClinicLoginPrefill = Partial<{
+  clinicSlug: string;
+  username: string;
+  password: string;
+  pin: string;
+}>;
 
 function isOnboardingStepKey(value: unknown): value is OnboardingStepKey {
   return value === "clinic" || value === "location" || value === "operations";
@@ -69,6 +78,25 @@ function isClinicSignupResult(value: unknown): value is ClinicSignupResult {
   );
 }
 
+function firstString(...values: Array<unknown>) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function isClinicLoginSession(value: unknown): value is ClinicLoginSession {
+  return (
+    isRecord(value) &&
+    typeof value.clinicSlug === "string" &&
+    typeof value.accessToken === "string" &&
+    typeof value.appUrl === "string"
+  );
+}
+
 function isStoredClinicOnboardingState(
   value: unknown,
 ): value is StoredClinicOnboardingState {
@@ -101,6 +129,30 @@ function removeSessionValue(key: string) {
   }
 
   window.sessionStorage.removeItem(key);
+}
+
+function readPersistentValue(key: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage.getItem(key);
+}
+
+function writePersistentValue(key: string, value: unknown) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function removePersistentValue(key: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(key);
 }
 
 export function storeClinicOnboardingState(state: StoredClinicOnboardingState) {
@@ -160,8 +212,73 @@ export function readClinicSignupResult() {
   }
 }
 
+export function readClinicLoginPrefillFromSignup() {
+  const signupResult = readClinicSignupResult();
+
+  if (!signupResult) {
+    return null;
+  }
+
+  const prefill: ClinicLoginPrefill = {};
+
+  const clinicSlug = firstString(
+    signupResult.clinicName,
+    signupResult.slug,
+    signupResult.clinicCode,
+  );
+
+  const username = firstString(signupResult.username);
+  const password = firstString(
+    signupResult.password,
+    signupResult.tempPassword,
+  );
+  const pin = firstString(signupResult.pin, signupResult.tempPin);
+
+  if (clinicSlug) {
+    prefill.clinicSlug = clinicSlug;
+  }
+
+  if (username) {
+    prefill.username = username;
+  }
+
+  if (password) {
+    prefill.password = password;
+  }
+
+  if (pin) {
+    prefill.pin = pin;
+  }
+
+  return Object.keys(prefill).length > 0 ? prefill : null;
+}
+
+export function storeClinicLoginSession(session: ClinicLoginSession) {
+  writePersistentValue(CLINIC_LOGIN_SESSION_KEY, session);
+}
+
+export function readClinicLoginSession() {
+  const raw = readPersistentValue(CLINIC_LOGIN_SESSION_KEY);
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isClinicLoginSession(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearClinicLoginSession() {
+  removePersistentValue(CLINIC_LOGIN_SESSION_KEY);
+}
+
 export function clearClinicSessionState() {
   removeSessionValue(CLINIC_ONBOARDING_STATE_KEY);
   removeSessionValue(CLINIC_SELECTED_PLAN_KEY);
   removeSessionValue(CLINIC_SIGNUP_RESULT_KEY);
+  removePersistentValue(CLINIC_LOGIN_SESSION_KEY);
 }

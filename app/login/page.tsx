@@ -1,10 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { ClinicCredentialsCard } from "@/components/clinic-access/clinic-credentials-card";
 import { submitClinicLogin } from "@/lib/api/clinic";
-import { clearClinicSessionState } from "@/lib/clinic/session";
+import {
+  clearClinicSessionState,
+  readClinicLoginPrefillFromSignup,
+  storeClinicLoginSession,
+} from "@/lib/clinic/session";
 import type { ClinicLoginFormData } from "@/lib/clinic/types";
 
 const emptyForm: ClinicLoginFormData = {
@@ -15,9 +20,18 @@ const emptyForm: ClinicLoginFormData = {
 };
 
 export default function ClinicLoginPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState<ClinicLoginFormData>(emptyForm);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState("");
+
+  useEffect(() => {
+    const signupPrefill = readClinicLoginPrefillFromSignup();
+
+    if (signupPrefill) {
+      setFormData((current) => ({ ...current, ...signupPrefill }));
+    }
+  }, []);
 
   function updateField(field: keyof ClinicLoginFormData, value: string) {
     setFormData((current) => ({ ...current, [field]: value }));
@@ -31,13 +45,12 @@ export default function ClinicLoginPage() {
     try {
       const response = await submitClinicLogin(formData);
       clearClinicSessionState();
-
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem("bimble:clinic:name", response.clinic_slug);
-        window.sessionStorage.setItem("bimble:clinic:token", response.access_token);
-      }
-
-      window.location.assign(response.app_url);
+      storeClinicLoginSession({
+        clinicSlug: response.clinic_slug,
+        accessToken: response.access_token,
+        appUrl: response.app_url,
+      });
+      router.push("/clinic/dashboard");
     } catch (error) {
       setLoginError(
         error instanceof Error
