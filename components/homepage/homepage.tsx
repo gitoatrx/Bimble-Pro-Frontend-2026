@@ -1,25 +1,134 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { CalendarDays, Home, MapPin, Search } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Activity, ArrowRight, Battery, Brain, CalendarCheck, Droplets, MapPin, Moon, Search, Sun, TrendingUp, Users, Zap } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import {
-  clinicBenefits,
-  clinicCards,
+  bcCities,
   faqs,
-  navItems,
-  provinces,
-  specialties,
+  marqueeConditions,
+  stats,
   testimonials,
-  whyFeatures,
 } from "./content";
 import "./homepage.css";
 
-export function Homepage() {
-  const [activeSpecialtyIndex, setActiveSpecialtyIndex] = useState(0);
-  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+/* ── Geolocation helpers ────────────────────── */
 
+async function reverseGeocodeCity(lat: number, lon: number): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+      { headers: { "Accept-Language": "en" } },
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      address?: { city?: string; town?: string; village?: string; state?: string };
+    };
+    const city =
+      data.address?.city ?? data.address?.town ?? data.address?.village ?? null;
+    return city ? city : null;
+  } catch {
+    return null;
+  }
+}
+
+/* ── Animated stat counter ──────────────────── */
+
+type StatFormat = { prefix: string; target: number; suffix: string; decimals: number };
+
+function parseStatValue(value: string): StatFormat {
+  if (value.startsWith("< ")) {
+    const n = parseFloat(value.replace("< ", "").split(" ")[0]);
+    const suffix = value.replace(`< ${n}`, "");
+    return { prefix: "< ", target: n, suffix, decimals: 0 };
+  }
+  const match = value.match(/^([\d.]+)(.*)$/);
+  if (!match) return { prefix: "", target: 0, suffix: value, decimals: 0 };
+  const n = parseFloat(match[1]);
+  const decimals = match[1].includes(".") ? match[1].split(".")[1].length : 0;
+  return { prefix: "", target: n, suffix: match[2], decimals };
+}
+
+function AnimatedStat({ value, active }: { value: string; active: boolean }) {
+  const { prefix, target, suffix, decimals } = parseStatValue(value);
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    if (!active) return;
+    const duration = 1800;
+    const startTime = performance.now();
+
+    const tick = (now: number) => {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      setDisplay(eased * target);
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+  }, [active, target]);
+
+  const formatted = display.toFixed(decimals);
+  return <>{prefix}{formatted}{suffix}</>;
+}
+
+/* ── Component ──────────────────────────────── */
+
+export function Homepage() {
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+  const [navScrolled, setNavScrolled] = useState(false);
+  const [statsActive, setStatsActive] = useState(false);
+  const statsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onScroll = () => setNavScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const el = statsRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setStatsActive(true); observer.disconnect(); } },
+      { threshold: 0.3 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Hero search state
+  const [careQuery, setCareQuery] = useState("");
+  const [locationQuery, setLocationQuery] = useState("");
+  const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "done" | "denied">("idle");
+  const [showCitySuggestions, setShowCitySuggestions] = useState(false);
+  const locationInputRef = useRef<HTMLInputElement>(null);
+
+  /* ── Geolocation on mount ─────────────────── */
+  useEffect(() => {
+    if (typeof window === "undefined" || !navigator.geolocation) return;
+
+    setGeoStatus("loading");
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const city = await reverseGeocodeCity(pos.coords.latitude, pos.coords.longitude);
+        if (city) {
+          setLocationQuery(city + ", BC");
+        } else {
+          setLocationQuery("Vancouver, BC");
+        }
+        setGeoStatus("done");
+      },
+      () => {
+        setGeoStatus("denied");
+      },
+      { timeout: 6000 },
+    );
+  }, []);
+
+  /* ── Reveal animation ─────────────────────── */
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -29,531 +138,270 @@ export function Homepage() {
           }
         });
       },
-      { threshold: 0.08 },
+      { threshold: 0.07 },
     );
 
-    document.querySelectorAll(".reveal").forEach((element, index) => {
-      const target = element as HTMLElement;
-      target.style.transitionDelay = `${index * 80}ms`;
+    document.querySelectorAll(".reveal").forEach((el, i) => {
+      const target = el as HTMLElement;
+      target.style.transitionDelay = `${i * 70}ms`;
       observer.observe(target);
     });
 
     return () => observer.disconnect();
   }, []);
 
+  const filteredCities = bcCities.filter(
+    (c) =>
+      locationQuery.length > 0 &&
+      c.toLowerCase().startsWith(locationQuery.toLowerCase()),
+  );
+
+  const handleSelectCity = useCallback((city: string) => {
+    setLocationQuery(city + ", BC");
+    setShowCitySuggestions(false);
+  }, []);
+
   return (
-    <div className="homepage-page">
-      <nav>
-        <Link href="#hero" className="nav-logo">
-          <BrandMark size={40} priority className="h-10 w-10" />
-          Bimble
-        </Link>
+    <div className="hp">
 
-        <ul className="nav-links">
-          {navItems.map((item) => (
-            <li key={item.label}>
-              <Link href={item.href}>{item.label}</Link>
-            </li>
-          ))}
-        </ul>
+      {/* ══ NAV ══════════════════════════════════ */}
+      <nav className={`hp-nav${navScrolled ? " hp-nav--scrolled" : ""}`}>
+        <div className="hp-nav-inner">
+          <Link href="/" className="hp-nav-logo">
+            <BrandMark size={36} priority className="h-9 w-9" />
+            Bimble
+          </Link>
 
-        <div className="nav-actions">
-          <Link href="/login" className="btn-ghost">
-            Sign In
-          </Link>
-          <Link href="/onboarding/plan" className="btn-primary">
-            <CalendarDays size={15} strokeWidth={2.5} />
-            Book Now
-          </Link>
+          <div className="hp-nav-actions">
+            <Link href="/onboarding/plan" className="hp-nav-list">
+              List your practice
+            </Link>
+            <Link href="/login" className="hp-nav-signin">
+              Log in
+            </Link>
+            <Link href="/onboarding/plan" className="hp-nav-cta">
+              Sign up
+            </Link>
+          </div>
         </div>
       </nav>
 
       <main>
-        <section className="hero" id="hero">
-          <div className="hero-bg" />
-          <div className="hero-leaf" />
 
-          <div className="hero-left">
-            <div className="hero-badge">
-              <div className="hero-badge-dot" />
-              ✳ Bimble connects booking, notes, and recovery
-            </div>
-
-            <h1 className="hero-title">
-              <em>Healthcare</em>
-              <br />
-              that stays connected.
+        {/* ══ HERO + STATS + MARQUEE (one connected section) ══ */}
+        <section className="hp-hero" id="find-care">
+          <div className="hp-hero-inner">
+            <h1 className="hp-hero-h1">
+              See a doctor today.<br />
+              Confirmed in <em>minutes.</em>
             </h1>
 
-            <p className="hero-subtitle">
-              Bimble brings booking, Secure OTP verification, AI-assisted
-              documentation, and recovery workflows together in one calm
-              experience.
-            </p>
-
-            <div className="hero-search-wrap">
-              <div className="hero-search-field">
-                <Search size={18} strokeWidth={2} />
-                <div style={{ flex: 1 }}>
-                  <label>Care need or specialist</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Family Care, Dermatology…"
-                  />
-                </div>
+            {/* Search bar */}
+            <div className="hp-search-box">
+              <div className="hp-search-field">
+                <Search size={17} strokeWidth={2} />
+                <input
+                  type="text"
+                  value={careQuery}
+                  onChange={(e) => setCareQuery(e.target.value)}
+                  placeholder="What type of care do you need?"
+                  autoComplete="off"
+                />
               </div>
 
-              <div className="hero-search-field">
-                <MapPin size={18} strokeWidth={2} />
-                <div style={{ flex: 1 }}>
-                  <label>City or Province</label>
-                  <input type="text" placeholder="Toronto, ON…" />
-                </div>
-              </div>
+              <div className="hp-search-field" style={{ position: "relative" }}>
+                <MapPin
+                  size={17}
+                  strokeWidth={2}
+                  style={{ color: geoStatus === "loading" ? "#1f4fff" : undefined }}
+                />
+                <input
+                  ref={locationInputRef}
+                  type="text"
+                  value={locationQuery}
+                  onChange={(e) => { setLocationQuery(e.target.value); setShowCitySuggestions(true); }}
+                  onFocus={() => setShowCitySuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowCitySuggestions(false), 150)}
+                  placeholder={geoStatus === "loading" ? "Detecting location…" : "City in BC"}
+                  autoComplete="off"
+                />
 
-              <Link href="#find-clinic" className="btn-primary hero-search-cta">
-                <Search size={16} strokeWidth={2.5} />
-                Find Appointment
-              </Link>
-            </div>
-
-            <div className="hero-cta-row">
-              <p style={{ fontSize: "0.82rem", color: "var(--muted)" }}>
-                Popular:
-              </p>
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {["Family Care", "Walk-In", "Virtual Care", "Urgent Care"].map(
-                  (item) => (
-                    <span
-                      key={item}
-                      style={{
-                        fontSize: "0.8rem",
-                        color: "var(--teal-deep)",
-                        background: "var(--teal-pale)",
-                        padding: "5px 12px",
-                        borderRadius: "20px",
-                        fontWeight: 500,
-                        border: "1px solid rgba(31,79,255,0.12)",
-                      }}
-                    >
-                      {item}
-                    </span>
-                  ),
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="hero-right">
-            <div style={{ position: "relative", padding: "40px 20px 20px" }}>
-              <div className="hero-card-main">
-                <div className="hero-card-header">
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "16px",
-                    }}
-                  >
-                    <div>
-                      <div
+                {showCitySuggestions && filteredCities.length > 0 && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0,
+                    background: "#fff", border: "1px solid #d0d8f0",
+                    borderRadius: "12px", boxShadow: "0 8px 32px rgba(15,31,61,0.12)",
+                    zIndex: 50, overflow: "hidden",
+                  }}>
+                    {filteredCities.map((city) => (
+                      <button
+                        key={city}
+                        type="button"
+                        onMouseDown={() => handleSelectCity(city)}
                         style={{
-                          fontSize: "0.8rem",
-                          color: "rgba(255,255,255,0.65)",
-                          marginBottom: "6px",
-                          fontWeight: 500,
+                          width: "100%", textAlign: "left", padding: "10px 16px",
+                          fontSize: "14px", color: "#0f1f3d", background: "none",
+                          border: "none", cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: "8px",
                         }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#eef2ff"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "none"; }}
                       >
-                        BIMBLE CARE FLOW
-                      </div>
-                      <div
-                        style={{
-                          fontFamily: "var(--ff-display)",
-                          fontSize: "1.3rem",
-                          fontWeight: 600,
-                          color: "white",
-                        }}
-                      >
-                        One connected visit
-                      </div>
-                    </div>
-                    <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.7)" }}>
-                      Live
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "8px",
-                      flexWrap: "wrap",
-                      marginTop: "16px",
-                    }}
-                  >
-                    <div className="workflow-chip">🔒 Secure OTP</div>
-                    <div className="workflow-chip">✍️ AI Notes</div>
-                    <div className="workflow-chip">🚚 Delivery</div>
-                  </div>
-                </div>
-
-                <div className="hero-card-body">
-                  <div className="workflow-label">Connected workflow</div>
-
-                  <div className="doctor-row">
-                    <div className="doctor-avatar">🔒</div>
-                    <div className="doctor-info">
-                      <div className="doctor-name">
-                        Secure OTP verification
-                      </div>
-                      <div className="doctor-spec">
-                        Identity confirmed before the appointment starts.
-                      </div>
-                    </div>
-                    <div className="avail-tag">Live</div>
-                  </div>
-
-                  <div className="doctor-row">
-                    <div className="doctor-avatar">✍️</div>
-                    <div className="doctor-info">
-                      <div className="doctor-name">
-                        AI-assisted documentation
-                      </div>
-                      <div className="doctor-spec">
-                        Notes and summaries stay in one calm flow.
-                      </div>
-                    </div>
-                    <div className="avail-tag">Draft ready</div>
-                  </div>
-
-                  <div className="doctor-row">
-                    <div className="doctor-avatar">🚚</div>
-                    <div className="doctor-info">
-                      <div className="doctor-name">Medicine delivery</div>
-                      <div className="doctor-spec">
-                        Pharmacy or home delivery after the visit.
-                      </div>
-                    </div>
-                    <div className="avail-tag busy">On track</div>
-                  </div>
-
-                  <div className="booking-confirm">
-                    <div className="booking-confirm-icon">📅</div>
-                    <div>
-                      <div
-                        style={{
-                          fontSize: "0.85rem",
-                          fontWeight: 600,
-                          color: "white",
-                        }}
-                      >
-                        Ready to continue?
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.78rem",
-                          color: "rgba(255,255,255,0.65)",
-                        }}
-                      >
-                        Instant confirmation · No credit card needed
-                      </div>
-                    </div>
-                    <Link
-                      href="/onboarding/plan"
-                      className="booking-confirm-button"
-                    >
-                      Start →
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section" id="how-it-works">
-          <div className="section-header-row reveal">
-            <div>
-              <div className="section-tag">
-                <div className="section-tag-line" />
-                Simple & Fast
-              </div>
-              <h2 className="section-title">
-                Book your appointment
-                <br />
-                in <em>under 2 minutes</em>
-              </h2>
-              <p className="section-subtitle">
-                No phone calls. No faxes. Just a few taps to connect with the
-                right clinic in your area.
-              </p>
-            </div>
-            <Link href="/onboarding/plan" className="btn-primary section-cta">
-              Get Started Free →
-            </Link>
-          </div>
-
-          <div className="steps-grid reveal">
-            <div className="steps-connector" />
-            <div className="step-card active">
-              <div className="step-num">01</div>
-              <div className="step-icon">🔍</div>
-              <div className="step-title">Search Your Area</div>
-              <div className="step-desc">
-                Enter your city, postal code, or allow location access to find
-                clinics near you instantly.
-              </div>
-            </div>
-            <div className="step-card">
-              <div className="step-num">02</div>
-              <div className="step-icon">🩺</div>
-              <div className="step-title">Choose a Specialist</div>
-              <div className="step-desc">
-                Browse verified doctors and clinics by specialty, language,
-                availability, and patient reviews.
-              </div>
-            </div>
-            <div className="step-card">
-              <div className="step-num">03</div>
-              <div className="step-icon">📅</div>
-              <div className="step-title">Pick a Time Slot</div>
-              <div className="step-desc">
-                See real-time availability — same-day, next-day, or schedule
-                ahead. Pick what works for you.
-              </div>
-            </div>
-            <div className="step-card">
-              <div className="step-num">04</div>
-              <div className="step-icon">✅</div>
-              <div className="step-title">Get Confirmed</div>
-              <div className="step-desc">
-                Instant confirmation via SMS and email. Reminders sent before
-                your appointment so you never miss it.
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="section section-alt" id="specialties">
-          <div className="section-header-row reveal">
-            <div>
-              <div className="section-tag">
-                <div className="section-tag-line" />
-                All Specialties
-              </div>
-              <h2 className="section-title">
-                Care for every
-                <br />
-                <em>health need</em>
-              </h2>
-            </div>
-            <Link href="#specialties" className="btn-ghost">
-              View All Specialties →
-            </Link>
-          </div>
-
-          <div className="spec-scroll reveal">
-            {specialties.map((specialty, index) => (
-              <button
-                key={specialty.name}
-                type="button"
-                className={`spec-pill ${
-                  activeSpecialtyIndex === index ? "active" : ""
-                }`}
-                onClick={() => setActiveSpecialtyIndex(index)}
-              >
-                <span className="spec-icon">{specialty.icon}</span>
-                <div className="spec-name">{specialty.name}</div>
-                <div className="spec-count">{specialty.count}</div>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="section" id="find-clinic">
-          <div className="section-header-row reveal">
-            <div>
-              <div className="section-tag">
-                <div className="section-tag-line" />
-                Top Rated
-              </div>
-              <h2 className="section-title">
-                Featured clinics
-                <br />
-                in <em>your city</em>
-              </h2>
-              <p className="section-subtitle">
-                Hand-picked, verified clinics with real patient reviews and
-                real-time availability.
-              </p>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                flexWrap: "wrap",
-                alignItems: "center",
-              }}
-            >
-              <select defaultValue="Toronto, ON">
-                <option>Toronto, ON</option>
-                <option>Vancouver, BC</option>
-                <option>Calgary, AB</option>
-                <option>Montréal, QC</option>
-                <option>Ottawa, ON</option>
-                <option>Edmonton, AB</option>
-              </select>
-              <Link href="#find-clinic" className="btn-ghost">
-                View All Clinics →
-              </Link>
-            </div>
-          </div>
-
-          <div className="clinics-grid reveal">
-            {clinicCards.map((clinic) => (
-              <div className="clinic-card" key={clinic.name}>
-                <div className="clinic-card-img">
-                  <div
-                    className="clinic-card-img-bg"
-                    style={{ background: clinic.gradient }}
-                  />
-                  <div className="clinic-card-img-icon">{clinic.icon}</div>
-                  <div className="clinic-rating-badge">
-                    ⭐ {clinic.rating}{" "}
-                    <span
-                      style={{
-                        fontSize: "0.7rem",
-                        color: "var(--muted)",
-                        fontWeight: 400,
-                      }}
-                    >
-                      {clinic.reviewCount}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="clinic-card-body">
-                  <div className="clinic-card-type">{clinic.type}</div>
-                  <div className="clinic-card-name">{clinic.name}</div>
-                  <div className="clinic-card-location">
-                    <MapPin size={13} strokeWidth={2} />
-                    {clinic.location}
-                  </div>
-                  <div className="clinic-card-tags">
-                    {clinic.tags.map((tag) => (
-                      <span
-                        key={tag.label}
-                        className={tag.variant === "leaf" ? "tag leaf" : "tag"}
-                      >
-                        {tag.label}
-                      </span>
+                        <MapPin size={13} style={{ color: "#8896b4", flexShrink: 0 }} />
+                        {city}, BC
+                      </button>
                     ))}
                   </div>
-                  <div className="clinic-card-footer">
-                    <div className="clinic-avail">
-                      <div className="clinic-avail-dot" />
-                      {clinic.availability}
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
-            ))}
+
+              <button type="button" className="hp-search-btn">
+                <Search size={15} strokeWidth={2.5} />
+                Find care
+              </button>
+            </div>
+          </div>
+
+          {/* Stats — no separate background, part of hero */}
+          <div className="hp-stats" ref={statsRef}>
+            <div className="hp-stats-inner">
+              {stats.map((stat) => (
+                <div key={stat.label} className="hp-stat">
+                  <div className="hp-stat-value">
+                    <AnimatedStat value={stat.value} active={statsActive} />
+                  </div>
+                  <div className="hp-stat-label">{stat.label}</div>
+                  {stat.sub && <div className="hp-stat-sub">{stat.sub}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Marquee of care categories + conditions */}
+          <div className="hp-marquee" aria-hidden="true">
+            <div className="hp-marquee-track">
+              {[...marqueeConditions, ...marqueeConditions].map((label, i) => (
+                <span key={i} className="hp-marquee-pill">{label}</span>
+              ))}
+            </div>
           </div>
         </section>
 
-        <section className="section section-alt">
-          <div className="why-grid">
-            <div className="reveal">
-              <div className="section-tag">
-                <div className="section-tag-line" />
-                Patient First
-              </div>
-              <h2 className="section-title">
-                Healthcare that
-                <br />
-                puts <em>you first</em>
-              </h2>
-              <p className="section-subtitle why-copy">
-                We built Bimble to make booking, verification, notes, and
-                follow-up feel like one connected experience. We&apos;re on your
-                side — always.
-              </p>
 
-              <div className="why-features">
-                {whyFeatures.map((feature) => (
-                  <div className="why-feature" key={feature.title}>
-                    <div className={`why-feature-icon ${feature.iconClass}`}>
-                      {feature.icon}
-                    </div>
+
+
+
+        {/* ══ CARE HIGHLIGHTS ══════════════════════ */}
+        <section className="hp-care">
+          <div className="hp-care-inner">
+
+            <div className="hp-care-head reveal">
+              <h2 className="hp-care-h2">Care for whatever you&rsquo;re going through</h2>
+              <p className="hp-care-sub">Video consultations, therapy, and specialist bookings — all virtual, all covered by your health card.</p>
+            </div>
+
+            <div className="hp-care-grid reveal">
+
+              {/* ── Featured card: virtual doctors available now ── */}
+              <div className="hp-care-card hp-care-card--featured">
+                <div className="hp-care-card-content">
+                  <h3 className="hp-care-card-title">See a doctor<br />from anywhere</h3>
+                  <p className="hp-care-card-desc">Licensed doctors available by video now. No travel, no waiting room.</p>
+                  <Link href="/book" className="hp-care-card-btn">
+                    Get started <ArrowRight size={13} />
+                  </Link>
+                </div>
+
+                {/* Image — replace src with your own */}
+                <div className="hp-care-card-image">
+                  {/* <img src="/images/virtual-care.jpg" alt="Virtual care" /> */}
+                </div>
+              </div>
+
+              {/* ── Mental health card ── */}
+              <div className="hp-care-card hp-care-card--green">
+                <div className="hp-care-card-icon-wrap">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                </div>
+                <h3 className="hp-care-card-title">Talk to<br />someone</h3>
+                <p className="hp-care-card-desc">Virtual therapy with licensed counsellors. Filter by language, coverage, and availability.</p>
+                <Link href="/book" className="hp-care-card-btn">
+                  Get started <ArrowRight size={13} />
+                </Link>
+              </div>
+
+              {/* ── Specialist card ── */}
+              <div className="hp-care-card hp-care-card--blue">
+                <div className="hp-care-card-icon-wrap">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                </div>
+                <h3 className="hp-care-card-title">Skip the<br />referral wait</h3>
+                <p className="hp-care-card-desc">Dermatology, physiotherapy, and more — book direct without waiting months for a referral.</p>
+                <Link href="/book" className="hp-care-card-btn">
+                  Get started <ArrowRight size={13} />
+                </Link>
+              </div>
+
+            </div>
+
+            {/* Condition pills */}
+            <div className="hp-care-pills reveal">
+              {([
+                ["Back pain",  <Activity key="i" size={14} />],
+                ["Skin rash",  <Droplets key="i" size={14} />],
+                ["Migraine",   <Zap key="i" size={14} />],
+                ["Anxiety",    <Brain key="i" size={14} />],
+              ] as [string, React.ReactNode][]).map(([c, icon]) => (
+                <button key={c} type="button" className="hp-care-pill" onClick={() => setCareQuery(c)}>
+                  {icon}{c}
+                </button>
+              ))}
+              <button type="button" className="hp-care-pill hp-care-pill--more" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+                See all <ArrowRight size={13} />
+              </button>
+            </div>
+
+          </div>
+        </section>
+
+        {/* ══ TESTIMONIALS ═════════════════════════ */}
+        <section className="hp-testimonials" id="reviews">
+          <div className="hp-testimonials-inner">
+            <h2 className="hp-t-heading">Real stories. Real appointments.</h2>
+          </div>
+
+          {/* Row 1 — scrolls left */}
+          <div className="hp-t-marquee">
+            <div className="hp-t-track hp-t-track--left">
+              {[...testimonials, ...testimonials].map((t, i) => (
+                <div key={i} className="hp-t-card">
+                  <div className="hp-t-stars">★★★★★</div>
+                  <p className="hp-t-text">&ldquo;{t.text}&rdquo;</p>
+                  <div className="hp-t-author">
+                    <div className="hp-t-avatar">{t.initials}</div>
                     <div>
-                      <div className="why-feature-title">{feature.title}</div>
-                      <div className="why-feature-desc">
-                        {feature.description}
-                      </div>
+                      <div className="hp-t-name">{t.name}</div>
+                      <div className="hp-t-meta">{t.meta}</div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="why-visual reveal">
-              <div className="why-visual-bg" />
-              <div className="impact-label">Bimble impact</div>
-              <div className="metric-cards">
-                <div className="metric-card">
-                  <div className="metric-num">48h</div>
-                  <div className="metric-label">Average wait time</div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-num">98%</div>
-                  <div className="metric-label">Appointment confirmations</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-num">1.2M</div>
-                  <div className="metric-label">Appointments booked</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-num">10</div>
-                  <div className="metric-label">Provinces served</div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
-        </section>
 
-        <section className="section section-dark" id="for-clinics">
-          <div className="for-clinics-grid">
-            <div className="reveal">
-              <div className="section-tag clinic-tag">
-                <div className="section-tag-line clinic-tag-line" />
-                For Clinics
-              </div>
-              <h2 className="section-title clinic-title">
-                Grow your practice.
-                <br />
-                <em>Fill every slot.</em>
-              </h2>
-              <p className="section-subtitle clinic-copy">
-                Join clinics that use Bimble to keep booking, notes, and
-                follow-up in one connected flow — with zero upfront cost.
-              </p>
-              <div className="clinic-actions">
-                <Link href="/onboarding/plan" className="btn-white">
-                  Join as a Clinic →
-                </Link>
-                <Link href="/onboarding/plan" className="btn-outline-white">
-                  View Demo
-                </Link>
-              </div>
-            </div>
-
-            <div className="clinic-benefits reveal">
-              {clinicBenefits.map((benefit) => (
-                <div className="clinic-benefit-card" key={benefit.title}>
-                  <div className="clinic-benefit-icon">{benefit.icon}</div>
-                  <div className="clinic-benefit-title">{benefit.title}</div>
-                  <div className="clinic-benefit-desc">
-                    {benefit.description}
+          {/* Row 2 — scrolls right (offset order) */}
+          <div className="hp-t-marquee" style={{ marginTop: "16px" }}>
+            <div className="hp-t-track hp-t-track--right">
+              {[...[...testimonials].reverse(), ...[...testimonials].reverse()].map((t, i) => (
+                <div key={i} className="hp-t-card">
+                  <div className="hp-t-stars">★★★★★</div>
+                  <p className="hp-t-text">&ldquo;{t.text}&rdquo;</p>
+                  <div className="hp-t-author">
+                    <div className="hp-t-avatar">{t.initials}</div>
+                    <div>
+                      <div className="hp-t-name">{t.name}</div>
+                      <div className="hp-t-meta">{t.meta}</div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -561,234 +409,154 @@ export function Homepage() {
           </div>
         </section>
 
-        <section className="section" id="reviews">
-          <div className="section-header-row reveal">
-            <div>
-              <div className="section-tag">
-                <div className="section-tag-line" />
-                Real Reviews
-              </div>
-              <h2 className="section-title">
-                Trusted by patients
-                <br />
-                &amp; clinics <em>coast to coast</em>
-              </h2>
+        {/* ══ FAQ ══════════════════════════════════ */}
+        <section className="hp-faq" id="faq">
+          <div className="hp-faq-inner">
+            <div className="hp-section-head reveal">
+              <div className="hp-section-label">Common Questions</div>
+              <h2 className="hp-section-h2">Everything you need to know</h2>
             </div>
-          </div>
 
-          <div className="testimonials-grid reveal">
-            {testimonials.map((testimonial) => (
-              <div
-                key={testimonial.name}
-                className={`testimonial-card ${
-                  testimonial.featured ? "featured" : ""
-                }`}
-              >
-                <div className="stars">★★★★★</div>
-                <div className="testimonial-text">{testimonial.text}</div>
-                <div className="testimonial-author">
-                  <div className="author-avatar">{testimonial.initials}</div>
-                  <div>
-                    <div className="author-name">{testimonial.name}</div>
-                    <div className="author-meta">{testimonial.meta}</div>
+            <div className="hp-faq-list reveal">
+              {faqs.map((faq, index) => (
+                <div key={faq.question} className="hp-faq-item">
+                  <button
+                    type="button"
+                    className={`hp-faq-q${openFaqIndex === index ? " open" : ""}`}
+                    onClick={() =>
+                      setOpenFaqIndex((curr) => (curr === index ? null : index))
+                    }
+                  >
+                    {faq.question}
+                    <div className="hp-faq-icon">+</div>
+                  </button>
+                  <div className={`hp-faq-a${openFaqIndex === index ? " open" : ""}`}>
+                    {faq.answer}
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
 
-        <section className="section section-alt" id="faq">
-          <div className="section-header-row reveal">
-            <div>
-              <div className="section-tag">
-                <div className="section-tag-line" />
-                Common Questions
-              </div>
-              <h2 className="section-title">
-                Everything you
-                <br />
-                need to <em>know</em>
-              </h2>
-            </div>
-          </div>
+        {/* ══ CLINIC CTA ═══════════════════════════ */}
+        <section className="hp-clinic-cta" id="for-clinics">
+          <div className="hp-clinic-cta-inner reveal">
 
-          <div className="faq-grid reveal">
-            {faqs.map((faq, index) => (
-              <div
-                key={faq.question}
-                className={`faq-item ${openFaqIndex === index ? "open" : ""}`}
-              >
-                <button
-                  type="button"
-                  className="faq-question"
-                  onClick={() =>
-                    setOpenFaqIndex((current) =>
-                      current === index ? null : index,
-                    )
-                  }
-                >
-                  {faq.question}
-                  <div className="faq-icon">+</div>
-                </button>
-                <div className="faq-answer">{faq.answer}</div>
+            <div className="hp-clinic-cta-left">
+              <span className="hp-clinic-cta-eyebrow">For Clinics</span>
+              <h2 className="hp-clinic-cta-h2">More patients.<br />Zero phone tag.</h2>
+              <p className="hp-clinic-cta-sub">
+                Bimble puts your clinic in front of patients actively searching for care in your area — no cold calls, no admin overhead, no long-term contracts.
+              </p>
+              <ul className="hp-clinic-benefits">
+                <li><Users size={18} /><span><strong>Fill empty slots instantly</strong> — patients book in real time, 24/7</span></li>
+                <li><CalendarCheck size={18} /><span><strong>Automatic reminders</strong> cut no-shows by up to 40%</span></li>
+                <li><TrendingUp size={18} /><span><strong>Grow your panel</strong> with patients matched to your specialty</span></li>
+              </ul>
+              <div className="hp-clinic-cta-actions">
+                <Link href="/onboarding/plan" className="hp-clinic-cta-btn-primary">
+                  List your clinic free <ArrowRight size={15} />
+                </Link>
               </div>
-            ))}
+              <p className="hp-clinic-cta-trust">Free to join · No long-term contracts · Setup in 10 min</p>
+            </div>
+
+            <div className="hp-clinic-cta-right">
+              <div className="hp-clinic-stat-card">
+                <div className="hp-clinic-stat">
+                  <span className="hp-clinic-stat-value">3×</span>
+                  <span className="hp-clinic-stat-label">more bookings per month</span>
+                </div>
+                <div className="hp-clinic-stat-divider" />
+                <div className="hp-clinic-stat">
+                  <span className="hp-clinic-stat-value">40%</span>
+                  <span className="hp-clinic-stat-label">fewer no-shows with reminders</span>
+                </div>
+                <div className="hp-clinic-stat-divider" />
+                <div className="hp-clinic-stat">
+                  <span className="hp-clinic-stat-value">0</span>
+                  <span className="hp-clinic-stat-label">phone calls to manage bookings</span>
+                </div>
+              </div>
+            </div>
+
           </div>
         </section>
 
-        <div className="cta-wrap">
-          <div className="cta-banner reveal">
-            <div className="cta-banner-bg" />
-            <div className="cta-banner-bg2" />
-            <div className="cta-banner-eyebrow">
-              ✳ Bimble&apos;s connected care platform
-            </div>
-            <div className="cta-banner-title">
-              Your next appointment
-              <br />
-              is <em>just minutes away.</em>
-            </div>
-            <div className="cta-banner-sub">
-              Join over 500,000 Canadians who&apos;ve found faster, better care
-              through Bimble.
-            </div>
-            <div className="cta-banner-btns">
-              <Link href="#find-clinic" className="btn-white">
-                <CalendarDays size={16} strokeWidth={2.5} />
-                Book an Appointment
-              </Link>
-              <Link href="/onboarding/plan" className="btn-outline-white">
-                <Home size={16} strokeWidth={2.5} />
-                List Your Clinic
-              </Link>
-            </div>
-          </div>
-        </div>
 
       </main>
-      <footer>
-        <div className="footer-top">
-          <div>
-        <Link href="/" className="nav-logo footer-brand">
-              <BrandMark size={40} className="h-10 w-10" />
-              <span>Bimble</span>
-            </Link>
-            <p className="footer-brand-desc">
-              Canada&apos;s trusted platform for fast, easy healthcare appointments.
-              Connecting patients to clinics in every province.
-            </p>
-            <div className="social-links">
-              <a href="#" className="social-link">
-                𝕏
-              </a>
-              <a href="#" className="social-link">
-                in
-              </a>
-              <a href="#" className="social-link">
-                f
-              </a>
-              <a href="#" className="social-link">
-                ▶
-              </a>
-            </div>
-            <div style={{ marginTop: "20px" }}>
-              <div className="province-label">Serving All Provinces</div>
-              <div className="provinces-strip">
-                {provinces.map((province) => (
-                  <a key={province} href="#" className="province-pill">
-                    {province}
-                  </a>
+
+      {/* ══ FOOTER ════════════════════════════════ */}
+      <footer className="hp-footer">
+        <div className="hp-footer-inner">
+          <div className="hp-footer-top">
+            <div className="hp-footer-brand">
+              <Link href="/" className="hp-footer-logo">
+                <BrandMark size={32} className="h-8 w-8" />
+                Bimble
+              </Link>
+              <p className="hp-footer-tagline">
+                British Columbia&rsquo;s trusted platform for fast, verified healthcare bookings.
+                Free for patients. MSP accepted everywhere.
+              </p>
+
+              <div className="hp-footer-cities">
+                {bcCities.map((city) => (
+                  <span key={city} className="hp-footer-city">{city}</span>
                 ))}
               </div>
             </div>
+
+            <div className="hp-footer-col">
+              <h4>For Patients</h4>
+              <ul>
+                <li><a href="#find-care">Find a Doctor</a></li>
+                <li><a href="#find-care">Book Appointment</a></li>
+                <li><a href="#specialties">Virtual Care</a></li>
+                <li><a href="#specialties">All Specialties</a></li>
+                <li><a href="#reviews">Patient Reviews</a></li>
+                <li><a href="#how-it-works">How It Works</a></li>
+              </ul>
+            </div>
+
+            <div className="hp-footer-col">
+              <h4>For Clinics</h4>
+              <ul>
+                <li><Link href="/onboarding/plan">List Your Clinic</Link></li>
+                <li><Link href="/onboarding/plan">Pricing</Link></li>
+                <li><Link href="/onboarding/plan">Start Free Trial</Link></li>
+                <li><a href="#for-clinics">Clinic Features</a></li>
+                <li><Link href="/login">Clinic Login</Link></li>
+              </ul>
+            </div>
+
+            <div className="hp-footer-col">
+              <h4>Company</h4>
+              <ul>
+                <li><a href="#">About Bimble</a></li>
+                <li><a href="#">Careers</a></li>
+                <li><a href="#">Press</a></li>
+                <li><a href="#">Contact Us</a></li>
+                <li><a href="#">Accessibility</a></li>
+                <li><a href="#">PIPA Compliance</a></li>
+              </ul>
+            </div>
           </div>
 
-          <div>
-            <div className="footer-heading">For Patients</div>
-            <ul className="footer-links">
-              <li>
-                <a href="#find-clinic">Find a Doctor</a>
-              </li>
-              <li>
-                <a href="#find-clinic">Book Appointment</a>
-              </li>
-              <li>
-                <a href="#specialties">Virtual Care</a>
-              </li>
-              <li>
-                <a href="#specialties">Specialties</a>
-              </li>
-              <li>
-                <a href="#reviews">Patient Reviews</a>
-              </li>
-              <li>
-                <a href="#how-it-works">How It Works</a>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <div className="footer-heading">For Clinics</div>
-            <ul className="footer-links">
-              <li>
-                <Link href="/onboarding/plan">List Your Clinic</Link>
-              </li>
-              <li>
-                <Link href="/onboarding/plan">Pricing</Link>
-              </li>
-              <li>
-                <a href="#">EMR Integration</a>
-              </li>
-              <li>
-                <a href="#">Analytics</a>
-              </li>
-              <li>
-                <a href="#">Success Stories</a>
-              </li>
-              <li>
-                <Link href="/onboarding/plan">Partner Support</Link>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <div className="footer-heading">Company</div>
-            <ul className="footer-links">
-              <li>
-                <a href="#">About Us</a>
-              </li>
-              <li>
-                <a href="#">Careers</a>
-              </li>
-              <li>
-                <a href="#">Press &amp; Media</a>
-              </li>
-              <li>
-                <a href="#">Blog</a>
-              </li>
-              <li>
-                <a href="#">Contact Us</a>
-              </li>
-              <li>
-                <a href="#">Accessibility</a>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="footer-bottom">
-          <span className="footer-copy">
-            © 2025 Bimble Canada Inc. All rights reserved. 🍁
-          </span>
-          <div className="footer-legal">
-            <a href="#">Privacy Policy</a>
-            <a href="#">Terms of Service</a>
-            <a href="#">Cookie Policy</a>
-            <a href="#">PIPEDA Compliance</a>
+          <div className="hp-footer-bottom">
+            <span className="hp-footer-copy">
+              © 2026 Bimble Canada Inc. · Serving British Columbia 🍁
+            </span>
+            <div className="hp-footer-legal">
+              <a href="#">Privacy Policy</a>
+              <a href="#">Terms of Service</a>
+              <a href="#">PIPA Compliance</a>
+            </div>
           </div>
         </div>
       </footer>
+
     </div>
   );
 }
