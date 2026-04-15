@@ -1,5 +1,5 @@
 export const API_ENDPOINTS = {
-  clinicSignup: "/api/clinics/signup",
-  clinicLogin: "/api/clinics/login",
-  clinicPlans: "/api/clinic-plans",
+  clinicSignup: "/api/v1/clinics/signup",
+  clinicLogin: "/api/v1/clinic-auth/login",
+  clinicPlans: "/api/v1/clinic-plans",
 } as const;

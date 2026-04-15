@@ -23,11 +23,45 @@ export function buildBackendApiUrl(path: string) {
   return new URL(cleanPath, `${getBackendApiBaseUrl()}/`).toString();
 }
 
-export function buildBackendOriginUrl(path: string) {
-  const cleanPath = path.replace(/^\/+/, "");
-  const origin = new URL(getBackendApiBaseUrl()).origin;
+type BackendRequestConfig = {
+  path: string;
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  body?: unknown;
+  headers?: HeadersInit;
+  cache?: RequestCache;
+};
 
-  return new URL(cleanPath, `${origin}/`).toString();
+export type BackendJsonResponse = {
+  ok: boolean;
+  status: number;
+  data: unknown;
+};
+
+export async function requestBackendApiJson({
+  path,
+  method = "GET",
+  body,
+  headers,
+  cache = "no-store",
+}: BackendRequestConfig): Promise<BackendJsonResponse> {
+  const response = await fetch(buildBackendApiUrl(path), {
+    method,
+    headers: {
+      Accept: "application/json",
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...headers,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache,
+  });
+
+  const data = await response.json().catch(() => null);
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    data,
+  };
 }
 
 export function extractBackendErrorMessage(

@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import {
-  buildBackendApiUrl,
   extractBackendErrorMessage,
+  requestBackendApiJson,
 } from "@/lib/api/backend";
-import type { ClinicRegisterRequest, ClinicRegisterResponse } from "@/lib/clinic/types";
+import type {
+  ClinicRegisterRequest,
+  ClinicRegisterResponse,
+} from "@/lib/clinic/types";
 
 function hasRequiredFields(payload: ClinicRegisterRequest): boolean {
   return Boolean(
@@ -36,23 +39,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const backendResponse = await fetch(buildBackendApiUrl("/clinics/signup"), {
+    const backendResponse = await requestBackendApiJson({
+      path: "/clinics/signup",
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(payload),
-      cache: "no-store",
+      body: payload,
     });
-
-    const responseData = await backendResponse.json().catch(() => null);
 
     if (!backendResponse.ok) {
       return NextResponse.json(
         {
           message: extractBackendErrorMessage(
-            responseData,
+            backendResponse.data,
             "Clinic registration failed. Please try again.",
           ),
         },
@@ -60,7 +57,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(responseData as ClinicRegisterResponse, {
+    return NextResponse.json(backendResponse.data as ClinicRegisterResponse, {
       status: backendResponse.status,
     });
   } catch {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import {
-  buildBackendApiUrl,
   extractBackendErrorMessage,
+  requestBackendApiJson,
 } from "@/lib/api/backend";
 import type { BackendPlan, ClinicPlan } from "@/lib/clinic/types";
 
@@ -47,19 +47,15 @@ function mapBackendPlanToClinicPlan(plan: BackendPlan): ClinicPlan {
 
 export async function GET() {
   try {
-    const backendResponse = await fetch(buildBackendApiUrl("/plans"), {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
+    const backendResponse = await requestBackendApiJson({
+      path: "/plans",
     });
-
-    const responseData = await backendResponse.json().catch(() => null);
 
     if (!backendResponse.ok) {
       return NextResponse.json(
         {
           message: extractBackendErrorMessage(
-            responseData,
+            backendResponse.data,
             "Could not load plans from the backend.",
           ),
         },
@@ -67,14 +63,14 @@ export async function GET() {
       );
     }
 
-    if (!Array.isArray(responseData)) {
+    if (!Array.isArray(backendResponse.data)) {
       return NextResponse.json(
         { message: "Plans service returned an unexpected response." },
         { status: 502 },
       );
     }
 
-    const backendPlans = responseData as BackendPlan[];
+    const backendPlans = backendResponse.data as BackendPlan[];
     const plans: ClinicPlan[] = backendPlans.map(mapBackendPlanToClinicPlan);
 
     return NextResponse.json(plans, { status: 200 });
