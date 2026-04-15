@@ -50,52 +50,40 @@ export const navItems = [
 
 export const specialties: Specialty[] = [
   {
-    icon: "🩺",
-    name: "Family Doctor",
-    description: "Find a GP accepting new patients near you",
-    slug: "family-doctor",
-  },
-  {
-    icon: "🚶",
+    icon: "",
     name: "Walk-In Clinic",
     description: "No appointment needed — see a doctor today",
     slug: "walk-in",
   },
   {
-    icon: "💻",
+    icon: "",
     name: "Virtual Care",
-    description: "See a doctor online from anywhere in BC",
+    description: "See a doctor online from anywhere, any time",
     slug: "virtual-care",
   },
   {
-    icon: "🧠",
+    icon: "",
     name: "Mental Health",
-    description: "Therapists and counsellors across BC",
+    description: "Therapists and counsellors accepting new patients",
     slug: "mental-health",
   },
   {
-    icon: "🦴",
+    icon: "",
     name: "Physiotherapy",
     description: "Rehab, injury recovery, and pain management",
     slug: "physiotherapy",
   },
   {
-    icon: "🧬",
+    icon: "",
     name: "Dermatology",
     description: "Skin concerns, conditions, and screenings",
     slug: "dermatology",
   },
   {
-    icon: "👶",
+    icon: "",
     name: "Pediatrics",
-    description: "Child and infant care from trusted BC doctors",
+    description: "Child and infant care from trusted, verified doctors",
     slug: "pediatrics",
-  },
-  {
-    icon: "🚑",
-    name: "Urgent Care",
-    description: "Same-day care for non-emergency conditions",
-    slug: "urgent-care",
   },
 ];
 
@@ -144,23 +132,23 @@ export const clinicCards: ClinicCard[] = [
 export const howItWorks = [
   {
     step: "01",
-    title: "Search your care need",
+    title: "Describe what you need",
     description:
-      "Tell us what you're looking for — a family doctor, walk-in visit, specialist, or virtual care — and where you are in BC.",
+      "Tell us your care need and location — family doctor, walk-in, specialist, or virtual. No account required to start.",
     icon: "🔍",
   },
   {
     step: "02",
-    title: "See real availability",
+    title: "We match you instantly",
     description:
-      "We show you verified clinics with live slots — same-day, next-day, or scheduled. Filter by language, MSP, and more.",
-    icon: "📅",
+      "Our system dispatches your request to verified, available providers in your area — filtered by MSP, language, and timing.",
+    icon: "⚡",
   },
   {
     step: "03",
-    title: "Book in seconds",
+    title: "Get confirmed, no calls",
     description:
-      "Confirm your appointment without phone calls or hold music. You'll get a confirmation with everything you need.",
+      "A clinic confirms your slot. You receive a text with all the details. No hold music, no callbacks, no paperwork.",
     icon: "✅",
   },
 ];
@@ -176,7 +164,7 @@ export const whyFeatures: Feature[] = [
     icon: "💳",
     title: "MSP accepted everywhere",
     description:
-      "Every clinic on Bimble accepts BC's Medical Services Plan. Your provincial health card covers what it always has.",
+      "Every clinic on Bimble accepts MSP. Your provincial health card covers what it always has.",
   },
   {
     icon: "📍",
@@ -188,13 +176,13 @@ export const whyFeatures: Feature[] = [
     icon: "🔒",
     title: "Secure & private",
     description:
-      "Your health information is protected under BC's PIPA and never shared without your consent.",
+      "Your health information is protected under PIPA and never shared without your consent.",
   },
   {
     icon: "🌐",
     title: "Multiple languages",
     description:
-      "Find providers who speak your language — Mandarin, Punjabi, Tagalog, French, and more across BC.",
+      "Find providers who speak your language — Mandarin, Punjabi, Tagalog, French, and more.",
   },
   {
     icon: "🆕",
@@ -206,17 +194,17 @@ export const whyFeatures: Feature[] = [
 
 export const stats: Stat[] = [
   {
-    value: "6.5M",
+    value: "5.9M",
     label: "Canadians without a family doctor",
     sub: "Bimble helps find one.",
   },
   {
-    value: "27 wks",
+    value: "28.6 wks",
     label: "Average specialist wait across Canada",
     sub: "Bimble finds faster.",
   },
   {
-    value: "46%",
+    value: "74%",
     label: "Can't get same-day care when needed",
     sub: "Bimble changes that.",
   },
@@ -274,19 +262,19 @@ export const faqs: Faq[] = [
       "Yes, completely. Bimble is free to use for every patient in BC. There are no booking fees, no subscription charges, and nothing hidden. Clinics pay to be listed — you never do.",
   },
   {
-    question: "Does my BC MSP card work?",
+    question: "Does my MSP card work?",
     answer:
-      "Yes. Every clinic listed on Bimble accepts BC's Medical Services Plan (MSP). If a service is covered by MSP, you won't pay out of pocket. We also show which clinics accept extended health benefits.",
+      "Yes. Every clinic listed on Bimble accepts MSP. If a service is covered, you won't pay out of pocket. We also show which clinics accept extended health benefits.",
   },
   {
     question: "Can I actually find a family doctor accepting new patients?",
     answer:
-      "Yes — and this is one of the most important things Bimble does. We specifically surface family practices in BC that are accepting new patients, including those that don't advertise publicly. This is updated in real time.",
+      "Yes — and this is one of the most important things Bimble does. We specifically surface family practices accepting new patients, including those that don't advertise publicly. This is updated in real time.",
   },
   {
     question: "Are the clinics on Bimble verified?",
     answer:
-      "Every clinic and provider on Bimble is verified before being listed. We confirm licensing with the BC College of Physicians and Surgeons and the relevant regulatory bodies for other health professionals.",
+      "Every clinic and provider on Bimble is verified before being listed. We confirm licensing with the College of Physicians and Surgeons and the relevant regulatory bodies for other health professionals.",
   },
   {
     question: "What if I need to cancel or reschedule?",
@@ -303,6 +291,70 @@ export const faqs: Faq[] = [
     answer:
       "Absolutely. Many clinics on Bimble offer virtual care — video or phone consultations — for appropriate visit types. You can filter by 'Virtual Available' when searching.",
   },
+];
+
+export const marqueeConditions: string[] = [
+  "Walk-In Clinic",
+  "Virtual Care",
+  "Mental Health",
+  "Physiotherapy",
+  "Dermatology",
+  "Pediatrics",
+  "Anxiety",
+  "Depression",
+  "Back Pain",
+  "Migraine",
+  "Skin Rash",
+  "Ear Infection",
+  "Hypertension",
+  "Diabetes",
+  "Asthma",
+  "Allergies",
+  "Insomnia",
+  "Knee Pain",
+  "Acne",
+  "Cold & Flu",
+  "UTI",
+  "Prenatal Care",
+  "Menopause",
+  "ADHD",
+  "Eczema",
+  "Thyroid",
+  "Shoulder Pain",
+  "Cholesterol",
+  "Psoriasis",
+  "Neck Pain",
+  "STI Testing",
+  "Fertility",
+  "Sports Injury",
+  "Concussion",
+  "Blood Pressure",
+  "Iron Deficiency",
+  "Vitamin D",
+  "Acid Reflux",
+  "IBS",
+  "Chest Pain",
+  "Shortness of Breath",
+  "Fatigue",
+  "Weight Management",
+  "Smoking Cessation",
+  "Counselling",
+  "Couples Therapy",
+  "PTSD",
+  "Burnout",
+  "Grief Support",
+  "Mole Check",
+  "Wart Removal",
+  "Ingrown Toenail",
+  "Hand Therapy",
+  "Hip Pain",
+  "Plantar Fasciitis",
+  "Carpal Tunnel",
+  "Eye Strain",
+  "Headache",
+  "Nausea",
+  "Rosacea",
+  "Hair Loss",
 ];
 
 export const bcCities = [
