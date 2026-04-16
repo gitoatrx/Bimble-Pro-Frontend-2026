@@ -15,7 +15,9 @@ function hasRequiredFields(payload: ClinicRegisterRequest): boolean {
       payload.clinic_display_name?.trim() &&
       payload.email?.trim() &&
       payload.phone?.trim() &&
-      payload.plan_code?.trim(),
+      payload.plan_code?.trim() &&
+      payload.password?.trim() &&
+      payload.pin?.trim(),
   );
 }
 
