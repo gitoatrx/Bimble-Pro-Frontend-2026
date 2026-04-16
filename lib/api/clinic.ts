@@ -153,8 +153,8 @@ export async function fetchDoctorInvites(
 export async function inviteDoctor(
   email: string,
   accessToken: string,
-): Promise<void> {
-  await apiRequest<unknown, { email: string; access_token: string }>({
+): Promise<{ invite_url: string }> {
+  return apiRequest<{ invite_url: string }, { email: string; access_token: string }>({
     endpoint: API_ENDPOINTS.clinicDoctorInvite,
     method: "POST",
     body: { email, access_token: accessToken },

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { CheckCircle2, Clock, Mail, MoreVertical, Plus, Stethoscope, UserMinus } from "lucide-react";
+import { CheckCircle2, Clock, Copy, Mail, MoreVertical, Plus, Stethoscope, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -50,7 +50,8 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [inviteUrl, setInviteUrl] = useState("");
+  const [copied, setCopied] = useState(false);
 
   async function handleInvite() {
     const trimmed = email.trim().toLowerCase();
@@ -60,7 +61,7 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
     }
     setSending(true);
     setError("");
-    setSuccess("");
+    setInviteUrl("");
     const session = readClinicLoginSession();
     if (!session) {
       setSending(false);
@@ -68,17 +69,21 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
       return;
     }
     try {
-      await inviteDoctor(trimmed, session.accessToken);
+      const res = await inviteDoctor(trimmed, session.accessToken);
+      setInviteUrl(res.invite_url);
+      onInvite(trimmed);
+      setEmail("");
     } catch (err) {
-      setSending(false);
       setError(err instanceof Error ? err.message : "Failed to send invite. Please try again.");
-      return;
+    } finally {
+      setSending(false);
     }
-    setSending(false);
-    onInvite(trimmed);
-    setEmail("");
-    setSuccess(`Invite sent to ${trimmed}`);
-    setTimeout(() => setSuccess(""), 3000);
+  }
+
+  function handleCopy() {
+    navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -103,8 +108,21 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
           {sending ? "Sending…" : "Send invite"}
         </Button>
       </div>
-      {error   && <p className="mt-2 text-xs text-destructive">{error}</p>}
-      {success && <p className="mt-2 text-xs text-green-600">{success}</p>}
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+      {inviteUrl && (
+        <div className="mt-3 rounded-lg border border-border bg-muted/50 p-3">
+          <p className="mb-1.5 text-xs font-medium text-foreground">Invite sent! Share this link with the doctor:</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 truncate rounded bg-background px-2 py-1 text-xs text-muted-foreground">
+              {inviteUrl}
+            </code>
+            <Button size="sm" variant="outline" className="shrink-0 h-7 px-2" onClick={handleCopy}>
+              <Copy className="h-3 w-3 mr-1" />
+              {copied ? "Copied!" : "Copy"}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

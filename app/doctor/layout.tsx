@@ -41,13 +41,17 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const session = readDoctorLoginSession();
 
+  const isPublicRoute = pathname.startsWith("/doctor/invite");
+
   useEffect(() => {
-    if (!session) {
+    if (!session && !isPublicRoute) {
       router.replace("/doctor/login");
     }
-  }, [session, router]);
+  }, [session, router, isPublicRoute]);
 
-  if (!session) return null;
+  if (!session && !isPublicRoute) return null;
+
+  if (isPublicRoute) return <>{children}</>;
 
   function handleLogout() {
     clearDoctorLoginSession();
