@@ -72,7 +72,7 @@ export default function ClinicLoginPage() {
 
   // --- Step 2 handlers ---
   async function handleVerifyOtp() {
-    if (otpCode.length !== 6) return;
+    if (otpCode.length !== 8) return;
 
     setIsVerifying(true);
     setOtpError("");
