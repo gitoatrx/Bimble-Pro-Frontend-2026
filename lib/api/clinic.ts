@@ -123,3 +123,19 @@ export async function submitClinicResendOtp(
     body: payload,
   });
 }
+
+/**
+ * Invite a doctor by email.
+ * Calls the Next.js proxy route which decodes clinic_id from the JWT and
+ * forwards the request to POST /api/v1/clinics/{clinic_id}/doctors/invite.
+ */
+export async function inviteDoctor(
+  email: string,
+  accessToken: string,
+): Promise<void> {
+  await apiRequest<unknown, { email: string; access_token: string }>({
+    endpoint: API_ENDPOINTS.clinicDoctorInvite,
+    method: "POST",
+    body: { email, access_token: accessToken },
+  });
+}

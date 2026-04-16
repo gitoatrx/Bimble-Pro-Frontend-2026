@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { readClinicLoginSession } from "@/lib/clinic/session";
+import { inviteDoctor } from "@/lib/api/clinic";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -541,7 +542,19 @@ function DoctorInviteStep({
     }
     setSending(true);
     setError("");
-    await new Promise((r) => setTimeout(r, 700));
+    const session = readClinicLoginSession();
+    if (!session) {
+      setError("You are not logged in. Please refresh and try again.");
+      setSending(false);
+      return;
+    }
+    try {
+      await inviteDoctor(trimmed, session.accessToken);
+    } catch (err) {
+      setSending(false);
+      setError(err instanceof Error ? err.message : "Failed to send invite. Please try again.");
+      return;
+    }
     setSending(false);
     onDoctorInvited(trimmed);
     setEmail("");
