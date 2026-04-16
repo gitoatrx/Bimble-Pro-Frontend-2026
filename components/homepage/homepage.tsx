@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, ArrowRight, Battery, Brain, CalendarCheck, Droplets, MapPin, Moon, Search, Sun, TrendingUp, Users, Zap } from "lucide-react";
+import { Activity, ArrowRight, Battery, Brain, CalendarCheck, ChevronDown, Droplets, MapPin, Moon, Search, Stethoscope, Sun, TrendingUp, Users, Zap } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import {
   bcCities,
@@ -79,6 +79,8 @@ function AnimatedStat({ value, active }: { value: string; active: boolean }) {
 export function Homepage() {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const [navScrolled, setNavScrolled] = useState(false);
+  const [loginMenuOpen, setLoginMenuOpen] = useState(false);
+  const loginMenuRef = useRef<HTMLDivElement>(null);
   const [statsActive, setStatsActive] = useState(false);
   const statsRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +89,18 @@ export function Homepage() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (loginMenuRef.current && !loginMenuRef.current.contains(e.target as Node)) {
+        setLoginMenuOpen(false);
+      }
+    }
+    if (loginMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [loginMenuOpen]);
 
   useEffect(() => {
     const el = statsRef.current;
@@ -176,9 +190,61 @@ export function Homepage() {
             <Link href="/onboarding/plan" className="hp-nav-list">
               List your practice
             </Link>
-            <Link href="/login" className="hp-nav-signin">
-              Log in
-            </Link>
+
+            {/* Login dropdown */}
+            <div ref={loginMenuRef} style={{ position: "relative" }}>
+              <button
+                className="hp-nav-signin"
+                onClick={() => setLoginMenuOpen((o) => !o)}
+                aria-expanded={loginMenuOpen}
+                aria-haspopup="true"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", padding: "9px 16px", borderRadius: "var(--r-sm)" }}
+              >
+                Log in
+                <ChevronDown
+                  size={14}
+                  style={{
+                    transition: "transform 0.18s",
+                    transform: loginMenuOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  }}
+                />
+              </button>
+
+              {loginMenuOpen && (
+                <div className="hp-login-menu">
+                  <Link
+                    href="/login"
+                    className="hp-login-menu-item"
+                    onClick={() => setLoginMenuOpen(false)}
+                  >
+                    <span className="hp-login-menu-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                        <polyline points="9 22 9 12 15 12 15 22"/>
+                      </svg>
+                    </span>
+                    <span>
+                      <strong>Login as Clinic</strong>
+                      <em>Manage appointments &amp; settings</em>
+                    </span>
+                  </Link>
+                  <Link
+                    href="/doctor/login"
+                    className="hp-login-menu-item"
+                    onClick={() => setLoginMenuOpen(false)}
+                  >
+                    <span className="hp-login-menu-icon">
+                      <Stethoscope size={16} />
+                    </span>
+                    <span>
+                      <strong>Login as Doctor</strong>
+                      <em>View patients &amp; pool appointments</em>
+                    </span>
+                  </Link>
+                </div>
+              )}
+            </div>
+
             <Link href="/onboarding/plan" className="hp-nav-cta">
               Sign up
             </Link>

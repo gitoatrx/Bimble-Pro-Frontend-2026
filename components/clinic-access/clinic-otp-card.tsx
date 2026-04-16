@@ -75,7 +75,7 @@ export function ClinicOtpCard({
     >
       <div className="space-y-2 text-center">
         <p className="text-sm text-slate-600">
-          A 6-digit code was sent to{" "}
+          An 8-digit code was sent to{" "}
           <span className="font-medium text-foreground">{maskedEmail}</span>.
           Enter it below to complete sign-in.
         </p>
@@ -106,7 +106,7 @@ export function ClinicOtpCard({
       <Button
         type="submit"
         className="h-12 w-full bg-primary text-primary-foreground hover:bg-primary/90"
-        disabled={isVerifying || otpCode.length !== 6}
+        disabled={isVerifying || otpCode.length !== 8}
       >
         {isVerifying ? "Verifying..." : "Verify & Sign In"}
       </Button>

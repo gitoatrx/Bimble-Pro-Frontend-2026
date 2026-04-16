@@ -1,4 +1,4 @@
-export type OnboardingStepKey = "clinic" | "location" | "operations";
+export type OnboardingStepKey = "clinic" | "location" | "operations" | "credentials";
 
 export type ClinicBillingCycle = "monthly" | "annual";
 
@@ -51,6 +51,10 @@ export type ClinicOnboardingFormData = {
   phoneNumber: string;
   clinicType: string;
   servicesProvided: string;
+  // Credentials step — set by the clinic owner at signup
+  password: string;
+  confirmPassword: string;
+  pin: string;
 };
 
 // Stored after a successful signup — used by login page
@@ -97,6 +101,8 @@ export type ClinicRegisterRequest = {
   clinic_type?: string;
   established_year?: number;
   plan_code: string;
+  password: string;
+  pin: string;
 };
 
 // POST /api/v1/clinics/signup — response
