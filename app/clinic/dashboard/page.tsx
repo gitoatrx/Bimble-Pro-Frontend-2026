@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { readClinicLoginSession } from "@/lib/clinic/session";
-import { inviteDoctor } from "@/lib/api/clinic";
+import { fetchDoctorInvites, inviteDoctor } from "@/lib/api/clinic";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -528,7 +528,7 @@ function DoctorInviteStep({
 }: {
   onComplete: () => void;
   invitedDoctors: { email: string; status: "pending" | "accepted" }[];
-  onDoctorInvited: (email: string) => void;
+  onDoctorInvited: (email: string, status?: "pending" | "accepted") => void;
 }) {
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
@@ -550,14 +550,23 @@ function DoctorInviteStep({
     }
     try {
       await inviteDoctor(trimmed, session.accessToken);
+      setSending(false);
+      onDoctorInvited(trimmed);
+      setEmail("");
     } catch (err) {
       setSending(false);
-      setError(err instanceof Error ? err.message : "Failed to send invite. Please try again.");
-      return;
+      const msg = err instanceof Error ? err.message : "";
+      // Backend returns 409 when the doctor is already a member — treat as accepted
+      if (
+        msg.toLowerCase().includes("already a member") ||
+        (err as { status?: number }).status === 409
+      ) {
+        onDoctorInvited(trimmed, "accepted");
+        setEmail("");
+        return;
+      }
+      setError(msg || "Failed to send invite. Please try again.");
     }
-    setSending(false);
-    onDoctorInvited(trimmed);
-    setEmail("");
   }
 
   const hasAccepted = invitedDoctors.some((d) => d.status === "accepted");
@@ -741,12 +750,37 @@ export default function ClinicDashboardPage() {
     { email: string; status: "pending" | "accepted" }[]
   >([]);
 
+  // Load existing invites on mount so accepted doctors unlock the Go Live step
+  useEffect(() => {
+    if (!session?.accessToken) return;
+    fetchDoctorInvites(session.accessToken)
+      .then((records) => {
+        const mapped = records.map((r) => ({
+          email: r.email,
+          status: (r.status === "ACCEPTED" ? "accepted" : "pending") as
+            | "pending"
+            | "accepted",
+        }));
+        if (mapped.length > 0) setInvitedDoctors(mapped);
+      })
+      .catch(() => {
+        // Non-fatal — user can still invite manually
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   function markComplete(key: StepKey) {
     setCompletedSteps((s) => new Set([...s, key]));
   }
 
-  function handleDoctorInvited(email: string) {
-    setInvitedDoctors((d) => [...d, { email, status: "pending" }]);
+  function handleDoctorInvited(email: string, status: "pending" | "accepted" = "pending") {
+    setInvitedDoctors((d) => {
+      // Update existing entry if present, otherwise append
+      const exists = d.find((x) => x.email === email);
+      if (exists) {
+        return d.map((x) => x.email === email ? { ...x, status } : x);
+      }
+      return [...d, { email, status }];
+    });
   }
 
   function handleGoLive() {

@@ -5,4 +5,5 @@ export const API_ENDPOINTS = {
   clinicResendOtp: "/api/v1/clinic-auth/resend-otp",
   clinicPlans: "/api/v1/clinic-plans",
   clinicDoctorInvite: "/api/v1/clinics/doctors/invite",
+  clinicDoctorInvites: "/api/v1/clinics/doctors/invites",
 } as const;

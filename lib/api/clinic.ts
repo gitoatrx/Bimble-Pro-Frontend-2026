@@ -124,6 +124,27 @@ export async function submitClinicResendOtp(
   });
 }
 
+export type DoctorInviteRecord = {
+  invite_id: number;
+  email: string;
+  status: "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
+  sent_at: string;
+  accepted_at: string | null;
+};
+
+/**
+ * Fetch all doctor invites for the current clinic.
+ */
+export async function fetchDoctorInvites(
+  accessToken: string,
+): Promise<DoctorInviteRecord[]> {
+  return apiRequest<DoctorInviteRecord[], never>({
+    endpoint: API_ENDPOINTS.clinicDoctorInvites,
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
 /**
  * Invite a doctor by email.
  * Calls the Next.js proxy route which decodes clinic_id from the JWT and
