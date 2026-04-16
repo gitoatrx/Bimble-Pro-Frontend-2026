@@ -158,7 +158,16 @@ export function Homepage() {
     document.querySelectorAll(".reveal").forEach((el, i) => {
       const target = el as HTMLElement;
       target.style.transitionDelay = `${i * 70}ms`;
-      observer.observe(target);
+
+      // Immediately mark visible if already in the viewport (handles cases where
+      // the element is above the fold or the IntersectionObserver callback is
+      // delayed — e.g. when accessing via a network IP in Next.js dev mode).
+      const rect = target.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {
+        target.classList.add("visible");
+      } else {
+        observer.observe(target);
+      }
     });
 
     return () => observer.disconnect();
