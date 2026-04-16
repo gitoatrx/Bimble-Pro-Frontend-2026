@@ -17,10 +17,8 @@ export type StoredClinicOnboardingState = {
 };
 
 export type ClinicLoginPrefill = Partial<{
-  clinicSlug: string;
-  username: string;
+  email: string;
   password: string;
-  pin: string;
 }>;
 
 function isOnboardingStepKey(value: unknown): value is OnboardingStepKey {
@@ -212,45 +210,11 @@ export function readClinicSignupResult() {
   }
 }
 
-export function readClinicLoginPrefillFromSignup() {
-  const signupResult = readClinicSignupResult();
-
-  if (!signupResult) {
-    return null;
-  }
-
-  const prefill: ClinicLoginPrefill = {};
-
-  const clinicSlug = firstString(
-    signupResult.clinicName,
-    signupResult.slug,
-    signupResult.clinicCode,
-  );
-
-  const username = firstString(signupResult.username);
-  const password = firstString(
-    signupResult.password,
-    signupResult.tempPassword,
-  );
-  const pin = firstString(signupResult.pin, signupResult.tempPin);
-
-  if (clinicSlug) {
-    prefill.clinicSlug = clinicSlug;
-  }
-
-  if (username) {
-    prefill.username = username;
-  }
-
-  if (password) {
-    prefill.password = password;
-  }
-
-  if (pin) {
-    prefill.pin = pin;
-  }
-
-  return Object.keys(prefill).length > 0 ? prefill : null;
+export function readClinicLoginPrefillFromSignup(): ClinicLoginPrefill | null {
+  // Email is not stored in the signup result (it is the clinic contact email).
+  // Credentials are sent to the admin by email after provisioning completes.
+  // No automatic prefill is possible for the new 2-step login flow.
+  return null;
 }
 
 export function storeClinicLoginSession(session: ClinicLoginSession) {

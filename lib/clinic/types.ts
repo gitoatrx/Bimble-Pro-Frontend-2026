@@ -1,4 +1,4 @@
-export type OnboardingStepKey = "clinic" | "location" | "operations";
+export type OnboardingStepKey = "clinic" | "location" | "operations" | "credentials";
 
 export type ClinicBillingCycle = "monthly" | "annual";
 
@@ -51,6 +51,10 @@ export type ClinicOnboardingFormData = {
   phoneNumber: string;
   clinicType: string;
   servicesProvided: string;
+  // Credentials step — set by the clinic owner at signup
+  password: string;
+  confirmPassword: string;
+  pin: string;
 };
 
 // Stored after a successful signup — used by login page
@@ -70,11 +74,9 @@ export type ClinicSignupResult = {
   bootstrapUrl?: string;
 };
 
-// Login form fields
+// Login form fields (step 1 — email + password only; PIN/slug handled server-side)
 export type ClinicLoginFormData = {
-  clinicSlug: string;
-  pin: string;
-  username: string;
+  email: string;
   password: string;
 };
 
@@ -99,6 +101,8 @@ export type ClinicRegisterRequest = {
   clinic_type?: string;
   established_year?: number;
   plan_code: string;
+  password: string;
+  pin: string;
 };
 
 // POST /api/v1/clinics/signup — response
@@ -120,23 +124,45 @@ export type ClinicRegisterResponse = {
   bootstrap_url?: string;
 };
 
-// POST /api/v1/clinic-auth/login — request
+// POST /api/v1/clinic-auth/login — step 1 request (email + password)
 export type ClinicLoginRequest = {
-  clinic_slug: string;
-  pin: string;
-  username: string;
+  email: string;
   password: string;
 };
 
-// POST /api/v1/clinic-auth/login — response
+// POST /api/v1/clinic-auth/login — step 1 response (OTP dispatched)
+export type ClinicLoginStep1Response = {
+  requires_otp: boolean;
+  otp_token: string;
+  masked_email: string;
+  message: string;
+};
+
+// POST /api/v1/clinic-auth/verify-otp — request
+export type ClinicOtpVerifyRequest = {
+  otp_token: string;
+  otp_code: string;
+};
+
+// POST /api/v1/clinic-auth/resend-otp — request
+export type ClinicOtpResendRequest = {
+  otp_token: string;
+};
+
+// POST /api/v1/clinic-auth/verify-otp — response (full session)
 export type ClinicLoginResponse = {
   access_token: string;
   token_type: string;
-  user_id: number;
   clinic_slug: string;
-  doctor_id: number | null;
-  role: string;
-  app_url: string;
+  clinic_name: string;
+  username: string;
+  temp_password?: string | null;
+  temp_pin?: string | null;
+  dashboard_url: string;
+  app_url: string;          // bootstrap_url — opens OSCAR with auto-login
+  bootstrap_url: string;
+  emr_launch_url: string;
+  message: string;
 };
 
 export type ClinicLoginSession = {

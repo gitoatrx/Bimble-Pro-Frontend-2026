@@ -3,34 +3,30 @@ import {
   extractBackendErrorMessage,
   requestBackendApiJson,
 } from "@/lib/api/backend";
-import type { ClinicLoginRequest, ClinicLoginStep1Response } from "@/lib/clinic/types";
-
-function hasRequiredFields(payload: ClinicLoginRequest): boolean {
-  return Boolean(payload.email?.trim() && payload.password?.trim());
-}
+import type { ClinicLoginStep1Response, ClinicOtpResendRequest } from "@/lib/clinic/types";
 
 export async function POST(request: Request) {
-  let payload: ClinicLoginRequest;
+  let payload: ClinicOtpResendRequest;
 
   try {
-    payload = (await request.json()) as ClinicLoginRequest;
+    payload = (await request.json()) as ClinicOtpResendRequest;
   } catch {
     return NextResponse.json(
-      { message: "Invalid login payload." },
+      { message: "Invalid request payload." },
       { status: 400 },
     );
   }
 
-  if (!hasRequiredFields(payload)) {
+  if (!payload.otp_token?.trim()) {
     return NextResponse.json(
-      { message: "Email and password are required." },
+      { message: "OTP token is required." },
       { status: 400 },
     );
   }
 
   try {
     const backendResponse = await requestBackendApiJson({
-      path: "/clinic-auth/login",
+      path: "/clinic-auth/resend-otp",
       method: "POST",
       body: payload,
     });
@@ -40,7 +36,7 @@ export async function POST(request: Request) {
         {
           message: extractBackendErrorMessage(
             backendResponse.data,
-            "Login failed. Please check your credentials and try again.",
+            "Could not resend the code. Please try again.",
           ),
         },
         { status: backendResponse.status },

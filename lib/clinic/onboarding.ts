@@ -9,6 +9,7 @@ export const onboardingStepOrder: OnboardingStepKey[] = [
   "clinic",
   "location",
   "operations",
+  "credentials",
 ];
 
 export const provinceOptions = [
@@ -59,6 +60,9 @@ export const initialClinicOnboardingFormData: ClinicOnboardingFormData = {
   phoneNumber: "",
   clinicType: "",
   servicesProvided: "",
+  password: "",
+  confirmPassword: "",
+  pin: "",
 };
 
 export function validateEmail(value: string) {
@@ -121,6 +125,8 @@ export function buildClinicRegisterPayload(
     clinic_type: formData.clinicType ? mapClinicTypeToApiValue(formData.clinicType) : undefined,
     established_year: formData.establishedYear ? Number(formData.establishedYear) : undefined,
     plan_code: planCode,
+    password: formData.password,
+    pin: formData.pin,
   };
 }
 
@@ -189,6 +195,26 @@ export function validateClinicOnboardingStep(
 
     if (!formData.servicesProvided.trim()) {
       errors.servicesProvided = "Services provided is required.";
+    }
+  }
+
+  if (step === "credentials") {
+    if (!formData.password) {
+      errors.password = "Password is required.";
+    } else if (formData.password.length < 8) {
+      errors.password = "Password must be at least 8 characters.";
+    }
+
+    if (!formData.confirmPassword) {
+      errors.confirmPassword = "Please confirm your password.";
+    } else if (formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = "Passwords do not match.";
+    }
+
+    if (!formData.pin) {
+      errors.pin = "PIN is required.";
+    } else if (!/^\d{4}$/.test(formData.pin)) {
+      errors.pin = "PIN must be exactly 4 digits.";
     }
   }
 

@@ -1,49 +1,84 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { ClinicCredentialsCard } from "@/components/clinic-access/clinic-credentials-card";
-import { submitClinicLogin } from "@/lib/api/clinic";
+import { ClinicOtpCard } from "@/components/clinic-access/clinic-otp-card";
+import {
+  submitClinicLogin,
+  submitClinicVerifyOtp,
+  submitClinicResendOtp,
+} from "@/lib/api/clinic";
 import {
   clearClinicSessionState,
-  readClinicLoginPrefillFromSignup,
   storeClinicLoginSession,
 } from "@/lib/clinic/session";
 import type { ClinicLoginFormData } from "@/lib/clinic/types";
 
+type LoginStep = "credentials" | "otp";
+
 const emptyForm: ClinicLoginFormData = {
-  clinicSlug: "",
-  pin: "",
-  username: "",
+  email: "",
   password: "",
 };
 
 export default function ClinicLoginPage() {
   const router = useRouter();
+
+  // --- Step tracking ---
+  const [step, setStep] = useState<LoginStep>("credentials");
+
+  // --- Step 1 state ---
   const [formData, setFormData] = useState<ClinicLoginFormData>(emptyForm);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [loginError, setLoginError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [credentialsError, setCredentialsError] = useState("");
 
-  useEffect(() => {
-    const signupPrefill = readClinicLoginPrefillFromSignup();
+  // --- Step 2 state ---
+  const [otpToken, setOtpToken] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [otpError, setOtpError] = useState("");
 
-    if (signupPrefill) {
-      setFormData((current) => ({ ...current, ...signupPrefill }));
-    }
-  }, []);
-
+  // --- Step 1 handlers ---
   function updateField(field: keyof ClinicLoginFormData, value: string) {
     setFormData((current) => ({ ...current, [field]: value }));
-    setLoginError("");
+    setCredentialsError("");
   }
 
   async function handleLogin() {
-    setIsLoggingIn(true);
-    setLoginError("");
+    setIsSubmitting(true);
+    setCredentialsError("");
 
     try {
       const response = await submitClinicLogin(formData);
+      setOtpToken(response.otp_token);
+      setMaskedEmail(response.masked_email);
+      setOtpCode("");
+      setOtpError("");
+      setStep("otp");
+    } catch (error) {
+      setCredentialsError(
+        error instanceof Error
+          ? error.message
+          : "Login failed. Please check your credentials and try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  // --- Step 2 handlers ---
+  async function handleVerifyOtp() {
+    if (otpCode.length !== 6) return;
+
+    setIsVerifying(true);
+    setOtpError("");
+
+    try {
+      const response = await submitClinicVerifyOtp({ otp_token: otpToken, otp_code: otpCode });
       clearClinicSessionState();
       storeClinicLoginSession({
         clinicSlug: response.clinic_slug,
@@ -52,35 +87,90 @@ export default function ClinicLoginPage() {
       });
       router.push("/clinic/dashboard");
     } catch (error) {
-      setLoginError(
+      setOtpError(
         error instanceof Error
           ? error.message
-          : "Login failed. Please check your credentials and try again.",
+          : "Verification failed. Please check the code and try again.",
       );
     } finally {
-      setIsLoggingIn(false);
+      setIsVerifying(false);
     }
+  }
+
+  async function handleResendOtp() {
+    setIsResending(true);
+    setOtpError("");
+
+    try {
+      const response = await submitClinicResendOtp({ otp_token: otpToken });
+      // The backend invalidates the old token and issues a new one
+      setOtpToken(response.otp_token);
+      setMaskedEmail(response.masked_email);
+      setOtpCode("");
+    } catch (error) {
+      setOtpError(
+        error instanceof Error
+          ? error.message
+          : "Could not resend the code. Please try again.",
+      );
+    } finally {
+      setIsResending(false);
+    }
+  }
+
+  function handleBackToCredentials() {
+    setStep("credentials");
+    setOtpCode("");
+    setOtpError("");
+    setOtpToken("");
+    setMaskedEmail("");
   }
 
   return (
     <ClinicFlowShell backHref="/onboarding/plan" backLabel="Back to plans">
-      <div className="mb-6 max-w-xl">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-          Clinic Login
-        </h1>
-        <p className="mt-1 text-sm leading-6 text-slate-600">
-          Enter your clinic name, PIN, and credentials to sign in.
-        </p>
-      </div>
+      {step === "credentials" ? (
+        <>
+          <div className="mb-6 max-w-xl">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              Clinic Sign In
+            </h1>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              Enter your email and password. We will send a verification code to your email.
+            </p>
+          </div>
 
-      <ClinicCredentialsCard
-        formData={formData}
-        isLoggingIn={isLoggingIn}
-        loginError={loginError}
-        onBack={() => window.location.assign("/onboarding/plan")}
-        onLogin={() => void handleLogin()}
-        onFieldChange={updateField}
-      />
+          <ClinicCredentialsCard
+            formData={formData}
+            isLoggingIn={isSubmitting}
+            loginError={credentialsError}
+            onLogin={() => void handleLogin()}
+            onFieldChange={updateField}
+          />
+        </>
+      ) : (
+        <>
+          <div className="mb-6 max-w-xl">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              Check Your Email
+            </h1>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              For your security, we sent a one-time code to verify your identity.
+            </p>
+          </div>
+
+          <ClinicOtpCard
+            maskedEmail={maskedEmail}
+            otpCode={otpCode}
+            isVerifying={isVerifying}
+            isResending={isResending}
+            verifyError={otpError}
+            onOtpChange={setOtpCode}
+            onVerify={() => void handleVerifyOtp()}
+            onResend={() => void handleResendOtp()}
+            onBack={handleBackToCredentials}
+          />
+        </>
+      )}
     </ClinicFlowShell>
   );
 }

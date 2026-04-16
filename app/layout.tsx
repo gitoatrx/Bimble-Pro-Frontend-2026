@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Plus_Jakarta_Sans } from "next/font/google";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -37,7 +38,7 @@ export default function RootLayout({
       className={`${dmSans.variable} ${plusJakartaSans.variable} h-full antialiased`}
     >
       <body className="min-h-full overflow-x-hidden bg-background font-sans text-foreground antialiased">
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );

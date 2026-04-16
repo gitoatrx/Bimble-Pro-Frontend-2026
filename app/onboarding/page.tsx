@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { GooglePlacesAddressInput } from "@/components/clinic-access/google-places-address-input";
 import { FieldError } from "@/components/clinic-access/field-error";
@@ -37,12 +37,14 @@ const onboardingStepTitles: Record<OnboardingStepKey, string> = {
   clinic: "Set up your clinic",
   location: "Add clinic location",
   operations: "Add contact details",
+  credentials: "Set your credentials",
 };
 
 const onboardingStepHelpers: Record<OnboardingStepKey, string> = {
   clinic: "Enter the clinic identity details.",
   location: "Add the clinic address and postal code.",
   operations: "Finish with the contact and service details.",
+  credentials: "Create your admin password and 4-digit PIN for Bimble and OSCAR.",
 };
 
 const neutralFieldClassName =
@@ -65,6 +67,8 @@ export default function ClinicOnboardingPage() {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPin, setShowPin] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<ClinicPlan | null>(null);
   const [isFlowReady, setIsFlowReady] = useState(false);
 
@@ -171,10 +175,17 @@ export default function ClinicOnboardingPage() {
       const signupResult = await submitClinicOnboarding(formData, selectedPlan.id);
       storeClinicSignupResult(signupResult);
 
-      // Stay inside the app and hand off to the local billing step.
-      router.push(
-        `/onboarding/billing?clinicCode=${encodeURIComponent(signupResult.clinicCode)}&clinicId=${encodeURIComponent(String(signupResult.clinicId))}&planId=${encodeURIComponent(selectedPlan.id)}&planName=${encodeURIComponent(selectedPlan.name)}&message=${encodeURIComponent(signupResult.message)}`,
-      );
+      // Redirect to Stripe checkout for payment.
+      // Stripe will redirect back to /onboarding/billing?success=1 on completion
+      // or /onboarding/billing?cancelled=1 if the user cancels.
+      if (signupResult.stripeCheckoutUrl) {
+        window.location.assign(signupResult.stripeCheckoutUrl);
+      } else {
+        // No Stripe URL (mock/dev mode) — go straight to billing confirmation
+        router.push(
+          `/onboarding/billing?success=1&clinic_id=${encodeURIComponent(String(signupResult.clinicId))}&clinic_code=${encodeURIComponent(signupResult.clinicCode)}`,
+        );
+      }
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -187,6 +198,129 @@ export default function ClinicOnboardingPage() {
   }
 
   function renderStepFields() {
+    if (step === "credentials") {
+      return (
+        <>
+          <p className="text-sm text-slate-500">
+            These credentials are used to sign in to your Bimble dashboard and
+            OSCAR EMR. Keep them safe — they cannot be recovered.
+          </p>
+
+          <div>
+            <label
+              htmlFor="password"
+              className="mb-2 block text-sm font-medium text-slate-900"
+            >
+              Password
+            </label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Minimum 8 characters"
+                value={formData.password}
+                onChange={(event) => setField("password", event.target.value)}
+                className={`${neutralFieldClassName} pr-10`}
+                autoFocus
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <FieldError message={errors.password} />
+          </div>
+
+          <div>
+            <label
+              htmlFor="confirmPassword"
+              className="mb-2 block text-sm font-medium text-slate-900"
+            >
+              Confirm Password
+            </label>
+            <div className="relative">
+              <Input
+                id="confirmPassword"
+                type={showPassword ? "text" : "password"}
+                placeholder="Re-enter your password"
+                value={formData.confirmPassword}
+                onChange={(event) =>
+                  setField("confirmPassword", event.target.value)
+                }
+                className={`${neutralFieldClassName} pr-10`}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <FieldError message={errors.confirmPassword} />
+          </div>
+
+          <div>
+            <label
+              htmlFor="pin"
+              className="mb-2 block text-sm font-medium text-slate-900"
+            >
+              4-digit PIN
+            </label>
+            <p className="mb-2 text-xs text-slate-500">
+              Used as a secondary access code inside OSCAR EMR.
+            </p>
+            <div className="relative">
+              <Input
+                id="pin"
+                type={showPin ? "text" : "password"}
+                inputMode="numeric"
+                placeholder="••••"
+                maxLength={4}
+                value={formData.pin}
+                onChange={(event) =>
+                  setField("pin", event.target.value.replace(/\D/g, "").slice(0, 4))
+                }
+                className={`${neutralFieldClassName} pr-10 tracking-[0.35em]`}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                tabIndex={-1}
+                aria-label={showPin ? "Hide PIN" : "Show PIN"}
+              >
+                {showPin ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <FieldError message={errors.pin} />
+          </div>
+        </>
+      );
+    }
+
     if (step === "clinic") {
       return (
         <>
