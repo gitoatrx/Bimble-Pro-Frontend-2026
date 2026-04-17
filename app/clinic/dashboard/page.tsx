@@ -1,15 +1,14 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   Circle,
   Clock,
   Lock,
   MessageSquare,
-  Phone,
   Printer,
   Rocket,
   Stethoscope,
@@ -19,6 +18,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import {
+  fetchAvailableServices,
+  fetchClinicServiceMappings,
+  fetchClinicSetupState,
+  saveClinicServiceMappings,
+  saveEmailNotifications,
+  saveFaxIntegration,
+  saveTextMessageNotifications,
+} from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { fetchDoctorInvites, inviteDoctor } from "@/lib/api/clinic";
 
@@ -112,21 +120,42 @@ function StepIndicator({ status }: { status: StepStatus }) {
 
 function SmsStep({ onComplete }: { onComplete: () => void }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [provider, setProvider] = useState<"twilio" | "auth" | "swift" | "">("");
-  const [fields, setFields] = useState({ accountSid: "", authToken: "", fromNumber: "" });
+  const [provider, setProvider] = useState<"twilio" | "auth0" | "swift" | "">("");
+  const [fields, setFields] = useState({
+    accountSid: "",
+    authToken: "",
+    fromNumber: "",
+  });
   const [saving, setSaving] = useState(false);
 
-  function canSave() {
-    if (enabled === false) return true;
-    if (!provider) return false;
-    return fields.accountSid.trim() !== "" && fields.authToken.trim() !== "" && fields.fromNumber.trim() !== "";
-  }
-
   async function handleSave() {
+    const session = readClinicLoginSession();
+
+    if (!session?.accessToken) {
+      return;
+    }
+
+    if (enabled === false) {
+      onComplete();
+      return;
+    }
+
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 600)); // replace with real API call
-    setSaving(false);
-    onComplete();
+
+    try {
+      await saveTextMessageNotifications(session.accessToken, {
+        enabled: true,
+        provider_name: provider,
+        account_identifier: fields.accountSid,
+        auth_secret: fields.authToken,
+        from_number: fields.fromNumber,
+      });
+      onComplete();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -158,49 +187,53 @@ function SmsStep({ onComplete }: { onComplete: () => void }) {
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Provider
             </label>
-            <div className="flex gap-2">
-              {(["twilio", "auth", "swift"] as const).map((p) => (
+            <div className="flex flex-wrap gap-2">
+              {(["twilio", "auth0", "swift"] as const).map((p) => (
                 <button
                   key={p}
                   onClick={() => setProvider(p)}
                   className={cn(
-                    "rounded-lg border px-3 py-1.5 text-sm font-medium capitalize transition-all",
+                    "rounded-full border px-3 py-1.5 text-sm font-medium transition-all",
                     provider === p
                       ? "border-primary bg-primary/10 text-primary"
                       : "border-border bg-card text-muted-foreground hover:border-primary/40",
                   )}
                 >
-                  {p === "auth" ? "Auth.0" : p.charAt(0).toUpperCase() + p.slice(1)}
+                  {p === "twilio" ? "Twilio" : p === "auth0" ? "Auth0" : "Swift"}
                 </button>
               ))}
             </div>
           </div>
 
-          {provider && (
-            <div className="space-y-3">
-              <Input
-                placeholder={provider === "twilio" ? "Account SID" : "API Key"}
-                value={fields.accountSid}
-                onChange={(e) => setFields((f) => ({ ...f, accountSid: e.target.value }))}
-              />
-              <Input
-                type="password"
-                placeholder={provider === "twilio" ? "Auth Token" : "Secret"}
-                value={fields.authToken}
-                onChange={(e) => setFields((f) => ({ ...f, authToken: e.target.value }))}
-              />
-              <Input
-                placeholder="From number (e.g. +16041234567)"
-                value={fields.fromNumber}
-                onChange={(e) => setFields((f) => ({ ...f, fromNumber: e.target.value }))}
-              />
-            </div>
-          )}
+          <div className="space-y-3">
+            <Input
+              placeholder="Account SID"
+              value={fields.accountSid}
+              onChange={(e) =>
+                setFields((f) => ({ ...f, accountSid: e.target.value }))
+              }
+            />
+            <Input
+              type="password"
+              placeholder="Auth Token"
+              value={fields.authToken}
+              onChange={(e) =>
+                setFields((f) => ({ ...f, authToken: e.target.value }))
+              }
+            />
+            <Input
+              placeholder="From number (e.g. +16041234567)"
+              value={fields.fromNumber}
+              onChange={(e) =>
+                setFields((f) => ({ ...f, fromNumber: e.target.value }))
+              }
+            />
+          </div>
         </div>
       )}
 
       {enabled !== null && (
-        <Button onClick={handleSave} disabled={!canSave() || saving} size="sm">
+        <Button onClick={handleSave} disabled={saving} size="sm">
           {saving ? "Saving…" : enabled ? "Save & continue" : "Skip & continue"}
         </Button>
       )}
@@ -212,21 +245,54 @@ function SmsStep({ onComplete }: { onComplete: () => void }) {
 
 function FaxStep({ onComplete }: { onComplete: () => void }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [provider, setProvider] = useState<"srfax" | "ringcentral" | "">("");
-  const [fields, setFields] = useState({ accountId: "", password: "", faxNumber: "" });
+  const [provider, setProvider] = useState<"SRFax" | "RingCentral Fax" | "">("");
+  const [fields, setFields] = useState({
+    accountIdentifier: "",
+    authSecret: "",
+    faxNumber: "",
+    notes: "",
+  });
   const [saving, setSaving] = useState(false);
 
   function canSave() {
     if (enabled === false) return true;
     if (!provider) return false;
-    return fields.accountId.trim() !== "" && fields.password.trim() !== "";
+    return (
+      fields.accountIdentifier.trim() !== "" &&
+      fields.authSecret.trim() !== "" &&
+      fields.faxNumber.trim() !== ""
+    );
   }
 
   async function handleSave() {
+    const session = readClinicLoginSession();
+
+    if (!session?.accessToken) {
+      return;
+    }
+
+    if (enabled === false) {
+      onComplete();
+      return;
+    }
+
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setSaving(false);
-    onComplete();
+
+    try {
+      await saveFaxIntegration(session.accessToken, {
+        enabled: true,
+        provider_name: provider === "SRFax" ? "srfax" : "ringcentral",
+        account_identifier: fields.accountIdentifier,
+        auth_secret: fields.authSecret,
+        fax_number: fields.faxNumber,
+        notes: fields.notes.trim() ? fields.notes : null,
+      });
+      onComplete();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -259,7 +325,7 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
               Provider
             </label>
             <div className="flex gap-2">
-              {(["srfax", "ringcentral"] as const).map((p) => (
+              {(["SRFax", "RingCentral Fax"] as const).map((p) => (
                 <button
                   key={p}
                   onClick={() => setProvider(p)}
@@ -270,7 +336,7 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
                       : "border-border bg-card text-muted-foreground hover:border-primary/40",
                   )}
                 >
-                  {p === "srfax" ? "SRFax" : "RingCentral Fax"}
+                  {p}
                 </button>
               ))}
             </div>
@@ -279,20 +345,25 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
           {provider && (
             <div className="space-y-3">
               <Input
-                placeholder={provider === "srfax" ? "Account number" : "Client ID"}
-                value={fields.accountId}
-                onChange={(e) => setFields((f) => ({ ...f, accountId: e.target.value }))}
+                placeholder="Account identifier"
+                value={fields.accountIdentifier}
+                onChange={(e) => setFields((f) => ({ ...f, accountIdentifier: e.target.value }))}
               />
               <Input
                 type="password"
-                placeholder={provider === "srfax" ? "Password" : "Client secret"}
-                value={fields.password}
-                onChange={(e) => setFields((f) => ({ ...f, password: e.target.value }))}
+                placeholder="Auth secret"
+                value={fields.authSecret}
+                onChange={(e) => setFields((f) => ({ ...f, authSecret: e.target.value }))}
               />
               <Input
-                placeholder="Fax number (e.g. +16041234567)"
+                placeholder="Fax number"
                 value={fields.faxNumber}
                 onChange={(e) => setFields((f) => ({ ...f, faxNumber: e.target.value }))}
+              />
+              <Input
+                placeholder="Notes"
+                value={fields.notes}
+                onChange={(e) => setFields((f) => ({ ...f, notes: e.target.value }))}
               />
             </div>
           )}
@@ -313,25 +384,45 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
 function EmailStep({ onComplete }: { onComplete: () => void }) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [fields, setFields] = useState({
-    host: "", port: "587", username: "", password: "", senderName: "", senderEmail: "",
+    host: "smtp.gmail.com",
+    port: "587",
+    username: "",
+    password: "",
+    senderName: "Bimble Clinic",
+    senderEmail: "",
   });
   const [saving, setSaving] = useState(false);
 
-  function canSave() {
-    if (enabled === false) return true;
-    return (
-      fields.host.trim() !== "" &&
-      fields.username.trim() !== "" &&
-      fields.password.trim() !== "" &&
-      fields.senderEmail.trim() !== ""
-    );
-  }
-
   async function handleSave() {
+    const session = readClinicLoginSession();
+
+    if (!session?.accessToken) {
+      return;
+    }
+
+    if (enabled === false) {
+      onComplete();
+      return;
+    }
+
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setSaving(false);
-    onComplete();
+
+    try {
+      await saveEmailNotifications(session.accessToken, {
+        enabled: true,
+        smtp_host: fields.host,
+        smtp_port: Number(fields.port) || 587,
+        smtp_username: fields.username,
+        smtp_password: fields.password,
+        sender_name: fields.senderName,
+        sender_email: fields.senderEmail,
+      });
+      onComplete();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -362,7 +453,7 @@ function EmailStep({ onComplete }: { onComplete: () => void }) {
           <div className="flex gap-3">
             <Input
               className="flex-1"
-              placeholder="SMTP host (e.g. smtp.gmail.com)"
+              placeholder="SMTP host"
               value={fields.host}
               onChange={(e) => setFields((f) => ({ ...f, host: e.target.value }))}
             />
@@ -398,7 +489,7 @@ function EmailStep({ onComplete }: { onComplete: () => void }) {
       )}
 
       {enabled !== null && (
-        <Button onClick={handleSave} disabled={!canSave() || saving} size="sm">
+        <Button onClick={handleSave} disabled={saving} size="sm">
           {saving ? "Saving…" : enabled ? "Save & continue" : "Skip & continue"}
         </Button>
       )}
@@ -409,10 +500,59 @@ function EmailStep({ onComplete }: { onComplete: () => void }) {
 // ── Services Step ─────────────────────────────────────────────────
 
 function ServicesStep({ onComplete }: { onComplete: () => void }) {
+  const session = readClinicLoginSession();
+  const accessToken = session?.accessToken ?? "";
   const [selected, setSelected] = useState<number[]>([]);
+  const [services, setServices] = useState(MOCK_SERVICES);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(Boolean(accessToken));
+  const [error, setError] = useState(
+    accessToken ? "" : "You are not logged in. Please refresh and try again.",
+  );
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
+    let active = true;
+
+    Promise.all([
+      fetchAvailableServices(),
+      fetchClinicServiceMappings(accessToken),
+    ])
+      .then(([serviceCatalog, records]) => {
+        if (!active) return;
+
+        const available = (serviceCatalog as Record<string, unknown>[]).map((record) => ({
+          id: Number(record.service_id ?? record.id ?? 0),
+          service_name:
+            (typeof record.service_name === "string" && record.service_name) ||
+            (typeof record.name === "string" && record.name) ||
+            `Service ${record.service_id ?? record.id ?? ""}`,
+        }));
+
+        const mappedIds = (records as Record<string, unknown>[]).map((record) =>
+          Number(record.platform_service_id ?? record.service_id ?? record.id ?? 0),
+        );
+
+        setServices(available.filter((svc) => Number.isFinite(svc.id) && svc.id > 0));
+        setSelected(mappedIds.filter((id) => Number.isFinite(id) && id > 0));
+      })
+      .catch((err) => {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load services.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [accessToken]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -429,14 +569,20 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
   }
 
   async function handleSave() {
-    if (selected.length === 0) return;
+    if (!accessToken || selected.length === 0) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setSaving(false);
-    onComplete();
+
+    try {
+      await saveClinicServiceMappings(accessToken, selected);
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save services.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  const selectedNames = MOCK_SERVICES
+  const selectedNames = services
     .filter((s) => selected.includes(s.id))
     .map((s) => s.service_name);
 
@@ -446,8 +592,13 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
         Select the services your clinic provides. Patients will only be matched with your clinic for the services you offer.
       </p>
 
+      {error && (
+        <p className="text-xs text-destructive">{error}</p>
+      )}
+
       <div ref={dropdownRef} className="relative w-full max-w-sm">
         <button
+          disabled={loading}
           onClick={() => setOpen((o) => !o)}
           className={cn(
             "flex w-full items-center justify-between rounded-2xl border bg-card px-4 py-3 text-sm transition-all",
@@ -466,7 +617,7 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
 
         {open && (
           <div className="absolute left-0 top-full z-20 mt-1.5 w-full rounded-2xl border border-border bg-card shadow-lg overflow-hidden">
-            {MOCK_SERVICES.map((svc) => (
+            {services.map((svc) => (
               <button
                 key={svc.id}
                 onClick={() => toggle(svc.id)}
@@ -510,10 +661,10 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
 
       <Button
         onClick={handleSave}
-        disabled={selected.length === 0 || saving}
+        disabled={selected.length === 0 || saving || loading}
         size="sm"
       >
-        {saving ? "Saving…" : "Save & continue"}
+        {saving ? "Saving…" : loading ? "Loading…" : "Save & continue"}
       </Button>
     </div>
   );
@@ -574,7 +725,7 @@ function DoctorInviteStep({
   return (
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
-        Invite a doctor by email. If they already have a Bimble account, they'll just need to accept. Otherwise, they'll receive an email to get set up.
+        Invite a doctor by email. If they already have a Bimble account, they&apos;ll just need to accept. Otherwise, they&apos;ll receive an email to get set up.
       </p>
 
       <div className="flex gap-2 max-w-sm">
@@ -693,7 +844,7 @@ function ChecklistItem({
   status: StepStatus;
   children?: React.ReactNode;
 }) {
-  const { Icon, label, description } = step;
+  const { label, description } = step;
   const isOpen = status === "active";
 
   return (
@@ -744,17 +895,56 @@ function ChecklistItem({
 // ── Page ──────────────────────────────────────────────────────────
 
 export default function ClinicDashboardPage() {
+  const router = useRouter();
   const session = readClinicLoginSession();
   const [completedSteps, setCompletedSteps] = useState<Set<StepKey>>(new Set());
   const [invitedDoctors, setInvitedDoctors] = useState<
     { email: string; status: "pending" | "accepted" }[]
   >([]);
+  const [setupComplete, setSetupComplete] = useState(false);
+  const [loadingSetupState, setLoadingSetupState] = useState(Boolean(session?.accessToken));
 
-  // Load existing invites on mount so accepted doctors unlock the Go Live step
+  // Load setup state and existing invites on mount.
   useEffect(() => {
     if (!session?.accessToken) return;
-    fetchDoctorInvites(session.accessToken)
-      .then((records) => {
+
+    let active = true;
+
+    Promise.all([
+      fetchClinicSetupState(session.accessToken),
+      fetchDoctorInvites(session.accessToken),
+    ])
+      .then(([setup, records]) => {
+        if (!active) return;
+
+        const setupRecord = setup as Record<string, unknown>;
+        const completed =
+          setupRecord.setup_completed === true ||
+          setupRecord.completed === true ||
+          setupRecord.setup_status === "COMPLETED";
+
+        setSetupComplete(completed);
+
+        const onboardingSteps = Array.isArray(setupRecord.onboarding_steps)
+          ? (setupRecord.onboarding_steps as Record<string, unknown>[])
+          : [];
+        const completedFromBackend = new Set<StepKey>();
+
+        for (const step of onboardingSteps) {
+          if (step.completed !== true) continue;
+          const key = step.step_key;
+          if (key === "text_message_notifications") completedFromBackend.add("sms");
+          if (key === "fax_integration") completedFromBackend.add("fax");
+          if (key === "email_notifications") completedFromBackend.add("email");
+          if (key === "map_services") completedFromBackend.add("services");
+          if (key === "doctor_invite") completedFromBackend.add("doctor_invite");
+          if (key === "start_accepting_appointments") completedFromBackend.add("go_live");
+        }
+
+        if (completedFromBackend.size > 0) {
+          setCompletedSteps(completedFromBackend);
+        }
+
         const mapped = records.map((r) => ({
           email: r.email,
           status: (r.status === "ACCEPTED" ? "accepted" : "pending") as
@@ -762,10 +952,21 @@ export default function ClinicDashboardPage() {
             | "accepted",
         }));
         if (mapped.length > 0) setInvitedDoctors(mapped);
+
+        if (completed) {
+          router.replace("/clinic/appointments/today");
+        }
       })
       .catch(() => {
-        // Non-fatal — user can still invite manually
+        // Non-fatal — local checklist can still render if backend status is unavailable.
+      })
+      .finally(() => {
+        if (active) setLoadingSetupState(false);
       });
+
+    return () => {
+      active = false;
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function markComplete(key: StepKey) {
@@ -788,6 +989,7 @@ export default function ClinicDashboardPage() {
     // Signal layout to unlock all nav items
     localStorage.setItem("bimble:clinic:onboarding-complete", "true");
     window.dispatchEvent(new Event("bimble:clinic:onboarding-complete"));
+    router.replace("/clinic/appointments/today");
   }
 
   // Determine the active step (first incomplete non-locked step)
@@ -831,7 +1033,17 @@ export default function ClinicDashboardPage() {
     }
   }
 
-  const allDone = completedSteps.has("go_live");
+  if (loadingSetupState) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-10">
+        <p className="text-sm text-muted-foreground">Checking setup status...</p>
+      </div>
+    );
+  }
+
+  if (setupComplete) {
+    return null;
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
@@ -841,33 +1053,29 @@ export default function ClinicDashboardPage() {
           Clinic setup
         </p>
         <h1 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-foreground">
-          {allDone ? "You're live! 🎉" : `Welcome, ${session?.clinicSlug ?? "Clinic"}`}
+          {`Welcome, ${session?.clinicSlug ?? "Clinic"}`}
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          {allDone
-            ? "Your clinic is now live and accepting appointments from the pool."
-            : "Complete these steps to start accepting appointments from Bimble patients."}
+          Complete these steps to start accepting appointments from Bimble patients.
         </p>
 
         {/* Progress bar */}
-        {!allDone && (
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs text-muted-foreground">
-                {completedSteps.size} of {stepOrder.length} steps complete
-              </span>
-              <span className="text-xs font-semibold text-primary">
-                {Math.round((completedSteps.size / stepOrder.length) * 100)}%
-              </span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-500"
-                style={{ width: `${(completedSteps.size / stepOrder.length) * 100}%` }}
-              />
-            </div>
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-muted-foreground">
+              {completedSteps.size} of {stepOrder.length} steps complete
+            </span>
+            <span className="text-xs font-semibold text-primary">
+              {Math.round((completedSteps.size / stepOrder.length) * 100)}%
+            </span>
           </div>
-        )}
+          <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-500"
+              style={{ width: `${(completedSteps.size / stepOrder.length) * 100}%` }}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Checklist */}

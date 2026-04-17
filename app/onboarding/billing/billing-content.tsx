@@ -182,6 +182,15 @@ export default function BillingContent() {
         >
           Back to home
         </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="h-12 w-full"
+          onClick={() => router.push("/login")}
+        >
+          Clinic login
+        </Button>
       </div>
     </ClinicFlowShell>
   );

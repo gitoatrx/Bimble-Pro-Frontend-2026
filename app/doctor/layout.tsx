@@ -4,7 +4,6 @@ import React, { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  BarChart3,
   CalendarDays,
   ClipboardList,
   ExternalLink,
@@ -17,7 +16,11 @@ import {
 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { clearDoctorLoginSession, readDoctorLoginSession } from "@/lib/doctor/session";
+import {
+  clearDoctorLoginSession,
+  resolveDoctorLayoutSession,
+  suppressDoctorUiPreviewForTab,
+} from "@/lib/doctor/session";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -36,21 +39,38 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/doctor/settings",      label: "Settings",      Icon: Settings        },
 ];
 
+function isPublicDoctorRoute(pathname: string) {
+  if (pathname === "/doctor/login") return true;
+  // /doctor/invite/[token]
+  if (pathname.startsWith("/doctor/invite")) return true;
+  return false;
+}
+
 export default function DoctorLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const session = readDoctorLoginSession();
+  const session = resolveDoctorLayoutSession();
+
+  const isPublic = isPublicDoctorRoute(pathname);
 
   useEffect(() => {
+    if (isPublic) return;
     if (!session) {
       router.replace("/doctor/login");
     }
-  }, [session, router]);
+  }, [isPublic, session, router]);
+
+  if (isPublic) {
+    return <>{children}</>;
+  }
 
   if (!session) return null;
 
   function handleLogout() {
     clearDoctorLoginSession();
+    if (process.env.NEXT_PUBLIC_DOCTOR_UI_PREVIEW === "true") {
+      suppressDoctorUiPreviewForTab();
+    }
     router.replace("/doctor/login");
   }
 

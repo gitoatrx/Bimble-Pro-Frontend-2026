@@ -14,26 +14,26 @@ type PoolAppointment = {
 
 const MOCK_POOL: PoolAppointment[] = [
   {
-    id: 201,
-    patientName: "Harper Singh",
+    id: 101,
+    patientName: "Ava Chen",
     reason: "General consultation",
     appointmentType: "walkin",
   },
   {
-    id: 202,
-    patientName: "Liam Wilson",
+    id: 102,
+    patientName: "Noah Patel",
     reason: "Prescription renewal",
     appointmentType: "virtual",
   },
   {
-    id: 203,
-    patientName: "Sophia Martin",
+    id: 103,
+    patientName: "Mia Gonzalez",
     reason: "Mental health follow-up",
     appointmentType: "virtual",
   },
   {
-    id: 204,
-    patientName: "Lucas Nguyen",
+    id: 104,
+    patientName: "Ethan Brooks",
     reason: "Sick note request",
     appointmentType: "walkin",
   },
@@ -57,7 +57,7 @@ function AppointmentTypeBadge({ type }: { type: PoolAppointment["appointmentType
   );
 }
 
-export default function DoctorPoolPage() {
+export default function ClinicPoolPage() {
   const [pool, setPool] = useState<PoolAppointment[]>(MOCK_POOL);
   const [claiming, setClaiming] = useState<number | null>(null);
   const [claimed, setClaimed] = useState<number[]>([]);
@@ -74,13 +74,13 @@ export default function DoctorPoolPage() {
     <div className="mx-auto max-w-2xl px-6 py-10">
       <div className="mb-8">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Doctor pool
+          Clinic pool
         </p>
         <h1 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-foreground">
           Available Appointments
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {pool.length} appointment{pool.length !== 1 ? "s" : ""} available · First to claim wins
+          {pool.length} appointment{pool.length !== 1 ? "s" : ""} available · First to assign wins
         </p>
       </div>
 
@@ -96,7 +96,7 @@ export default function DoctorPoolPage() {
 
       {claimed.length > 0 && (
         <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/20 dark:text-green-300">
-          You claimed {claimed.length} appointment{claimed.length > 1 ? "s" : ""} this session. Check your queue for follow-up.
+          You assigned {claimed.length} appointment{claimed.length > 1 ? "s" : ""} this session. Check today&apos;s appointments to follow up.
         </div>
       )}
 
@@ -125,7 +125,7 @@ export default function DoctorPoolPage() {
                 disabled={claiming !== null}
                 className="shrink-0"
               >
-                {claiming === appt.id ? "Claiming..." : "Claim"}
+                {claiming === appt.id ? "Assigning…" : "Assign"}
                 <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Button>
             </div>

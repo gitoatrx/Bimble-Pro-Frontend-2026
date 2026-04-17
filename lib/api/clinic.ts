@@ -154,9 +154,10 @@ export async function inviteDoctor(
   email: string,
   accessToken: string,
 ): Promise<void> {
-  await apiRequest<unknown, { email: string; access_token: string }>({
+  await apiRequest<unknown, { email: string }>({
     endpoint: API_ENDPOINTS.clinicDoctorInvite,
     method: "POST",
-    body: { email, access_token: accessToken },
+    body: { email },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 }

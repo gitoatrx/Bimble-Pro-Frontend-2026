@@ -13,11 +13,12 @@ import {
   LogOut,
   Settings,
   Stethoscope,
-  Users,
+  Zap,
 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { clearClinicLoginSession, readClinicLoginSession } from "@/lib/clinic/session";
+import { fetchClinicSetupState } from "@/lib/api/clinic-dashboard";
 import { cn } from "@/lib/utils";
 
 // ── Nav items ─────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/clinic/dashboard",               label: "Setup",          Icon: LayoutDashboard, requiresOnboarding: false },
   { href: "/clinic/appointments/today",      label: "Today",          Icon: CalendarCheck2,  requiresOnboarding: true  },
   { href: "/clinic/appointments",            label: "Appointments",   Icon: CalendarDays,    requiresOnboarding: true  },
+  { href: "/clinic/pool",                    label: "Pool",           Icon: Zap,             requiresOnboarding: true  },
   { href: "/clinic/doctors",                 label: "Doctors",        Icon: Stethoscope,     requiresOnboarding: true  },
   { href: "/clinic/doctors/schedule",        label: "Availability",   Icon: ClipboardList,   requiresOnboarding: true  },
   { href: "/clinic/analytics",              label: "Analytics",      Icon: BarChart3,       requiresOnboarding: true  },
@@ -43,16 +45,23 @@ const NAV_ITEMS: NavItem[] = [
 
 function Sidebar({
   clinicSlug,
+  clinicName,
+  clinicStatus,
   appUrl,
   onboardingComplete,
   onLogout,
 }: {
   clinicSlug: string;
+  clinicName: string;
+  clinicStatus: string;
   appUrl: string;
   onboardingComplete: boolean;
   onLogout: () => void;
 }) {
   const pathname = usePathname();
+  const visibleNavItems = onboardingComplete
+    ? NAV_ITEMS.filter((item) => item.label !== "Setup")
+    : NAV_ITEMS;
 
   return (
     <aside className="flex h-screen w-56 flex-shrink-0 flex-col border-r border-border bg-card">
@@ -69,14 +78,17 @@ function Sidebar({
         <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           Clinic
         </p>
-        <p className="mt-0.5 text-sm font-semibold text-foreground truncate">
-          {clinicSlug}
+        <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
+          {clinicName || clinicSlug}
+        </p>
+        <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+          {clinicStatus || "Active"}
         </p>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
-        {NAV_ITEMS.map(({ href, label, Icon, requiresOnboarding }) => {
+        {visibleNavItems.map(({ href, label, Icon, requiresOnboarding }) => {
           const locked = requiresOnboarding && !onboardingComplete;
           const active = pathname === href || pathname.startsWith(href + "/");
 
@@ -176,7 +188,8 @@ function SidebarNavItem({
 
 export default function ClinicLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [session, setSession] = useState(() => readClinicLoginSession());
+  const [session] = useState(() => readClinicLoginSession());
+  const [backendOnboardingComplete, setBackendOnboardingComplete] = useState(false);
 
   // Check onboarding completion (stored flag, updated after go-live)
   const [onboardingComplete, setOnboardingComplete] = useState(() => {
@@ -189,6 +202,45 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
       router.replace("/login");
     }
   }, [session, router]);
+
+  useEffect(() => {
+    if (!session?.accessToken) return;
+
+    let active = true;
+
+    fetchClinicSetupState(session.accessToken)
+      .then((record) => {
+        if (!active) return;
+
+        const value = record as Record<string, unknown>;
+        const status = typeof value.status === "string" ? value.status.toLowerCase() : "";
+        const complete =
+          value.complete === true ||
+          value.completed === true ||
+          value.is_complete === true ||
+          value.setup_complete === true ||
+          value.onboarding_complete === true ||
+          status === "complete" ||
+          status === "completed" ||
+          status === "done" ||
+          status === "live" ||
+          status === "active";
+
+        setBackendOnboardingComplete(complete);
+
+        if (complete) {
+          setOnboardingComplete(true);
+          localStorage.setItem("bimble:clinic:onboarding-complete", "true");
+        }
+      })
+      .catch(() => {
+        // Keep local onboarding state if backend status is unavailable.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [session?.accessToken]);
 
   // Listen for onboarding completion signal from child pages
   useEffect(() => {
@@ -206,12 +258,17 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     router.replace("/login");
   }
 
+  const resolvedOnboardingComplete =
+    onboardingComplete || backendOnboardingComplete;
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar
         clinicSlug={session.clinicSlug}
+        clinicName={session.clinicSlug}
+        clinicStatus="Active"
         appUrl={session.appUrl}
-        onboardingComplete={onboardingComplete}
+        onboardingComplete={resolvedOnboardingComplete}
         onLogout={handleLogout}
       />
 

@@ -58,7 +58,7 @@ export function ClinicOtpCard({
   }
 
   function handleOtpInput(value: string) {
-    // Only allow digits, max 6 characters
+    // Only allow digits, max 8 characters
     const digits = value.replace(/\D/g, "").slice(0, 8);
     onOtpChange(digits);
   }
