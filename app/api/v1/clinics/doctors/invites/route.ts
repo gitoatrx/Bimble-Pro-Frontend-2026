@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
   try {
     const backendResponse = await requestBackendApiJson({
-      path: "/clinics/doctors/invites",
+      path: "/clinics/me/doctors/invites",
       method: "GET",
       headers: { Authorization: `Bearer ${accessToken}` },
     });

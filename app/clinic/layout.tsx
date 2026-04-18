@@ -47,14 +47,14 @@ function Sidebar({
   clinicSlug,
   clinicName,
   clinicStatus,
-  appUrl,
+  oscarLaunchUrl,
   onboardingComplete,
   onLogout,
 }: {
   clinicSlug: string;
   clinicName: string;
   clinicStatus: string;
-  appUrl: string;
+  oscarLaunchUrl?: string;
   onboardingComplete: boolean;
   onLogout: () => void;
 }) {
@@ -62,6 +62,14 @@ function Sidebar({
   const visibleNavItems = onboardingComplete
     ? NAV_ITEMS.filter((item) => item.label !== "Setup")
     : NAV_ITEMS;
+
+  function handleOpenOscar() {
+    if (!oscarLaunchUrl) {
+      return;
+    }
+
+    window.location.assign(oscarLaunchUrl);
+  }
 
   return (
     <aside className="flex h-screen w-56 flex-shrink-0 flex-col border-r border-border bg-card">
@@ -107,16 +115,16 @@ function Sidebar({
 
       {/* Bottom: OSCAR link + theme + logout */}
       <div className="border-t border-border px-2 py-3 space-y-1">
-        <a
-          href={appUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        <button
+          type="button"
+          onClick={handleOpenOscar}
+          disabled={!oscarLaunchUrl}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
         >
           <ExternalLink className="h-4 w-4 flex-shrink-0" />
           <span className="flex-1">Open OSCAR</span>
           <ExternalLink className="h-3 w-3 opacity-50" />
-        </a>
+        </button>
 
         <div className="px-3 py-2">
           <ThemeToggle className="w-full justify-center" />
@@ -213,13 +221,29 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
         if (!active) return;
 
         const value = record as Record<string, unknown>;
-        const status = typeof value.status === "string" ? value.status.toLowerCase() : "";
+        const statusSource =
+          typeof value.setup_status === "string"
+            ? value.setup_status
+            : typeof value.status === "string"
+              ? value.status
+              : "";
+        const status = statusSource.toLowerCase();
+        const completedSteps = Number(
+          value.completed_steps ?? value.completedSteps ?? value.steps_completed ?? 0,
+        );
+        const totalSteps = Number(value.total_steps ?? value.totalSteps ?? 0);
+        const completionPercent = Number(
+          value.completion_percent ?? value.completionPercent ?? 0,
+        );
         const complete =
+          value.setup_completed === true ||
           value.complete === true ||
           value.completed === true ||
           value.is_complete === true ||
           value.setup_complete === true ||
           value.onboarding_complete === true ||
+          completionPercent >= 100 ||
+          (completedSteps > 0 && totalSteps > 0 && completedSteps >= totalSteps) ||
           status === "complete" ||
           status === "completed" ||
           status === "done" ||
@@ -260,6 +284,7 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
 
   const resolvedOnboardingComplete =
     onboardingComplete || backendOnboardingComplete;
+  const oscarLaunchUrl = session.emrLaunchUrl || session.bootstrapUrl || session.appUrl;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -267,7 +292,7 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
         clinicSlug={session.clinicSlug}
         clinicName={session.clinicSlug}
         clinicStatus="Active"
-        appUrl={session.appUrl}
+        oscarLaunchUrl={oscarLaunchUrl}
         onboardingComplete={resolvedOnboardingComplete}
         onLogout={handleLogout}
       />

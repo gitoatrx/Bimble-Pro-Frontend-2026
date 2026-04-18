@@ -103,15 +103,19 @@ function SmsSettings() {
         const record = data as Record<string, unknown>;
         setEnabled(record.enabled !== false);
         setProvider(
-          (typeof record.provider === "string" && (record.provider as "twilio" | "auth" | "swift")) ||
+          (typeof record.provider_name === "string" &&
+            (record.provider_name as "twilio" | "auth" | "swift")) ||
+            (typeof record.provider === "string" && (record.provider as "twilio" | "auth" | "swift")) ||
             "twilio",
         );
         setFields({
           accountSid:
+            (typeof record.account_identifier === "string" && record.account_identifier) ||
             (typeof record.account_sid === "string" && record.account_sid) ||
             (typeof record.accountSid === "string" && record.accountSid) ||
             "",
           authToken:
+            (typeof record.auth_secret === "string" && record.auth_secret) ||
             (typeof record.auth_token === "string" && record.auth_token) ||
             (typeof record.authToken === "string" && record.authToken) ||
             "",
@@ -131,9 +135,9 @@ function SmsSettings() {
 
     await updateClinicSettingsSms(session.accessToken, {
       enabled,
-      provider,
-      account_sid: fields.accountSid,
-      auth_token: fields.authToken,
+      provider_name: provider,
+      account_identifier: fields.accountSid,
+      auth_secret: fields.authToken,
       from_number: fields.fromNumber,
     });
   }
@@ -225,15 +229,19 @@ function FaxSettings() {
         const record = data as Record<string, unknown>;
         setEnabled(record.enabled !== false);
         setProvider(
-          (typeof record.provider === "string" && (record.provider as "srfax" | "ringcentral")) ||
+          (typeof record.provider_name === "string" &&
+            (record.provider_name as "srfax" | "ringcentral")) ||
+            (typeof record.provider === "string" && (record.provider as "srfax" | "ringcentral")) ||
             "srfax",
         );
         setFields({
           accountId:
+            (typeof record.account_identifier === "string" && record.account_identifier) ||
             (typeof record.account_id === "string" && record.account_id) ||
             (typeof record.accountId === "string" && record.accountId) ||
             "",
           password:
+            (typeof record.auth_secret === "string" && record.auth_secret) ||
             (typeof record.password === "string" && record.password) ||
             (typeof record.secret === "string" && record.secret) ||
             "",
@@ -253,10 +261,11 @@ function FaxSettings() {
 
     await updateClinicSettingsFax(session.accessToken, {
       enabled,
-      provider,
-      account_id: fields.accountId,
-      password: fields.password,
+      provider_name: provider,
+      account_identifier: fields.accountId,
+      auth_secret: fields.password,
       fax_number: fields.faxNumber,
+      notes: null,
     });
   }
 
@@ -350,28 +359,29 @@ function SmtpSettings() {
         setEnabled(record.enabled !== false);
         setFields({
           host:
-            (typeof record.host === "string" && record.host) ||
             (typeof record.smtp_host === "string" && record.smtp_host) ||
+            (typeof record.host === "string" && record.host) ||
             "smtp.gmail.com",
           port:
-            (typeof record.port === "string" && record.port) ||
             (typeof record.smtp_port === "number" && String(record.smtp_port)) ||
+            (typeof record.smtp_port === "string" && record.smtp_port) ||
+            (typeof record.port === "string" && record.port) ||
             "587",
           username:
-            (typeof record.username === "string" && record.username) ||
             (typeof record.smtp_username === "string" && record.smtp_username) ||
+            (typeof record.username === "string" && record.username) ||
             "",
           password:
-            (typeof record.password === "string" && record.password) ||
             (typeof record.smtp_password === "string" && record.smtp_password) ||
+            (typeof record.password === "string" && record.password) ||
             "",
           senderName:
-            (typeof record.sender_name === "string" && record.sender_name) ||
             (typeof record.from_name === "string" && record.from_name) ||
+            (typeof record.sender_name === "string" && record.sender_name) ||
             "Bimble Clinic",
           senderEmail:
-            (typeof record.sender_email === "string" && record.sender_email) ||
             (typeof record.from_email === "string" && record.from_email) ||
+            (typeof record.sender_email === "string" && record.sender_email) ||
             "",
         });
       })
@@ -385,10 +395,10 @@ function SmtpSettings() {
 
     await updateClinicSettingsSmtp(session.accessToken, {
       enabled,
-      host: fields.host,
-      port: Number(fields.port) || 587,
-      username: fields.username,
-      password: fields.password,
+      smtp_host: fields.host,
+      smtp_port: Number(fields.port) || 587,
+      smtp_username: fields.username,
+      smtp_password: fields.password,
       sender_name: fields.senderName,
       sender_email: fields.senderEmail,
     });
@@ -463,9 +473,10 @@ function CredentialsSettings() {
   const session = readClinicLoginSession();
   const [fields, setFields] = useState({
     currentPassword: "",
+    currentPin: "",
     newPassword: "",
     confirmPassword: "",
-    pin: "",
+    newPin: "",
   });
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
@@ -481,6 +492,7 @@ function CredentialsSettings() {
   function canSave() {
     return (
       fields.currentPassword.trim() !== "" &&
+      fields.currentPin.trim() !== "" &&
       fields.newPassword.length >= 8 &&
       fields.newPassword === fields.confirmPassword
     );
@@ -507,6 +519,16 @@ function CredentialsSettings() {
             {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
+        <Input
+          type="password"
+          placeholder="Current PIN"
+          value={fields.currentPin}
+          maxLength={4}
+          onChange={(e) => {
+            setFields((f) => ({ ...f, currentPin: e.target.value.replace(/\D/g, "") }));
+            setError("");
+          }}
+        />
         <Input
           type="password"
           placeholder="New password (min 8 characters)"
@@ -536,10 +558,10 @@ function CredentialsSettings() {
         <Input
           type="password"
           placeholder="New PIN (4 digits, optional)"
-          value={fields.pin}
+          value={fields.newPin}
           maxLength={4}
           onChange={(e) =>
-            setFields((f) => ({ ...f, pin: e.target.value.replace(/\D/g, "") }))
+            setFields((f) => ({ ...f, newPin: e.target.value.replace(/\D/g, "") }))
           }
         />
       </div>
@@ -556,8 +578,9 @@ function CredentialsSettings() {
 
           await updateClinicSettingsCredentials(session.accessToken, {
             current_password: fields.currentPassword,
+            current_pin: fields.currentPin,
             new_password: fields.newPassword,
-            pin: fields.pin || undefined,
+            new_pin: fields.newPin || undefined,
           });
         }}
         label="Update credentials"

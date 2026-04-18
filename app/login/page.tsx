@@ -79,12 +79,16 @@ export default function ClinicLoginPage() {
 
     try {
       const response = await submitClinicVerifyOtp({ otp_token: otpToken, otp_code: otpCode });
+
       clearClinicSessionState();
       storeClinicLoginSession({
         clinicSlug: response.clinic_slug,
         accessToken: response.access_token,
         appUrl: response.app_url,
+        bootstrapUrl: response.bootstrap_url,
+        emrLaunchUrl: response.emr_launch_url,
       });
+
       router.push("/clinic/dashboard");
     } catch (error) {
       setOtpError(

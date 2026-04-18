@@ -918,10 +918,27 @@ export default function ClinicDashboardPage() {
         if (!active) return;
 
         const setupRecord = setup as Record<string, unknown>;
+        const setupStatus = typeof setupRecord.setup_status === "string"
+          ? setupRecord.setup_status.toUpperCase()
+          : typeof setupRecord.status === "string"
+            ? setupRecord.status.toUpperCase()
+            : "";
+        const completionPercent = Number(
+          setupRecord.completion_percent ?? setupRecord.completionPercent ?? 0,
+        );
+        const completedSteps = Number(
+          setupRecord.completed_steps ?? setupRecord.completedSteps ?? 0,
+        );
+        const totalSteps = Number(setupRecord.total_steps ?? setupRecord.totalSteps ?? 0);
         const completed =
           setupRecord.setup_completed === true ||
           setupRecord.completed === true ||
-          setupRecord.setup_status === "COMPLETED";
+          completionPercent >= 100 ||
+          (completedSteps > 0 && totalSteps > 0 && completedSteps >= totalSteps) ||
+          setupStatus === "COMPLETED" ||
+          setupStatus === "DONE" ||
+          setupStatus === "LIVE" ||
+          setupStatus === "ACTIVE";
 
         setSetupComplete(completed);
 

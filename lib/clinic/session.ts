@@ -76,22 +76,14 @@ function isClinicSignupResult(value: unknown): value is ClinicSignupResult {
   );
 }
 
-function firstString(...values: Array<unknown>) {
-  for (const value of values) {
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
 function isClinicLoginSession(value: unknown): value is ClinicLoginSession {
   return (
     isRecord(value) &&
     typeof value.clinicSlug === "string" &&
     typeof value.accessToken === "string" &&
-    typeof value.appUrl === "string"
+    typeof value.appUrl === "string" &&
+    (value.bootstrapUrl === undefined || typeof value.bootstrapUrl === "string") &&
+    (value.emrLaunchUrl === undefined || typeof value.emrLaunchUrl === "string")
   );
 }
 

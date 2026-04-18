@@ -95,7 +95,7 @@ export async function saveTextMessageNotifications(
     },
     typeof payload
   >({
-    endpoint: API_ENDPOINTS.clinicSetupTextMessageNotifications,
+    endpoint: API_ENDPOINTS.clinicMeSettingsSms,
     method: "PATCH",
     body: payload,
     headers: authHeaders(accessToken),
@@ -127,7 +127,7 @@ export async function saveEmailNotifications(
     },
     typeof payload
   >({
-    endpoint: API_ENDPOINTS.clinicSetupEmailNotifications,
+    endpoint: API_ENDPOINTS.clinicMeSettingsSmtp,
     method: "PATCH",
     body: payload,
     headers: authHeaders(accessToken),
@@ -157,7 +157,7 @@ export async function saveFaxIntegration(
     },
     typeof payload
   >({
-    endpoint: API_ENDPOINTS.clinicSetupFaxIntegration,
+    endpoint: API_ENDPOINTS.clinicMeSettingsFax,
     method: "PATCH",
     body: payload,
     headers: authHeaders(accessToken),
@@ -166,7 +166,7 @@ export async function saveFaxIntegration(
 
 export async function fetchClinicSetupState(accessToken: string) {
   return apiRequest<ClinicSetupStateRecord>({
-    endpoint: "/api/v1/clinics/setup",
+    endpoint: API_ENDPOINTS.clinicMeSetupStatus,
     headers: authHeaders(accessToken),
   });
 }
@@ -281,7 +281,7 @@ export async function updateClinicDoctorStatus(
 
 export async function inviteClinicDoctor(
   accessToken: string,
-  payload: { doctor_name?: string; email: string; specialty?: string; role?: string },
+  payload: { email: string },
 ) {
   return apiRequest<ClinicDoctorInviteRecord, typeof payload>({
     endpoint: API_ENDPOINTS.clinicMeDoctorInvite,

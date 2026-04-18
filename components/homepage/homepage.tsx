@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, ArrowRight, Battery, Brain, CalendarCheck, ChevronDown, Droplets, MapPin, Moon, Search, Stethoscope, Sun, TrendingUp, Users, Zap } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
@@ -77,6 +78,7 @@ function AnimatedStat({ value, active }: { value: string; active: boolean }) {
 /* ── Component ──────────────────────────────── */
 
 export function Homepage() {
+  const router = useRouter();
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const [navScrolled, setNavScrolled] = useState(false);
   const [loginMenuOpen, setLoginMenuOpen] = useState(false);
@@ -330,7 +332,17 @@ export function Homepage() {
                 )}
               </div>
 
-              <button type="button" className="hp-search-btn">
+              <button
+                type="button"
+                className="hp-search-btn"
+                onClick={() => {
+                  const params = new URLSearchParams();
+                  if (careQuery.trim()) params.set("reason", careQuery.trim());
+                  if (locationQuery.trim()) params.set("location", locationQuery.trim());
+                  const q = params.toString();
+                  router.push(q ? `/patient/onboarding?${q}` : "/patient/onboarding");
+                }}
+              >
                 <Search size={15} strokeWidth={2.5} />
                 Find care
               </button>

@@ -72,6 +72,7 @@ export type ClinicSignupResult = {
   tempPin?: string;
   appUrl?: string;
   bootstrapUrl?: string;
+  emrLaunchUrl?: string;
 };
 
 // Login form fields (step 1 — email + password only; PIN/slug handled server-side)
@@ -169,6 +170,8 @@ export type ClinicLoginSession = {
   clinicSlug: string;
   accessToken: string;
   appUrl: string;
+  bootstrapUrl?: string;
+  emrLaunchUrl?: string;
 };
 
 export type FieldErrors<T> = Partial<Record<keyof T, string>>;

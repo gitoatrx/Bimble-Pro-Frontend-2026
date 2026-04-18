@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
   try {
     const backendResponse = await requestBackendApiJson({
-      path: "/clinics/doctors/invite",
+      path: "/clinics/me/doctors/invite",
       method: "POST",
       body: { email },
       headers: {

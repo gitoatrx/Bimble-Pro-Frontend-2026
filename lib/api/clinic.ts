@@ -29,6 +29,25 @@ function pickStringValue(
   return undefined;
 }
 
+function normalizeClinicLoginResponse(
+  response: Record<string, unknown>,
+): ClinicLoginResponse {
+  return {
+    access_token: pickStringValue(response, ["access_token", "accessToken"]) ?? "",
+    token_type: pickStringValue(response, ["token_type", "tokenType"]) ?? "bearer",
+    clinic_slug: pickStringValue(response, ["clinic_slug", "clinicSlug"]) ?? "",
+    clinic_name: pickStringValue(response, ["clinic_name", "clinicName"]) ?? "",
+    username: pickStringValue(response, ["username", "user_name", "userName"]) ?? "",
+    temp_password: pickStringValue(response, ["temp_password", "tempPassword"]) ?? null,
+    temp_pin: pickStringValue(response, ["temp_pin", "tempPin"]) ?? null,
+    dashboard_url: pickStringValue(response, ["dashboard_url", "dashboardUrl"]) ?? "",
+    app_url: pickStringValue(response, ["app_url", "appUrl"]) ?? "",
+    bootstrap_url: pickStringValue(response, ["bootstrap_url", "bootstrapUrl"]) ?? "",
+    emr_launch_url: pickStringValue(response, ["emr_launch_url", "emrLaunchUrl"]) ?? "",
+    message: pickStringValue(response, ["message"]) ?? "",
+  };
+}
+
 export async function submitClinicOnboarding(
   payload: ClinicOnboardingFormData,
   planCode: string,
@@ -76,6 +95,7 @@ export async function submitClinicOnboarding(
     ]),
     appUrl: pickStringValue(responseRecord, ["app_url", "appUrl"]),
     bootstrapUrl: pickStringValue(responseRecord, ["bootstrap_url", "bootstrapUrl"]),
+    emrLaunchUrl: pickStringValue(responseRecord, ["emr_launch_url", "emrLaunchUrl"]),
   };
 }
 
@@ -103,11 +123,13 @@ export async function submitClinicLogin(
 export async function submitClinicVerifyOtp(
   payload: ClinicOtpVerifyRequest,
 ): Promise<ClinicLoginResponse> {
-  return apiRequest<ClinicLoginResponse, ClinicOtpVerifyRequest>({
+  const response = await apiRequest<Record<string, unknown>, ClinicOtpVerifyRequest>({
     endpoint: API_ENDPOINTS.clinicVerifyOtp,
     method: "POST",
     body: payload,
   });
+
+  return normalizeClinicLoginResponse(response);
 }
 
 /**

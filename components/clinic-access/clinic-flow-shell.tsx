@@ -9,6 +9,8 @@ type ClinicFlowShellProps = {
   backLabel: string;
   children: ReactNode;
   contentClassName?: string;
+  /** Defaults to “Clinic workspace” — use “Find care” for patient flows. */
+  workspaceLabel?: string;
 };
 
 export function ClinicFlowShell({
@@ -16,6 +18,7 @@ export function ClinicFlowShell({
   backLabel,
   children,
   contentClassName,
+  workspaceLabel = "Clinic workspace",
 }: ClinicFlowShellProps) {
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
@@ -28,7 +31,7 @@ export function ClinicFlowShell({
                 Bimble
               </span>
               <span className="block text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-                Clinic workspace
+                {workspaceLabel}
               </span>
             </div>
           </Link>
