@@ -91,7 +91,9 @@ function isClinicLoginSession(value: unknown): value is ClinicLoginSession {
     isRecord(value) &&
     typeof value.clinicSlug === "string" &&
     typeof value.accessToken === "string" &&
-    typeof value.appUrl === "string"
+    typeof value.appUrl === "string" &&
+    (value.bootstrapUrl === undefined || typeof value.bootstrapUrl === "string") &&
+    (value.emrLaunchUrl === undefined || typeof value.emrLaunchUrl === "string")
   );
 }
 
