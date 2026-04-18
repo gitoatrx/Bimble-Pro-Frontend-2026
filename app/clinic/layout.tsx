@@ -49,13 +49,15 @@ function Sidebar({
   clinicStatus,
   oscarLaunchUrl,
   onboardingComplete,
+  onOpenOscar,
   onLogout,
 }: {
   clinicSlug: string;
   clinicName: string;
   clinicStatus: string;
-  oscarLaunchUrl?: string;
+  oscarLaunchUrl: string;
   onboardingComplete: boolean;
+  onOpenOscar: () => void;
   onLogout: () => void;
 }) {
   const pathname = usePathname();
@@ -117,9 +119,8 @@ function Sidebar({
       <div className="border-t border-border px-2 py-3 space-y-1">
         <button
           type="button"
-          onClick={handleOpenOscar}
-          disabled={!oscarLaunchUrl}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+          onClick={onOpenOscar}
+          className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <ExternalLink className="h-4 w-4 flex-shrink-0" />
           <span className="flex-1">Open OSCAR</span>
@@ -282,6 +283,38 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     router.replace("/login");
   }
 
+  function handleOpenOscar() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const bootstrapUrl = session.bootstrapUrl;
+    if (bootstrapUrl) {
+      try {
+        const parsed = new URL(bootstrapUrl);
+        const username = parsed.searchParams.get("username") || "";
+        const password = parsed.searchParams.get("password") || "";
+        const pin = parsed.searchParams.get("pin") || "";
+
+        if (username && password && pin) {
+          const loginUrl = new URL("login.do", parsed);
+          loginUrl.searchParams.set("username", username);
+          loginUrl.searchParams.set("password", password);
+          loginUrl.searchParams.set("pin", pin);
+          loginUrl.searchParams.set("pin2", pin);
+          loginUrl.searchParams.set("submit", "Login");
+          loginUrl.searchParams.set("propname", "oscar_mcmaster");
+          window.open(loginUrl.toString(), "_blank", "noopener,noreferrer");
+          return;
+        }
+      } catch {
+        // Fall back to the next available launch path below.
+      }
+    }
+
+    window.open(session.appUrl, "_blank", "noopener,noreferrer");
+  }
+
   const resolvedOnboardingComplete =
     onboardingComplete || backendOnboardingComplete;
   const oscarLaunchUrl = session.emrLaunchUrl || session.bootstrapUrl || session.appUrl;
@@ -292,8 +325,9 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
         clinicSlug={session.clinicSlug}
         clinicName={session.clinicSlug}
         clinicStatus="Active"
-        oscarLaunchUrl={oscarLaunchUrl}
+        oscarLaunchUrl={session.emrLaunchUrl || session.bootstrapUrl || session.appUrl}
         onboardingComplete={resolvedOnboardingComplete}
+        onOpenOscar={handleOpenOscar}
         onLogout={handleLogout}
       />
 

@@ -161,8 +161,8 @@ export type ClinicLoginResponse = {
   temp_pin?: string | null;
   dashboard_url: string;
   app_url: string;          // bootstrap_url — opens OSCAR with auto-login
-  bootstrap_url: string;
-  emr_launch_url: string;
+  bootstrap_url?: string;
+  emr_launch_url?: string;
   message: string;
 };
 
