@@ -47,7 +47,6 @@ function Sidebar({
   clinicSlug,
   clinicName,
   clinicStatus,
-  oscarLaunchUrl,
   onboardingComplete,
   onOpenOscar,
   onLogout,
@@ -55,7 +54,6 @@ function Sidebar({
   clinicSlug: string;
   clinicName: string;
   clinicStatus: string;
-  oscarLaunchUrl: string;
   onboardingComplete: boolean;
   onOpenOscar: () => void;
   onLogout: () => void;
@@ -64,14 +62,6 @@ function Sidebar({
   const visibleNavItems = onboardingComplete
     ? NAV_ITEMS.filter((item) => item.label !== "Setup")
     : NAV_ITEMS;
-
-  function handleOpenOscar() {
-    if (!oscarLaunchUrl) {
-      return;
-    }
-
-    window.location.assign(oscarLaunchUrl);
-  }
 
   return (
     <aside className="flex h-screen w-56 flex-shrink-0 flex-col border-r border-border bg-card">
@@ -277,6 +267,7 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
   }, []);
 
   if (!session) return null;
+  const clinicSession = session;
 
   function handleLogout() {
     clearClinicLoginSession();
@@ -288,7 +279,8 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
       return;
     }
 
-    const bootstrapUrl = session.bootstrapUrl;
+    let launchUrl = clinicSession.appUrl;
+    const bootstrapUrl = clinicSession.bootstrapUrl;
     if (bootstrapUrl) {
       try {
         const parsed = new URL(bootstrapUrl);
@@ -304,28 +296,25 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
           loginUrl.searchParams.set("pin2", pin);
           loginUrl.searchParams.set("submit", "Login");
           loginUrl.searchParams.set("propname", "oscar_mcmaster");
-          window.open(loginUrl.toString(), "_blank", "noopener,noreferrer");
-          return;
+          launchUrl = loginUrl.toString();
         }
       } catch {
         // Fall back to the next available launch path below.
       }
     }
 
-    window.open(session.appUrl, "_blank", "noopener,noreferrer");
+    window.open(launchUrl, "_blank", "noopener,noreferrer");
   }
 
   const resolvedOnboardingComplete =
     onboardingComplete || backendOnboardingComplete;
-  const oscarLaunchUrl = session.emrLaunchUrl || session.bootstrapUrl || session.appUrl;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar
-        clinicSlug={session.clinicSlug}
-        clinicName={session.clinicSlug}
+        clinicSlug={clinicSession.clinicSlug}
+        clinicName={clinicSession.clinicSlug}
         clinicStatus="Active"
-        oscarLaunchUrl={session.emrLaunchUrl || session.bootstrapUrl || session.appUrl}
         onboardingComplete={resolvedOnboardingComplete}
         onOpenOscar={handleOpenOscar}
         onLogout={handleLogout}

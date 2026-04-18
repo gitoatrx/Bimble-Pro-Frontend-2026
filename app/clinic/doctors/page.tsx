@@ -31,7 +31,7 @@ type Doctor = {
 type PendingInvite = {
   inviteId: number;
   email: string;
-  status: string;
+  status: "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
   sentAt: string;
 };
 
@@ -74,6 +74,11 @@ function toDoctor(record: Record<string, unknown>): Doctor {
 }
 
 function toInvite(record: Record<string, unknown>): PendingInvite {
+  const rawStatus =
+    typeof record.status === "string"
+      ? record.status.toUpperCase()
+      : "PENDING";
+
   return {
     inviteId: Number(record.invite_id ?? record.id ?? Date.now()),
     email:
@@ -81,8 +86,9 @@ function toInvite(record: Record<string, unknown>): PendingInvite {
       (typeof record.doctor_email === "string" && record.doctor_email) ||
       "unknown@example.com",
     status:
-      (typeof record.status === "string" && record.status) ||
-      "PENDING",
+      rawStatus === "ACCEPTED" || rawStatus === "EXPIRED" || rawStatus === "REVOKED"
+        ? rawStatus
+        : "PENDING",
     sentAt:
       (typeof record.sent_at === "string" && record.sent_at) ||
       (typeof record.created_at === "string" && record.created_at) ||
@@ -162,10 +168,12 @@ function InviteRow({
   invite,
   onDelete,
   onResend,
+  showActions = true,
 }: {
   invite: PendingInvite;
   onDelete: (inviteId: number) => void;
   onResend: (inviteId: number) => void;
+  showActions?: boolean;
 }) {
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-dashed border-border bg-card px-5 py-4">
@@ -182,20 +190,24 @@ function InviteRow({
         <Clock className="h-3 w-3" />
         {invite.status === "ACCEPTED" ? "Accepted" : "Awaiting"}
       </span>
-      <button
-        onClick={() => onResend(invite.inviteId)}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        title="Resend invite"
-      >
-        <RotateCcw className="h-4 w-4" />
-      </button>
-      <button
-        onClick={() => onDelete(invite.inviteId)}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
-        title="Cancel invite"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      {showActions && (
+        <>
+          <button
+            onClick={() => onResend(invite.inviteId)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title="Resend invite"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => onDelete(invite.inviteId)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
+            title="Cancel invite"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -304,6 +316,9 @@ export default function DoctorsPage() {
 
   const activeCount = doctors.filter((d) => d.status === "ACTIVE").length;
   const seatsUsed = doctors.filter((d) => d.status !== "INACTIVE").length;
+  const pendingInvites = invites.filter((invite) => invite.status === "PENDING");
+  const acceptedInvites = invites.filter((invite) => invite.status === "ACCEPTED");
+  const inactiveDoctors = doctors.filter((d) => d.status === "INACTIVE");
 
   function handleInvite(email: string) {
     setInvites((current) => {
@@ -421,12 +436,34 @@ export default function DoctorsPage() {
             Pending invites
           </h2>
           <div className="space-y-2">
-            {invites.map((invite) => (
+            {pendingInvites.map((invite) => (
               <InviteRow
                 key={invite.inviteId}
                 invite={invite}
                 onDelete={handleDeleteInvite}
                 onResend={handleResendInvite}
+              />
+            ))}
+            {pendingInvites.length === 0 && (
+              <p className="text-sm text-muted-foreground">No pending invites.</p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {acceptedInvites.length > 0 && (
+        <section className="mb-6">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Accepted invites
+          </h2>
+          <div className="space-y-2">
+            {acceptedInvites.map((invite) => (
+              <InviteRow
+                key={invite.inviteId}
+                invite={invite}
+                onDelete={handleDeleteInvite}
+                onResend={handleResendInvite}
+                showActions={false}
               />
             ))}
           </div>
@@ -435,17 +472,15 @@ export default function DoctorsPage() {
 
       <InviteForm onInvite={handleInvite} />
 
-      {doctors.filter((d) => d.status === "INACTIVE").length > 0 && (
+      {inactiveDoctors.length > 0 && (
         <section className="mt-8">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Deactivated
           </h2>
           <div className="space-y-2 opacity-50">
-            {doctors
-              .filter((d) => d.status === "INACTIVE")
-              .map((doctor) => (
-                <DoctorRow key={doctor.id} doctor={doctor} onDeactivate={handleDeactivate} />
-              ))}
+            {inactiveDoctors.map((doctor) => (
+              <DoctorRow key={doctor.id} doctor={doctor} onDeactivate={handleDeactivate} />
+            ))}
           </div>
         </section>
       )}
