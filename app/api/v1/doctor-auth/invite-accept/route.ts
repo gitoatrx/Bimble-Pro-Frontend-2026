@@ -7,6 +7,8 @@ export async function POST(request: Request) {
     first_name: string;
     last_name: string;
     password: string;
+    pin?: string;
+    service_codes?: string[];
   };
 
   try {
@@ -23,6 +25,12 @@ export async function POST(request: Request) {
   }
   if (!payload.password || payload.password.length < 6) {
     return NextResponse.json({ message: "Password must be at least 6 characters." }, { status: 400 });
+  }
+  if (payload.pin !== undefined && !/^\d{4}$/.test(payload.pin.trim())) {
+    return NextResponse.json({ message: "PIN must be 4 digits." }, { status: 400 });
+  }
+  if (payload.service_codes !== undefined && !Array.isArray(payload.service_codes)) {
+    return NextResponse.json({ message: "Service codes must be an array." }, { status: 400 });
   }
 
   try {

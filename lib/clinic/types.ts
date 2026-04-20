@@ -137,6 +137,15 @@ export type ClinicLoginStep1Response = {
   otp_token: string;
   masked_email: string;
   message: string;
+  access_token?: string;
+  token_type?: string;
+  clinic_slug?: string;
+  clinic_name?: string;
+  username?: string;
+  dashboard_url?: string;
+  app_url?: string;
+  bootstrap_url?: string;
+  emr_launch_url?: string;
 };
 
 // POST /api/v1/clinic-auth/verify-otp — request

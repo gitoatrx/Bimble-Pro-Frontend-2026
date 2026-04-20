@@ -1,11 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
-import { Check, Eye, EyeOff, KeyRound, User } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Check, Eye, EyeOff } from "lucide-react";
+import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
+import {
+  fetchDoctorProfile,
+  updateDoctorPassword,
+  updateDoctorProfile,
+} from "@/lib/api/doctor-dashboard";
 
 function SaveButton({ onSave, label = "Save changes" }: { onSave: () => Promise<void>; label?: string }) {
   const [saving, setSaving] = useState(false);
@@ -21,81 +26,163 @@ function SaveButton({ onSave, label = "Save changes" }: { onSave: () => Promise<
 
   return (
     <Button onClick={handle} disabled={saving} size="sm" className="gap-2">
-      {saved ? <><Check className="h-3.5 w-3.5" /> Saved</> : saving ? "Saving…" : label}
+      {saved ? (
+        <>
+          <Check className="h-3.5 w-3.5" /> Saved
+        </>
+      ) : saving ? (
+        "Saving…"
+      ) : (
+        label
+      )}
     </Button>
   );
 }
 
 export default function DoctorSettingsPage() {
-  const session = readDoctorLoginSession();
-  const [profile, setProfile] = useState({ firstName: "Dr.", lastName: "Smith", email: session?.clinicSlug ? `doctor@${session.clinicSlug}.ca` : "" });
-  const [credentials, setCredentials] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [profileDraft, setProfileDraft] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+  });
+  const [credentials, setCredentials] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
   const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      const session = readDoctorLoginSession();
+      if (!session?.accessToken) {
+        setError("You are not logged in.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const profileResponse = await fetchDoctorProfile(session.accessToken);
+        if (!cancelled) {
+          setProfileDraft({
+            first_name: profileResponse.first_name ?? "",
+            last_name: profileResponse.last_name ?? "",
+            email: profileResponse.email ?? "",
+          });
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load settings.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleProfileSave() {
+    const session = readDoctorLoginSession();
+    if (!session?.accessToken) {
+      setError("You are not logged in.");
+      return;
+    }
+    await updateDoctorProfile(session.accessToken, profileDraft);
+  }
+
+  async function handlePasswordSave() {
+    const session = readDoctorLoginSession();
+    if (!session?.accessToken) {
+      setError("You are not logged in.");
+      return;
+    }
+    await updateDoctorPassword(session.accessToken, {
+      current_password: credentials.currentPassword,
+      new_password: credentials.newPassword,
+    });
+    setCredentials({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+  }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
-      <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Account</p>
-        <h1 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-foreground">Settings</h1>
-      </div>
+    <DoctorPageShell eyebrow="Account" title="Settings">
+      <div className="grid gap-6">
+        <DoctorSection title="Profile">
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading profile…</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  placeholder="First name"
+                  value={profileDraft.first_name}
+                  onChange={(event) => setProfileDraft((current) => ({ ...current, first_name: event.target.value }))}
+                />
+                <Input
+                  placeholder="Last name"
+                  value={profileDraft.last_name}
+                  onChange={(event) => setProfileDraft((current) => ({ ...current, last_name: event.target.value }))}
+                />
+              </div>
+              <Input
+                type="email"
+                placeholder="Email address"
+                value={profileDraft.email}
+                onChange={(event) => setProfileDraft((current) => ({ ...current, email: event.target.value }))}
+              />
+              <SaveButton onSave={handleProfileSave} />
+            </div>
+          )}
+        </DoctorSection>
 
-      <div className="space-y-4">
-        {/* Profile */}
-        <div className="rounded-2xl border border-border bg-card">
-          <div className="border-b border-border px-6 py-5 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
-              <User className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">Profile</p>
-              <p className="text-xs text-muted-foreground">Your personal details</p>
-            </div>
-          </div>
-          <div className="px-6 py-5 space-y-3">
-            <div className="flex gap-3 max-w-sm">
-              <Input placeholder="First name" value={profile.firstName} onChange={(e) => setProfile((f) => ({ ...f, firstName: e.target.value }))} />
-              <Input placeholder="Last name" value={profile.lastName} onChange={(e) => setProfile((f) => ({ ...f, lastName: e.target.value }))} />
-            </div>
-            <Input type="email" className="max-w-sm" placeholder="Email address" value={profile.email} onChange={(e) => setProfile((f) => ({ ...f, email: e.target.value }))} />
-            <SaveButton onSave={async () => { await new Promise((r) => setTimeout(r, 500)); }} />
-          </div>
-        </div>
-
-        {/* Password */}
-        <div className="rounded-2xl border border-border bg-card">
-          <div className="border-b border-border px-6 py-5 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
-              <KeyRound className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">Password</p>
-              <p className="text-xs text-muted-foreground">Change your login password</p>
-            </div>
-          </div>
-          <div className="px-6 py-5 space-y-3">
-            <div className="relative max-w-sm">
+        <DoctorSection title="Password">
+          <div className="space-y-4">
+            <div className="relative">
               <Input
                 type={showPw ? "text" : "password"}
                 placeholder="Current password"
                 value={credentials.currentPassword}
-                onChange={(e) => setCredentials((f) => ({ ...f, currentPassword: e.target.value }))}
+                onChange={(event) => setCredentials((current) => ({ ...current, currentPassword: event.target.value }))}
               />
-              <button type="button" onClick={() => setShowPw((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => setShowPw((value) => !value)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+              >
                 {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            <Input type="password" className="max-w-sm" placeholder="New password (min 8 characters)" value={credentials.newPassword} onChange={(e) => setCredentials((f) => ({ ...f, newPassword: e.target.value }))} />
-            <Input type="password" className="max-w-sm" placeholder="Confirm new password" value={credentials.confirmPassword} onChange={(e) => setCredentials((f) => ({ ...f, confirmPassword: e.target.value }))} />
-            <SaveButton onSave={async () => { await new Promise((r) => setTimeout(r, 600)); }} label="Update password" />
+            <Input
+              type="password"
+              placeholder="New password"
+              value={credentials.newPassword}
+              onChange={(event) => setCredentials((current) => ({ ...current, newPassword: event.target.value }))}
+            />
+            <Input
+              type="password"
+              placeholder="Confirm new password"
+              value={credentials.confirmPassword}
+              onChange={(event) => setCredentials((current) => ({ ...current, confirmPassword: event.target.value }))}
+            />
+            <SaveButton onSave={handlePasswordSave} label="Update password" />
           </div>
-        </div>
+        </DoctorSection>
 
-        {/* Theme */}
-        <div className="rounded-2xl border border-border bg-card px-6 py-5">
-          <p className="mb-3 text-sm font-semibold text-foreground">Appearance</p>
-          <ThemeToggle />
-        </div>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
       </div>
-    </div>
+    </DoctorPageShell>
   );
 }

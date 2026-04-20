@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -19,13 +19,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
-  fetchAvailableServices,
-  fetchClinicServiceMappings,
+  fetchClinicDoctors,
   fetchClinicSetupState,
-  saveClinicServiceMappings,
   saveEmailNotifications,
   saveFaxIntegration,
+  saveClinicServiceSelections,
+  searchFeeScheduleServices,
   saveTextMessageNotifications,
+  startAcceptingAppointments,
 } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { fetchDoctorInvites, inviteDoctor } from "@/lib/api/clinic";
@@ -86,19 +87,6 @@ const STEPS: ChecklistStep[] = [
     description: "Go live and start receiving pool appointments from patients.",
     Icon: Rocket,
   },
-];
-
-// ── Mock service list (will come from GET /api/v1/services) ───────
-
-const MOCK_SERVICES = [
-  { id: 1, service_name: "General Consultation" },
-  { id: 2, service_name: "Blood Work" },
-  { id: 3, service_name: "Prescription Renewal" },
-  { id: 4, service_name: "Mental Health Assessment" },
-  { id: 5, service_name: "Chronic Disease Management" },
-  { id: 6, service_name: "Sick Note" },
-  { id: 7, service_name: "Referral" },
-  { id: 8, service_name: "Immunization" },
 ];
 
 // ── Step indicator ────────────────────────────────────────────────
@@ -497,75 +485,80 @@ function EmailStep({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-// ── Services Step ─────────────────────────────────────────────────
+type ServicePickerProps = {
+  buttonLabel: string;
+  onSaved: () => void;
+  introText?: string;
+};
 
-function ServicesStep({ onComplete }: { onComplete: () => void }) {
+function ServicePickerField({
+  buttonLabel,
+  onSaved,
+  introText,
+}: ServicePickerProps) {
   const session = readClinicLoginSession();
   const accessToken = session?.accessToken ?? "";
-  const [selected, setSelected] = useState<number[]>([]);
-  const [services, setServices] = useState(MOCK_SERVICES);
-  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [services, setServices] = useState<
+    { service_code: string; service_name: string; user_friendly_service_name?: string }[]
+  >([]);
+  const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(Boolean(accessToken));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(
     accessToken ? "" : "You are not logged in. Please refresh and try again.",
   );
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const hasSearchTerm = search.trim().length >= 2;
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!accessToken || !hasSearchTerm) {
+      setServices([]);
+      setLoading(false);
       return;
     }
 
     let active = true;
+    setLoading(true);
 
-    Promise.all([
-      fetchAvailableServices(),
-      fetchClinicServiceMappings(accessToken),
-    ])
-      .then(([serviceCatalog, records]) => {
-        if (!active) return;
-
-        const available = (serviceCatalog as Record<string, unknown>[]).map((record) => ({
-          id: Number(record.service_id ?? record.id ?? 0),
-          service_name:
-            (typeof record.service_name === "string" && record.service_name) ||
-            (typeof record.name === "string" && record.name) ||
-            `Service ${record.service_id ?? record.id ?? ""}`,
-        }));
-
-        const mappedIds = (records as Record<string, unknown>[]).map((record) =>
-          Number(record.platform_service_id ?? record.service_id ?? record.id ?? 0),
-        );
-
-        setServices(available.filter((svc) => Number.isFinite(svc.id) && svc.id > 0));
-        setSelected(mappedIds.filter((id) => Number.isFinite(id) && id > 0));
-      })
-      .catch((err) => {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : "Failed to load services.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const timer = window.setTimeout(() => {
+      searchFeeScheduleServices(accessToken, search.trim())
+        .then((items) => {
+          if (!active) return;
+          setServices(
+            items
+              .map((record) => ({
+                service_code: record.service_code ?? "",
+                service_name:
+                  record.user_friendly_service_name?.trim() ||
+                  record.service_name?.trim() ||
+                  "",
+                user_friendly_service_name: record.user_friendly_service_name,
+              }))
+              .filter((svc) => svc.service_code.trim() !== "" && svc.service_name.trim() !== ""),
+          );
+        })
+        .catch((err) => {
+          if (!active) return;
+          setError(err instanceof Error ? err.message : "Failed to load services.");
+          setServices([]);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 250);
 
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
-  }, [accessToken]);
+  }, [accessToken, hasSearchTerm, search]);
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  function toggle(id: number) {
-    setSelected((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  function toggle(serviceCode: string) {
+    setSelected((current) =>
+      current.includes(serviceCode)
+        ? current.filter((code) => code !== serviceCode)
+        : [...current, serviceCode],
+    );
   }
 
   async function handleSave() {
@@ -573,8 +566,12 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
     setSaving(true);
 
     try {
-      await saveClinicServiceMappings(accessToken, selected);
-      onComplete();
+      const response = await saveClinicServiceSelections(accessToken, selected);
+      if (response.missing_service_codes.length > 0) {
+        setError(`Missing service codes: ${response.missing_service_codes.join(", ")}`);
+        return;
+      }
+      onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save services.");
     } finally {
@@ -583,65 +580,63 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
   }
 
   const selectedNames = services
-    .filter((s) => selected.includes(s.id))
+    .filter((s) => selected.includes(s.service_code))
     .map((s) => s.service_name);
 
   return (
-    <div className="space-y-5">
-      <p className="text-sm text-muted-foreground">
-        Select the services your clinic provides. Patients will only be matched with your clinic for the services you offer.
-      </p>
+    <div className="space-y-4">
+      {introText ? <p className="text-sm text-muted-foreground">{introText}</p> : null}
 
-      {error && (
-        <p className="text-xs text-destructive">{error}</p>
-      )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
 
-      <div ref={dropdownRef} className="relative w-full max-w-sm">
-        <button
-          disabled={loading}
-          onClick={() => setOpen((o) => !o)}
-          className={cn(
-            "flex w-full items-center justify-between rounded-2xl border bg-card px-4 py-3 text-sm transition-all",
-            open ? "border-primary ring-2 ring-primary/20" : "border-border",
-          )}
-        >
-          <span className={selected.length === 0 ? "text-muted-foreground" : "text-foreground"}>
-            {selected.length === 0
-              ? "Select services…"
-              : `${selected.length} service${selected.length > 1 ? "s" : ""} selected`}
-          </span>
-          <ChevronDown
-            className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")}
+      <div className="w-full max-w-sm space-y-2">
+        <div className="flex w-full items-center rounded-2xl border border-border bg-card px-4 py-3 text-sm transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+          <Input
+            disabled={loading}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Select services…"
+            className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
           />
-        </button>
+          <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+        </div>
 
-        {open && (
-          <div className="absolute left-0 top-full z-20 mt-1.5 w-full rounded-2xl border border-border bg-card shadow-lg overflow-hidden">
-            {services.map((svc) => (
-              <button
-                key={svc.id}
-                onClick={() => toggle(svc.id)}
-                className="flex w-full items-center gap-3 px-4 py-2.5 text-sm hover:bg-accent transition-colors"
-              >
-                <span
-                  className={cn(
-                    "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all",
-                    selected.includes(svc.id)
-                      ? "border-primary bg-primary"
-                      : "border-border",
-                  )}
-                >
-                  {selected.includes(svc.id) && (
-                    <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 12 12" fill="none">
-                      <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </span>
-                <span className={selected.includes(svc.id) ? "text-foreground" : "text-muted-foreground"}>
-                  {svc.service_name}
-                </span>
-              </button>
-            ))}
+        {hasSearchTerm && (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="max-h-72 overflow-auto">
+              {loading ? (
+                <div className="px-4 py-4 text-sm text-muted-foreground">Loading services…</div>
+              ) : services.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-muted-foreground">No matching services found.</div>
+              ) : (
+                services.map((svc) => (
+                  <button
+                    key={svc.service_code}
+                    onClick={() => toggle(svc.service_code)}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent"
+                  >
+                    <span
+                      className={cn(
+                        "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all",
+                        selected.includes(svc.service_code)
+                          ? "border-primary bg-primary"
+                          : "border-border",
+                      )}
+                    >
+                      {selected.includes(svc.service_code) && (
+                        <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className={selected.includes(svc.service_code) ? "text-foreground" : "text-muted-foreground"}>
+                      {svc.service_name}
+                    </span>
+                    <span className="ml-auto text-[11px] text-muted-foreground">{svc.service_code}</span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -659,11 +654,177 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
         </div>
       )}
 
-      <Button
-        onClick={handleSave}
-        disabled={selected.length === 0 || saving || loading}
-        size="sm"
-      >
+      <Button onClick={handleSave} disabled={selected.length === 0 || saving || loading} size="sm">
+        {saving ? "Saving…" : loading ? "Loading…" : buttonLabel}
+      </Button>
+    </div>
+  );
+}
+
+// ── Services Step ─────────────────────────────────────────────────
+
+function ServicesStep({ onComplete }: { onComplete: () => void }) {
+  const session = readClinicLoginSession();
+  const accessToken = session?.accessToken ?? "";
+  const [selected, setSelected] = useState<string[]>([]);
+  const [services, setServices] = useState<
+    { service_code: string; service_name: string; user_friendly_service_name?: string }[]
+  >([]);
+  const [search, setSearch] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(
+    accessToken ? "" : "You are not logged in. Please refresh and try again.",
+  );
+  const hasSearchTerm = search.trim().length >= 2;
+
+  useEffect(() => {
+    if (!accessToken || !hasSearchTerm) {
+      setServices([]);
+      setLoading(false);
+      return;
+    }
+
+    let active = true;
+    setLoading(true);
+
+    const timer = window.setTimeout(() => {
+      searchFeeScheduleServices(accessToken, search.trim())
+        .then((items) => {
+          if (!active) return;
+          setServices(
+            items
+              .map((record) => ({
+                service_code: record.service_code ?? "",
+                service_name:
+                  record.user_friendly_service_name?.trim() ||
+                  record.service_name?.trim() ||
+                  "",
+                user_friendly_service_name: record.user_friendly_service_name,
+              }))
+              .filter((svc) => svc.service_code.trim() !== "" && svc.service_name.trim() !== ""),
+          );
+        })
+        .catch((err) => {
+          if (!active) return;
+          setError(err instanceof Error ? err.message : "Failed to load services.");
+          setServices([]);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [accessToken, hasSearchTerm, search]);
+
+  function toggle(serviceCode: string) {
+    setSelected((current) =>
+      current.includes(serviceCode)
+        ? current.filter((code) => code !== serviceCode)
+        : [...current, serviceCode],
+    );
+  }
+
+  async function handleSave() {
+    if (!accessToken || selected.length === 0) return;
+    setSaving(true);
+
+    try {
+      const response = await saveClinicServiceSelections(accessToken, selected);
+      if (response.missing_service_codes.length > 0) {
+        setError(`Missing service codes: ${response.missing_service_codes.join(", ")}`);
+        return;
+      }
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save services.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const selectedNames = services
+    .filter((s) => selected.includes(s.service_code))
+    .map((s) => s.service_name);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Select the services your clinic provides. Patients will only be matched with your clinic for the services you offer.
+      </p>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      <div className="w-full max-w-sm space-y-2">
+        <div className="flex w-full items-center rounded-2xl border border-border bg-card px-4 py-3 text-sm transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+          <Input
+            disabled={loading}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Select services…"
+            className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
+          />
+          <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+        </div>
+
+        {hasSearchTerm && (
+          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <div className="max-h-72 overflow-auto">
+              {loading ? (
+                <div className="px-4 py-4 text-sm text-muted-foreground">Loading services…</div>
+              ) : services.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-muted-foreground">No matching services found.</div>
+              ) : (
+                services.map((svc) => (
+                  <button
+                    key={svc.service_code}
+                    onClick={() => toggle(svc.service_code)}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent"
+                  >
+                    <span
+                      className={cn(
+                        "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all",
+                        selected.includes(svc.service_code)
+                          ? "border-primary bg-primary"
+                          : "border-border",
+                      )}
+                    >
+                      {selected.includes(svc.service_code) && (
+                        <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className={selected.includes(svc.service_code) ? "text-foreground" : "text-muted-foreground"}>
+                      {svc.service_name}
+                    </span>
+                    <span className="ml-auto text-[11px] text-muted-foreground">{svc.service_code}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {selectedNames.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedNames.map((name) => (
+            <span
+              key={name}
+              className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
+            >
+              {name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <Button onClick={handleSave} disabled={selected.length === 0 || saving || loading} size="sm">
         {saving ? "Saving…" : loading ? "Loading…" : "Save & continue"}
       </Button>
     </div>
@@ -790,15 +951,17 @@ function GoLiveStep({
 }: {
   canGoLive: boolean;
   blockingReasons: string[];
-  onGoLive: () => void;
+  onGoLive: () => Promise<void>;
 }) {
   const [going, setGoing] = useState(false);
 
   async function handleGoLive() {
     setGoing(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setGoing(false);
-    onGoLive();
+    try {
+      await onGoLive();
+    } finally {
+      setGoing(false);
+    }
   }
 
   return (
@@ -1001,8 +1164,32 @@ export default function ClinicDashboardPage() {
     });
   }
 
-  function handleGoLive() {
+  async function handleGoLive() {
+    if (!session?.accessToken) {
+      throw new Error("You are not logged in. Please refresh and try again.");
+    }
+
+    const doctors = await fetchClinicDoctors(session.accessToken);
+    const doctorIds = doctors
+      .filter((doctor) => {
+        const status = String(doctor.status ?? doctor.doctor_status ?? "").toUpperCase();
+        return status === "ACTIVE" || status === "";
+      })
+      .map((doctor) => Number(doctor.id ?? doctor.doctor_id ?? doctor.user_id ?? 0))
+      .filter((doctorId) => Number.isFinite(doctorId) && doctorId > 0);
+
+    if (doctorIds.length === 0) {
+      throw new Error("No active doctors found to start accepting appointments.");
+    }
+
+    const response = await startAcceptingAppointments(session.accessToken, doctorIds);
+
+    if (!response.accepting_appointments) {
+      throw new Error("Could not start accepting appointments.");
+    }
+
     markComplete("go_live");
+    setSetupComplete(true);
     // Signal layout to unlock all nav items
     localStorage.setItem("bimble:clinic:onboarding-complete", "true");
     window.dispatchEvent(new Event("bimble:clinic:onboarding-complete"));

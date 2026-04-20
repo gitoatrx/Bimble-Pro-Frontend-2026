@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Building2, ChevronRight, Stethoscope } from "lucide-react";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { ClinicCredentialsCard } from "@/components/clinic-access/clinic-credentials-card";
+import { ClinicForgotPasswordWizard } from "@/components/clinic-access/clinic-forgot-password-wizard";
 import { ClinicOtpCard } from "@/components/clinic-access/clinic-otp-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,11 +15,15 @@ import {
   clearDoctorSelectionToken,
   clearDoctorOtpToken,
 } from "@/lib/doctor/session";
-import type { DoctorClinicOption, DoctorLoginFormData } from "@/lib/doctor/types";
+import type {
+  DoctorClinicOption,
+  DoctorLoginFormData,
+  DoctorLoginStep1Response,
+} from "@/lib/doctor/types";
 
 // ── Types ─────────────────────────────────────────────────────────
 
-type LoginStep = "credentials" | "otp" | "clinic_select";
+type LoginStep = "credentials" | "otp" | "clinic_select" | "forgot";
 
 const emptyForm: DoctorLoginFormData = {
   email: "",
@@ -129,6 +134,7 @@ export default function DoctorLoginPage() {
   const [formData, setFormData] = useState<DoctorLoginFormData>(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [credentialsError, setCredentialsError] = useState("");
+  const [credentialsNotice, setCredentialsNotice] = useState("");
 
   const [otpToken, setOtpToken] = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
@@ -149,8 +155,42 @@ export default function DoctorLoginPage() {
   async function handleLogin() {
     setIsSubmitting(true);
     setCredentialsError("");
+    setCredentialsNotice("");
     try {
-      const response = await submitDoctorLogin(formData);
+      const response = (await submitDoctorLogin(formData)) as DoctorLoginStep1Response;
+
+      const hasDirectSession = Boolean(
+        response.access_token &&
+          response.clinic_slug &&
+          response.clinic_name &&
+          response.app_url &&
+          response.doctor_id,
+      );
+
+      if (hasDirectSession || !response.requires_otp) {
+        if (
+          !response.access_token ||
+          !response.clinic_slug ||
+          !response.clinic_name ||
+          !response.app_url ||
+          !response.doctor_id
+        ) {
+          throw new Error(
+            "Your account was updated, but the login response did not include a session.",
+          );
+        }
+
+        storeDoctorLoginSession({
+          doctorId: response.doctor_id,
+          clinicSlug: response.clinic_slug,
+          clinicName: response.clinic_name,
+          accessToken: response.access_token,
+          appUrl: response.app_url,
+        });
+        router.push("/doctor/dashboard");
+        return;
+      }
+
       setOtpToken(response.otp_token);
       storeDoctorOtpToken(response.otp_token);
       setMaskedEmail(response.masked_email);
@@ -242,8 +282,25 @@ export default function DoctorLoginPage() {
     setMaskedEmail("");
   }
 
+  function handleStartForgotPassword() {
+    setCredentialsError("");
+    setCredentialsNotice("");
+    setStep("forgot");
+  }
+
   return (
     <ClinicFlowShell backHref="/" backLabel="Back to home">
+      {step === "forgot" && (
+        <ClinicForgotPasswordWizard
+          initialEmail={formData.email}
+          accountType="doctor"
+          onCancel={handleBackToCredentials}
+          onSuccess={(message) => {
+            setCredentialsNotice(message);
+          }}
+        />
+      )}
+
       {step === "credentials" && (
         <>
           <div className="mb-6 max-w-xl">
@@ -259,11 +316,18 @@ export default function DoctorLoginPage() {
             </p>
           </div>
 
+          {credentialsNotice && (
+            <div className="mb-4 max-w-xl rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+              {credentialsNotice}
+            </div>
+          )}
+
           <ClinicCredentialsCard
             formData={formData}
             isLoggingIn={isSubmitting}
             loginError={credentialsError}
             onLogin={() => void handleLogin()}
+            onForgotPassword={handleStartForgotPassword}
             onFieldChange={updateField}
           />
         </>

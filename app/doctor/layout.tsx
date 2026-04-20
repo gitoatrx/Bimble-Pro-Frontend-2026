@@ -75,80 +75,131 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Sidebar */}
-      <aside className="flex h-screen w-56 flex-shrink-0 flex-col border-r border-border bg-card">
-        {/* Brand */}
-        <div className="flex items-center gap-2.5 px-4 py-5 border-b border-border">
-          <BrandMark size={28} className="h-7 w-7" />
-          <span className="font-display text-base font-700 tracking-tight text-foreground">
-            Bimble
-          </span>
-        </div>
+    <div className="min-h-screen bg-background">
+      <div className="flex min-h-screen">
+        <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r border-border bg-card lg:flex">
+          <div className="flex h-full w-full flex-col">
+            <div className="border-b border-border px-5 py-5">
+              <div className="flex items-center gap-3">
+                <BrandMark size={34} className="h-8 w-8" />
+                <div>
+                  <p className="font-display text-lg font-bold tracking-tight text-foreground">
+                    Bimble
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Doctor workspace
+                  </p>
+                </div>
+              </div>
 
-        {/* Doctor context */}
-        <div className="px-4 py-3 border-b border-border">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Doctor
-          </p>
-          <p className="mt-0.5 text-sm font-semibold text-foreground truncate">
-            {session.clinicName}
-          </p>
-          <p className="text-xs text-muted-foreground truncate">{session.clinicSlug}</p>
-        </div>
+              <div className="mt-4 rounded-2xl border border-border bg-background p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Current clinic
+                </p>
+                <p className="mt-1 text-sm font-semibold text-foreground">{session.clinicName}</p>
+                <p className="text-xs text-muted-foreground">{session.clinicSlug}</p>
+              </div>
+            </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
-          {NAV_ITEMS.map(({ href, label, Icon }) => {
-            const active = pathname === href || pathname.startsWith(href + "/");
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-primary/10 text-primary font-semibold"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
-                )}
+            <nav className="flex-1 overflow-y-auto px-3 py-4">
+              <p className="px-3 pb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                Navigation
+              </p>
+              <div className="space-y-1">
+                {NAV_ITEMS.map(({ href, label, Icon }) => {
+                  const active = pathname === href || pathname.startsWith(href + "/");
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={cn(
+                        "group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-all",
+                        active
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="h-4 w-4 flex-shrink-0" />
+                      <span>{label}</span>
+                      {active ? <span className="ml-auto h-2 w-2 rounded-full bg-current/80" /> : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
+
+            <div className="border-t border-border p-4">
+              <a
+                href={session.appUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
               >
-                <Icon className="h-4 w-4 flex-shrink-0" />
-                <span>{label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-primary">
+                  <ExternalLink className="h-4 w-4" />
+                </span>
+                <span className="flex-1">Open OSCAR</span>
+                <ExternalLink className="h-4 w-4 text-muted-foreground" />
+              </a>
 
-        {/* Bottom */}
-        <div className="border-t border-border px-2 py-3 space-y-1">
-          <a
-            href={session.appUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <ExternalLink className="h-4 w-4 flex-shrink-0" />
-            <span className="flex-1">Open OSCAR</span>
-            <ExternalLink className="h-3 w-3 opacity-50" />
-          </a>
+              <div className="mt-4 flex justify-center">
+                <ThemeToggle />
+              </div>
 
-          <div className="px-3 py-2">
-            <ThemeToggle className="w-full justify-center" />
+              <button
+                onClick={handleLogout}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-border px-4 py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </button>
+            </div>
           </div>
+        </aside>
 
-          <button
-            onClick={handleLogout}
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-          >
-            <LogOut className="h-4 w-4 flex-shrink-0" />
-            Sign out
-          </button>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-30 border-b border-border bg-card lg:hidden">
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <BrandMark size={32} className="h-8 w-8 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {session.clinicName}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {session.clinicSlug}
+                  </p>
+                </div>
+              </div>
+              <ThemeToggle />
+            </div>
+            <nav className="flex gap-2 overflow-x-auto px-4 pb-3">
+              {NAV_ITEMS.map(({ href, label, Icon }) => {
+                const active = pathname === href || pathname.startsWith(href + "/");
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold transition-colors",
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-background text-muted-foreground",
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                  </Link>
+                );
+              })}
+            </nav>
+          </header>
+
+          <main className="min-w-0 flex-1">
+            {children}
+          </main>
         </div>
-      </aside>
-
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
+      </div>
     </div>
   );
 }

@@ -11,6 +11,12 @@ export type DoctorLoginStep1Response = {
   otp_token: string;
   masked_email: string;
   message: string;
+  access_token?: string;
+  token_type?: string;
+  doctor_id?: number;
+  clinic_slug?: string;
+  clinic_name?: string;
+  app_url?: string;
 };
 
 // POST /api/v1/doctor-auth/verify-otp — request

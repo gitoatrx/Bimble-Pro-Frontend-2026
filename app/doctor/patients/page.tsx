@@ -1,76 +1,125 @@
 "use client";
 
-import React, { useState } from "react";
-import { Search, User } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Search } from "lucide-react";
+import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Input } from "@/components/ui/input";
-
-type Patient = {
-  id: number;
-  name: string;
-  dob: string;
-  lastSeen: string;
-  totalVisits: number;
-  status: "active" | "inactive";
-};
-
-const MOCK_PATIENTS: Patient[] = [
-  { id: 1, name: "Sarah Chen",    dob: "Apr 5, 1988",  lastSeen: "Apr 14, 2026", totalVisits: 4,  status: "active"   },
-  { id: 2, name: "Marcus Brown",  dob: "Jul 12, 1975", lastSeen: "Apr 10, 2026", totalVisits: 2,  status: "active"   },
-  { id: 3, name: "Rita Nguyen",   dob: "Jan 30, 1992", lastSeen: "Mar 28, 2026", totalVisits: 6,  status: "active"   },
-  { id: 4, name: "John Moore",    dob: "Sep 8, 1960",  lastSeen: "Feb 14, 2026", totalVisits: 1,  status: "inactive" },
-  { id: 5, name: "Aisha Patel",   dob: "Mar 17, 2000", lastSeen: "Apr 9, 2026",  totalVisits: 3,  status: "active"   },
-];
+import { readDoctorLoginSession } from "@/lib/doctor/session";
+import { fetchDoctorPatients, type DoctorPatient } from "@/lib/api/doctor-dashboard";
 
 export default function DoctorPatientsPage() {
   const [query, setQuery] = useState("");
+  const [patients, setPatients] = useState<DoctorPatient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const filtered = MOCK_PATIENTS.filter((p) =>
-    p.name.toLowerCase().includes(query.toLowerCase()),
-  );
+  const debouncedQuery = useMemo(() => query.trim(), [query]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      const session = readDoctorLoginSession();
+      if (!session?.accessToken) {
+        setError("You are not logged in.");
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError("");
+
+      try {
+        const response = await fetchDoctorPatients(session.accessToken, debouncedQuery);
+        if (!cancelled) {
+          setPatients(response.patients ?? []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setPatients([]);
+          setError(err instanceof Error ? err.message : "Failed to load patients.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [debouncedQuery]);
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
-      <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Records</p>
-        <h1 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-foreground">Patients</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{MOCK_PATIENTS.length} patients seen</p>
-      </div>
+    <DoctorPageShell eyebrow="Records" title="Patients">
+      <DoctorSection title="Search">
+        <div className="relative mb-4 w-full max-w-sm">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search patients…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="pl-11"
+          />
+        </div>
 
-      <div className="relative mb-6 max-w-xs">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search patients…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="pl-9"
-        />
-      </div>
-
-      <div className="space-y-2">
-        {filtered.map((p) => (
-          <div key={p.id} className="flex items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 hover:bg-accent/30 transition-colors">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-              {p.name.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">{p.name}</p>
-              <p className="text-xs text-muted-foreground">Born {p.dob} · {p.totalVisits} visit{p.totalVisits > 1 ? "s" : ""}</p>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <p className="text-xs text-muted-foreground">Last seen</p>
-              <p className="text-xs font-medium text-foreground">{p.lastSeen}</p>
-            </div>
-            {p.status === "inactive" && (
-              <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                Inactive
-              </span>
-            )}
+        {loading ? (
+          <div className="rounded-3xl border border-dashed border-border/70 bg-muted/30 px-5 py-10 text-center">
+            <p className="text-sm font-medium text-foreground">Loading patients…</p>
           </div>
-        ))}
-        {filtered.length === 0 && (
-          <p className="py-8 text-center text-sm text-muted-foreground">No patients match your search.</p>
+        ) : error ? (
+          <div className="rounded-3xl border border-dashed border-destructive/40 bg-destructive/5 px-5 py-10 text-center">
+            <p className="text-sm font-medium text-destructive">{error}</p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {patients.map((patient) => (
+              <div
+                key={patient.id}
+                className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card px-3 py-3 transition-all hover:border-primary/30 sm:flex-row sm:items-center"
+              >
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-xs font-semibold text-primary">
+                  {patient.name.charAt(0)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-foreground">{patient.name}</p>
+                    <span
+                      className={
+                        patient.status === "inactive"
+                          ? "rounded-full border border-border/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+                          : "rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300"
+                      }
+                    >
+                      {patient.status}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Born {patient.dob_label} · {patient.total_visits} visit{patient.total_visits !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border/70 bg-background px-3 py-2.5 text-left sm:min-w-[160px] sm:text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Last seen
+                  </p>
+                  <p className="mt-0.5 text-sm font-medium text-foreground">{patient.last_seen_label}</p>
+                </div>
+              </div>
+            ))}
+            {patients.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-border/70 bg-muted/30 px-5 py-10 text-center">
+                <p className="text-sm font-medium text-foreground">No patients match your search.</p>
+              </div>
+            ) : null}
+          </div>
         )}
-      </div>
-    </div>
+      </DoctorSection>
+    </DoctorPageShell>
   );
 }

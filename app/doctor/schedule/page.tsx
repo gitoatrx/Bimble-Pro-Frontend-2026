@@ -1,65 +1,102 @@
 "use client";
 
-import React from "react";
-import { CalendarDays, Clock } from "lucide-react";
-
-type ScheduleEntry = {
-  id: number;
-  mode: "recurring" | "specific";
-  days: string;
-  startTime: string;
-  endTime: string;
-  note: string;
-};
-
-const MOCK_SCHEDULE: ScheduleEntry[] = [
-  { id: 1, mode: "recurring", days: "Mon, Tue, Wed, Thu, Fri", startTime: "09:00", endTime: "17:00", note: "Standard hours" },
-  { id: 2, mode: "specific",  days: "Apr 18, 2026 (Saturday)", startTime: "10:00", endTime: "14:00", note: "On-call shift" },
-];
+import React, { useEffect, useState } from "react";
+import { CalendarDays, Clock3 } from "lucide-react";
+import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
+import { readDoctorLoginSession } from "@/lib/doctor/session";
+import { fetchDoctorSchedule, type DoctorScheduleEntry } from "@/lib/api/doctor-dashboard";
 
 export default function DoctorSchedulePage() {
-  return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
-      <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Schedule</p>
-        <h1 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-foreground">My Availability</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Your clinic has set the following hours for you. To request changes, contact your clinic admin.
-        </p>
-      </div>
+  const [schedule, setSchedule] = useState<DoctorScheduleEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-      {MOCK_SCHEDULE.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-card py-16 text-center">
-          <CalendarDays className="mb-3 h-8 w-8 text-muted-foreground/40" />
-          <p className="text-sm font-medium text-foreground">No schedule set yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">Your clinic hasn&apos;t set your availability yet.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {MOCK_SCHEDULE.map((entry) => (
-            <div key={entry.id} className="rounded-2xl border border-border bg-card px-5 py-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                  <CalendarDays className="h-4 w-4 text-primary" />
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      const session = readDoctorLoginSession();
+      if (!session?.accessToken) {
+        setError("You are not logged in.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetchDoctorSchedule(session.accessToken);
+        if (!cancelled) {
+          setSchedule(response.schedule ?? []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSchedule([]);
+          setError(err instanceof Error ? err.message : "Failed to load schedule.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <DoctorPageShell eyebrow="Schedule" title="Schedule">
+      <DoctorSection title="My availability">
+        {loading ? (
+          <div className="rounded-3xl border border-dashed border-border/70 bg-muted/30 px-5 py-10 text-center">
+            <p className="text-sm font-medium text-foreground">Loading schedule…</p>
+          </div>
+        ) : error ? (
+          <div className="rounded-3xl border border-dashed border-destructive/40 bg-destructive/5 px-5 py-10 text-center">
+            <p className="text-sm font-medium text-destructive">{error}</p>
+          </div>
+        ) : schedule.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-border/70 bg-muted/30 px-5 py-10 text-center">
+            <CalendarDays className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-foreground">No schedule set yet</p>
+          </div>
+        ) : (
+          <div className="grid gap-2.5">
+            {schedule.map((entry, index) => (
+              <div
+                key={entry.id}
+                className="rounded-2xl border border-border/70 bg-card px-3 py-3 transition-all hover:border-primary/30"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 gap-4">
+                    <div
+                      className={
+                        index === 0
+                          ? "flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10 text-primary"
+                          : "flex h-9 w-9 items-center justify-center rounded-2xl bg-muted text-muted-foreground"
+                      }
+                    >
+                      <CalendarDays className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{entry.days}</p>
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {entry.start_time} – {entry.end_time}
+                      </p>
+                      {entry.note ? <p className="mt-1 text-xs text-muted-foreground">{entry.note}</p> : null}
+                    </div>
+                  </div>
+                  <span className="inline-flex self-start rounded-full border border-border/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    {entry.mode}
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0 space-y-0.5">
-                  <p className="text-sm font-semibold text-foreground">{entry.days}</p>
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="h-3 w-3" />
-                    {entry.startTime} – {entry.endTime}
-                  </p>
-                  {entry.note && (
-                    <p className="text-xs text-muted-foreground">{entry.note}</p>
-                  )}
-                </div>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
-                  {entry.mode}
-                </span>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </DoctorSection>
+    </DoctorPageShell>
   );
 }

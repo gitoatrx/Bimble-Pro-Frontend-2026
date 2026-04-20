@@ -12,6 +12,7 @@ type ClinicCredentialsCardProps = {
   isLoggingIn?: boolean;
   loginError?: string;
   onLogin: () => void;
+  onForgotPassword?: () => void;
   onFieldChange: (field: keyof ClinicLoginFormData, value: string) => void;
 };
 
@@ -23,6 +24,7 @@ export function ClinicCredentialsCard({
   isLoggingIn = false,
   loginError,
   onLogin,
+  onForgotPassword,
   onFieldChange,
 }: ClinicCredentialsCardProps) {
   const [showPassword, setShowPassword] = useState(false);
@@ -88,6 +90,19 @@ export function ClinicCredentialsCard({
             autoComplete="current-password"
             className={neutralFieldClassName}
           />
+          {onForgotPassword && (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-auto px-0 text-primary hover:bg-transparent hover:text-primary/80"
+                onClick={onForgotPassword}
+              >
+                Forgot password?
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

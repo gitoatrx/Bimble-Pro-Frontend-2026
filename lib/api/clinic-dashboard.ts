@@ -39,39 +39,91 @@ export type AvailableServiceRecord = {
   created_at: string;
 };
 
-export type SavedServiceMappingRecord = {
-  mapping_id: number;
-  platform_service_id: number;
-  doctor_id: number | null;
-  is_active: boolean;
-  created_at: string;
-};
-
 export async function fetchAvailableServices() {
   return apiRequest<AvailableServiceRecord[]>({
     endpoint: API_ENDPOINTS.servicesCatalog,
   });
 }
 
-export async function fetchClinicServiceMappings(accessToken: string) {
-  return apiRequest<SavedServiceMappingRecord[]>({
-    endpoint: API_ENDPOINTS.clinicServices,
-    headers: authHeaders(accessToken),
-  });
+export type FeeScheduleServiceRecord = {
+  service_code: string;
+  service_name: string;
+  user_friendly_service_name: string;
+  price: string;
+  anesthesia_intensity_level?: number | null;
+  referral_flag?: string | null;
+  specialty_code_1?: string | null;
+  specialty_code_2?: string | null;
+  specialty_code_3?: string | null;
+  specialty_code_4?: string | null;
+  specialty_code_5?: string | null;
+  time_dependency_flag?: string | null;
+  service_clarification_flag?: string | null;
+  restriction_flag?: string | null;
+  bcma_status_flag?: string | null;
+  source_effective_date?: string | null;
+  source_file_name?: string | null;
+};
+
+function normalizeFeeScheduleResponse(response: unknown): FeeScheduleServiceRecord[] {
+  if (Array.isArray(response)) {
+    return response as FeeScheduleServiceRecord[];
+  }
+
+  if (response && typeof response === "object") {
+    const maybeItems = (response as { items?: unknown }).items;
+    if (Array.isArray(maybeItems)) {
+      return maybeItems as FeeScheduleServiceRecord[];
+    }
+  }
+
+  return [];
 }
 
-export async function saveClinicServiceMappings(
+export async function searchFeeScheduleServices(
   accessToken: string,
-  serviceIds: number[],
+  query: string,
 ) {
-  return apiRequest<{ clinic_id: number; mapped_service_ids: number[] }, { service_ids: number[] }>(
+  return searchFeeScheduleServicesInternal(query, authHeaders(accessToken));
+}
+
+export async function searchFeeScheduleServicesPublic(query: string) {
+  return searchFeeScheduleServicesInternal(query);
+}
+
+async function searchFeeScheduleServicesInternal(
+  query: string,
+  headers?: Record<string, string>,
+) {
+  const response = await apiRequest<unknown>({
+    endpoint: `${API_ENDPOINTS.mspFeeScheduleSearch}?query=${encodeURIComponent(query)}&q=${encodeURIComponent(query)}`,
+    headers,
+  });
+
+  return normalizeFeeScheduleResponse(response);
+}
+
+export async function saveClinicServiceSelections(
+  accessToken: string,
+  serviceCodes: string[],
+) {
+  return apiRequest<
     {
-      endpoint: API_ENDPOINTS.clinicServices,
-      method: "POST",
-      body: { service_ids: serviceIds },
-      headers: authHeaders(accessToken),
+      items: Array<{
+        service_code: string;
+        service_name: string;
+        price: string;
+        user_friendly_service_name: string;
+      }>;
+      missing_service_codes: string[];
     },
-  );
+    { service_codes: string[] }
+  >({
+    endpoint: API_ENDPOINTS.mspFeeScheduleSelection,
+    method: "POST",
+    body: { service_codes: serviceCodes },
+    headers: authHeaders(accessToken),
+  });
 }
 
 export async function saveTextMessageNotifications(
@@ -127,7 +179,7 @@ export async function saveEmailNotifications(
     },
     typeof payload
   >({
-    endpoint: API_ENDPOINTS.clinicMeSettingsSmtp,
+    endpoint: API_ENDPOINTS.clinicSetupEmailNotifications,
     method: "PATCH",
     body: payload,
     headers: authHeaders(accessToken),
@@ -160,6 +212,31 @@ export async function saveFaxIntegration(
     endpoint: API_ENDPOINTS.clinicMeSettingsFax,
     method: "PATCH",
     body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function startAcceptingAppointments(
+  accessToken: string,
+  doctorIds: number[],
+) {
+  return apiRequest<
+    {
+      clinic_id: number;
+      accepting_appointments: boolean;
+      enabled_doctor_ids: number[];
+      active_doctor_count: number;
+      setup_status: string;
+      setup_completed: boolean;
+      completed_steps: number;
+      total_steps: number;
+      completion_percent: number;
+    },
+    { enabled: boolean; doctor_ids: number[] }
+  >({
+    endpoint: API_ENDPOINTS.clinicSetupStartAcceptingAppointments,
+    method: "PATCH",
+    body: { enabled: true, doctor_ids: doctorIds },
     headers: authHeaders(accessToken),
   });
 }
@@ -294,28 +371,6 @@ export async function inviteClinicDoctor(
 export async function fetchClinicDoctorInvites(accessToken: string) {
   return apiRequest<ClinicDoctorInviteRecord[]>({
     endpoint: API_ENDPOINTS.clinicMeDoctorInvites,
-    headers: authHeaders(accessToken),
-  });
-}
-
-export async function fetchClinicServices(accessToken: string) {
-  return apiRequest<ClinicServiceMappingRecord[]>({
-    endpoint: API_ENDPOINTS.clinicMeServices,
-    headers: authHeaders(accessToken),
-  });
-}
-
-export async function saveClinicServices(
-  accessToken: string,
-  serviceIds: number[],
-) {
-  return apiRequest<
-    { clinic_id: number; mapped_service_ids: number[] },
-    { service_ids: number[] }
-  >({
-    endpoint: API_ENDPOINTS.clinicMeServices,
-    method: "POST",
-    body: { service_ids: serviceIds },
     headers: authHeaders(accessToken),
   });
 }

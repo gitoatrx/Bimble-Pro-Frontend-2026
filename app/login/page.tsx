@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { ClinicCredentialsCard } from "@/components/clinic-access/clinic-credentials-card";
+import { ClinicForgotPasswordWizard } from "@/components/clinic-access/clinic-forgot-password-wizard";
 import { ClinicOtpCard } from "@/components/clinic-access/clinic-otp-card";
 import {
   submitClinicLogin,
@@ -15,8 +16,9 @@ import {
   storeClinicLoginSession,
 } from "@/lib/clinic/session";
 import type { ClinicLoginFormData } from "@/lib/clinic/types";
+import type { ClinicLoginStep1Response } from "@/lib/clinic/types";
 
-type LoginStep = "credentials" | "otp";
+type LoginStep = "credentials" | "otp" | "forgot";
 
 const emptyForm: ClinicLoginFormData = {
   email: "",
@@ -33,6 +35,7 @@ export default function ClinicLoginPage() {
   const [formData, setFormData] = useState<ClinicLoginFormData>(emptyForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [credentialsError, setCredentialsError] = useState("");
+  const [credentialsNotice, setCredentialsNotice] = useState("");
 
   // --- Step 2 state ---
   const [otpToken, setOtpToken] = useState("");
@@ -51,9 +54,34 @@ export default function ClinicLoginPage() {
   async function handleLogin() {
     setIsSubmitting(true);
     setCredentialsError("");
+    setCredentialsNotice("");
 
     try {
-      const response = await submitClinicLogin(formData);
+      const response = await submitClinicLogin(formData) as ClinicLoginStep1Response;
+
+      const hasDirectSession =
+        Boolean(response.access_token && response.clinic_slug && response.app_url);
+
+      if (hasDirectSession || !response.requires_otp) {
+        if (!response.access_token || !response.clinic_slug || !response.app_url) {
+          throw new Error(
+            "Your account was updated, but the login response did not include a session.",
+          );
+        }
+
+        clearClinicSessionState();
+        storeClinicLoginSession({
+          clinicSlug: response.clinic_slug,
+          accessToken: response.access_token,
+          appUrl: response.app_url,
+          bootstrapUrl: response.bootstrap_url,
+          emrLaunchUrl: response.emr_launch_url,
+        });
+
+        router.push("/clinic/dashboard");
+        return;
+      }
+
       setOtpToken(response.otp_token);
       setMaskedEmail(response.masked_email);
       setOtpCode("");
@@ -130,9 +158,23 @@ export default function ClinicLoginPage() {
     setMaskedEmail("");
   }
 
+  function handleStartForgotPassword() {
+    setCredentialsError("");
+    setCredentialsNotice("");
+    setStep("forgot");
+  }
+
   return (
     <ClinicFlowShell backHref="/onboarding/plan" backLabel="Back to plans">
-      {step === "credentials" ? (
+      {step === "forgot" ? (
+        <ClinicForgotPasswordWizard
+          initialEmail={formData.email}
+          onCancel={handleBackToCredentials}
+          onSuccess={(message) => {
+            setCredentialsNotice(message);
+          }}
+        />
+      ) : step === "credentials" ? (
         <>
           <div className="mb-6 max-w-xl">
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
@@ -143,11 +185,18 @@ export default function ClinicLoginPage() {
             </p>
           </div>
 
+          {credentialsNotice && (
+            <div className="mb-4 max-w-xl rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+              {credentialsNotice}
+            </div>
+          )}
+
           <ClinicCredentialsCard
             formData={formData}
             isLoggingIn={isSubmitting}
             loginError={credentialsError}
             onLogin={() => void handleLogin()}
+            onForgotPassword={handleStartForgotPassword}
             onFieldChange={updateField}
           />
         </>
