@@ -40,12 +40,6 @@ function decodeJwtExpiryIso(token: string): string | null {
   }
 }
 
-function isExpired(expiresAt: string | undefined): boolean {
-  if (!expiresAt) return false;
-  const expiresMs = Date.parse(expiresAt);
-  return Number.isFinite(expiresMs) && Date.now() >= expiresMs;
-}
-
 function isOnboardingStepKey(value: unknown): value is OnboardingStepKey {
   return value === "clinic" || value === "location" || value === "operations";
 }
@@ -252,11 +246,6 @@ export function readClinicLoginSession() {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!isClinicLoginSession(parsed)) {
-      return null;
-    }
-
-    if (isExpired(parsed.expiresAt)) {
-      clearClinicLoginSession();
       return null;
     }
 

@@ -1,6 +1,7 @@
 import type { DoctorLoginSession } from "@/lib/doctor/types";
 
 export const DOCTOR_LOGIN_SESSION_KEY = "bimble:doctor:login-session";
+export const DOCTOR_SETUP_COMPLETE_KEY = "bimble:doctor:setup-complete";
 /** When UI preview is on, user can opt out for this tab until reload (set on Sign out). */
 export const DOCTOR_UI_PREVIEW_OFF_KEY = "bimble:doctor:ui-preview-off";
 // Short-lived OTP token kept in sessionStorage (cleared on tab close)
@@ -24,12 +25,6 @@ function decodeJwtExpiryIso(token: string): string | null {
   } catch {
     return null;
   }
-}
-
-function isExpired(expiresAt: string | undefined): boolean {
-  if (!expiresAt) return false;
-  const expiresMs = Date.parse(expiresAt);
-  return Number.isFinite(expiresMs) && Date.now() >= expiresMs;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,10 +63,6 @@ export function readDoctorLoginSession(): DoctorLoginSession | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!isDoctorLoginSession(parsed)) return null;
-    if (isExpired(parsed.expiresAt)) {
-      clearDoctorLoginSession();
-      return null;
-    }
     if (!parsed.expiresAt) {
       const hydrated = {
         ...parsed,
