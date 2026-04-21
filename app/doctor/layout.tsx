@@ -18,6 +18,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   clearDoctorLoginSession,
+  getDoctorSessionRemainingMs,
   resolveDoctorLayoutSession,
   suppressDoctorUiPreviewForTab,
 } from "@/lib/doctor/session";
@@ -58,6 +59,24 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
     if (!session) {
       router.replace("/doctor/login");
     }
+  }, [isPublic, session, router]);
+
+  useEffect(() => {
+    if (isPublic || !session) return;
+    const remainingMs = getDoctorSessionRemainingMs(session);
+    if (remainingMs === null) return;
+    if (remainingMs <= 0) {
+      clearDoctorLoginSession();
+      router.replace("/doctor/login");
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      clearDoctorLoginSession();
+      router.replace("/doctor/login");
+    }, remainingMs);
+
+    return () => window.clearTimeout(timeoutId);
   }, [isPublic, session, router]);
 
   if (isPublic) {

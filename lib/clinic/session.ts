@@ -21,6 +21,30 @@ export type ClinicLoginPrefill = Partial<{
   password: string;
 }>;
 
+function decodeJwtExpiryIso(token: string): string | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const [, payloadPart] = token.split(".");
+    if (!payloadPart) return null;
+    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+    const decoded = window.atob(padded);
+    const payload = JSON.parse(decoded) as { exp?: number };
+    if (typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) {
+      return null;
+    }
+    return new Date(payload.exp * 1000).toISOString();
+  } catch {
+    return null;
+  }
+}
+
+function isExpired(expiresAt: string | undefined): boolean {
+  if (!expiresAt) return false;
+  const expiresMs = Date.parse(expiresAt);
+  return Number.isFinite(expiresMs) && Date.now() >= expiresMs;
+}
+
 function isOnboardingStepKey(value: unknown): value is OnboardingStepKey {
   return value === "clinic" || value === "location" || value === "operations";
 }
@@ -82,6 +106,7 @@ function isClinicLoginSession(value: unknown): value is ClinicLoginSession {
     typeof value.clinicSlug === "string" &&
     typeof value.accessToken === "string" &&
     typeof value.appUrl === "string" &&
+    (value.expiresAt === undefined || typeof value.expiresAt === "string") &&
     (value.bootstrapUrl === undefined || typeof value.bootstrapUrl === "string") &&
     (value.emrLaunchUrl === undefined || typeof value.emrLaunchUrl === "string")
   );
@@ -210,7 +235,10 @@ export function readClinicLoginPrefillFromSignup(): ClinicLoginPrefill | null {
 }
 
 export function storeClinicLoginSession(session: ClinicLoginSession) {
-  writePersistentValue(CLINIC_LOGIN_SESSION_KEY, session);
+  writePersistentValue(CLINIC_LOGIN_SESSION_KEY, {
+    ...session,
+    expiresAt: session.expiresAt ?? decodeJwtExpiryIso(session.accessToken) ?? undefined,
+  });
 }
 
 export function readClinicLoginSession() {
@@ -222,7 +250,25 @@ export function readClinicLoginSession() {
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    return isClinicLoginSession(parsed) ? parsed : null;
+    if (!isClinicLoginSession(parsed)) {
+      return null;
+    }
+
+    if (isExpired(parsed.expiresAt)) {
+      clearClinicLoginSession();
+      return null;
+    }
+
+    if (!parsed.expiresAt) {
+      const hydrated = {
+        ...parsed,
+        expiresAt: decodeJwtExpiryIso(parsed.accessToken) ?? undefined,
+      };
+      writePersistentValue(CLINIC_LOGIN_SESSION_KEY, hydrated);
+      return hydrated;
+    }
+
+    return parsed;
   } catch {
     return null;
   }
@@ -230,6 +276,13 @@ export function readClinicLoginSession() {
 
 export function clearClinicLoginSession() {
   removePersistentValue(CLINIC_LOGIN_SESSION_KEY);
+}
+
+export function getClinicSessionRemainingMs(session: ClinicLoginSession | null): number | null {
+  if (!session?.expiresAt) return null;
+  const expiresMs = Date.parse(session.expiresAt);
+  if (!Number.isFinite(expiresMs)) return null;
+  return expiresMs - Date.now();
 }
 
 export function clearClinicSessionState() {

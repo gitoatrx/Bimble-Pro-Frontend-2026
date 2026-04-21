@@ -1,9 +1,9 @@
 import { proxyClinicBackendRequest } from "@/lib/api/clinic-proxy";
 
 export async function GET(request: Request) {
-  return proxyClinicBackendRequest(request, "/clinics/me/settings/fax");
+  return proxyClinicBackendRequest(request, "/clinics/me/settings/profile");
 }
 
 export async function PATCH(request: Request) {
-  return proxyClinicBackendRequest(request, "/clinics/setup/fax-integration");
+  return proxyClinicBackendRequest(request, "/clinics/me/settings/profile");
 }

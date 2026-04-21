@@ -8,6 +8,30 @@ const DOCTOR_OTP_TOKEN_KEY = "bimble:doctor:otp-token";
 // Short-lived clinic-selection token
 const DOCTOR_SELECTION_TOKEN_KEY = "bimble:doctor:selection-token";
 
+function decodeJwtExpiryIso(token: string): string | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const [, payloadPart] = token.split(".");
+    if (!payloadPart) return null;
+    const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+    const decoded = window.atob(padded);
+    const payload = JSON.parse(decoded) as { exp?: number };
+    if (typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) {
+      return null;
+    }
+    return new Date(payload.exp * 1000).toISOString();
+  } catch {
+    return null;
+  }
+}
+
+function isExpired(expiresAt: string | undefined): boolean {
+  if (!expiresAt) return false;
+  const expiresMs = Date.parse(expiresAt);
+  return Number.isFinite(expiresMs) && Date.now() >= expiresMs;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
@@ -19,7 +43,8 @@ function isDoctorLoginSession(value: unknown): value is DoctorLoginSession {
     typeof value.clinicSlug === "string" &&
     typeof value.clinicName === "string" &&
     typeof value.accessToken === "string" &&
-    typeof value.appUrl === "string"
+    typeof value.appUrl === "string" &&
+    (value.expiresAt === undefined || typeof value.expiresAt === "string")
   );
 }
 
@@ -27,7 +52,13 @@ function isDoctorLoginSession(value: unknown): value is DoctorLoginSession {
 
 export function storeDoctorLoginSession(session: DoctorLoginSession) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DOCTOR_LOGIN_SESSION_KEY, JSON.stringify(session));
+  localStorage.setItem(
+    DOCTOR_LOGIN_SESSION_KEY,
+    JSON.stringify({
+      ...session,
+      expiresAt: session.expiresAt ?? decodeJwtExpiryIso(session.accessToken) ?? undefined,
+    }),
+  );
 }
 
 export function readDoctorLoginSession(): DoctorLoginSession | null {
@@ -36,7 +67,20 @@ export function readDoctorLoginSession(): DoctorLoginSession | null {
   if (!raw) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
-    return isDoctorLoginSession(parsed) ? parsed : null;
+    if (!isDoctorLoginSession(parsed)) return null;
+    if (isExpired(parsed.expiresAt)) {
+      clearDoctorLoginSession();
+      return null;
+    }
+    if (!parsed.expiresAt) {
+      const hydrated = {
+        ...parsed,
+        expiresAt: decodeJwtExpiryIso(parsed.accessToken) ?? undefined,
+      };
+      localStorage.setItem(DOCTOR_LOGIN_SESSION_KEY, JSON.stringify(hydrated));
+      return hydrated;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -127,4 +171,11 @@ export function readDoctorSelectionToken(): string | null {
 export function clearDoctorSelectionToken() {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(DOCTOR_SELECTION_TOKEN_KEY);
+}
+
+export function getDoctorSessionRemainingMs(session: DoctorLoginSession | null): number | null {
+  if (!session?.expiresAt) return null;
+  const expiresMs = Date.parse(session.expiresAt);
+  if (!Number.isFinite(expiresMs)) return null;
+  return expiresMs - Date.now();
 }

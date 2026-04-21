@@ -17,7 +17,11 @@ import {
 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { clearClinicLoginSession, readClinicLoginSession } from "@/lib/clinic/session";
+import {
+  clearClinicLoginSession,
+  getClinicSessionRemainingMs,
+  readClinicLoginSession,
+} from "@/lib/clinic/session";
 import { fetchClinicSetupState } from "@/lib/api/clinic-dashboard";
 import { cn } from "@/lib/utils";
 
@@ -200,6 +204,24 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     if (!session) {
       router.replace("/login");
     }
+  }, [session, router]);
+
+  useEffect(() => {
+    if (!session) return;
+    const remainingMs = getClinicSessionRemainingMs(session);
+    if (remainingMs === null) return;
+    if (remainingMs <= 0) {
+      clearClinicLoginSession();
+      router.replace("/login");
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      clearClinicLoginSession();
+      router.replace("/login");
+    }, remainingMs);
+
+    return () => window.clearTimeout(timeoutId);
   }, [session, router]);
 
   useEffect(() => {

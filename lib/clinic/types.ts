@@ -181,6 +181,7 @@ export type ClinicLoginSession = {
   appUrl: string;
   bootstrapUrl?: string;
   emrLaunchUrl?: string;
+  expiresAt?: string;
 };
 
 export type FieldErrors<T> = Partial<Record<keyof T, string>>;
