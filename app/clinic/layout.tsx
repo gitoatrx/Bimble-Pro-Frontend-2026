@@ -18,9 +18,10 @@ import {
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
+  clearClinicLoginSession,
   CLINIC_LOGIN_SESSION_KEY,
   CLINIC_ONBOARDING_COMPLETE_KEY,
-  clearClinicLoginSession,
+  getClinicSessionRemainingMs,
   readClinicLoginSession,
 } from "@/lib/clinic/session";
 import { fetchClinicSetupState } from "@/lib/api/clinic-dashboard";
@@ -234,6 +235,24 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     if (!session) {
       router.replace("/login");
     }
+  }, [session, router]);
+
+  useEffect(() => {
+    if (!session) return;
+    const remainingMs = getClinicSessionRemainingMs(session);
+    if (remainingMs === null) return;
+    if (remainingMs <= 0) {
+      clearClinicLoginSession();
+      router.replace("/login");
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      clearClinicLoginSession();
+      router.replace("/login");
+    }, remainingMs);
+
+    return () => window.clearTimeout(timeoutId);
   }, [session, router]);
 
   useEffect(() => {

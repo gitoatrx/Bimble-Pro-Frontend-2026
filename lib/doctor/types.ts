@@ -11,12 +11,15 @@ export type DoctorLoginStep1Response = {
   otp_token: string;
   masked_email: string;
   message: string;
+  needs_clinic_selection?: boolean;
   access_token?: string;
   token_type?: string;
   doctor_id?: number;
   clinic_slug?: string;
   clinic_name?: string;
   app_url?: string;
+  clinics?: DoctorClinicOption[];
+  selection_token?: string;
 };
 
 // POST /api/v1/doctor-auth/verify-otp — request
@@ -82,6 +85,7 @@ export type DoctorLoginSession = {
   clinicName: string;
   accessToken: string;
   appUrl: string;
+  expiresAt?: string;
 };
 
 // ── Shared status display maps ─────────────────────────────────────

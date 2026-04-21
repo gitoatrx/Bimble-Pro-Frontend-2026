@@ -3,7 +3,8 @@ import { extractBackendErrorMessage, requestBackendApiJson } from "@/lib/api/bac
 
 export async function PATCH(request: Request) {
   let payload: { enabled?: boolean; doctor_ids?: number[] };
-  const authorization = request.headers.get("Authorization") ?? "";
+  const authHeader = request.headers.get("Authorization") ?? "";
+  const accessToken = authHeader.replace(/^Bearer\s+/i, "").trim();
 
   try {
     payload = (await request.json()) as { enabled?: boolean };
@@ -17,13 +18,21 @@ export async function PATCH(request: Request) {
   if (!Array.isArray(payload.doctor_ids)) {
     return NextResponse.json({ message: "doctor_ids must be an array." }, { status: 400 });
   }
+  if (!accessToken) {
+    return NextResponse.json(
+      { message: "Authentication token is required." },
+      { status: 401 },
+    );
+  }
 
   try {
     const backendResponse = await requestBackendApiJson({
       path: "/clinics/setup/start-accepting-appointments",
       method: "PATCH",
       body: payload,
-      headers: authorization ? { Authorization: authorization } : undefined,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
     });
 
     if (!backendResponse.ok) {

@@ -166,8 +166,20 @@ export default function DoctorLoginPage() {
           response.app_url &&
           response.doctor_id,
       );
+      const needsClinicSelection = Boolean(
+        response.needs_clinic_selection &&
+          response.selection_token &&
+          response.clinics?.length,
+      );
 
       if (hasDirectSession || !response.requires_otp) {
+        if (needsClinicSelection) {
+          setClinicOptions(response.clinics ?? []);
+          storeDoctorSelectionToken(response.selection_token ?? "");
+          setStep("clinic_select");
+          return;
+        }
+
         if (
           !response.access_token ||
           !response.clinic_slug ||

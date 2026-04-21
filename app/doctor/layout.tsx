@@ -22,6 +22,7 @@ import {
   DOCTOR_UI_PREVIEW_OFF_KEY,
   getDoctorUiPreviewSession,
   getDoctorUiPreviewSessionRaw,
+  getDoctorSessionRemainingMs,
   readDoctorLoginSession,
   suppressDoctorUiPreviewForTab,
 } from "@/lib/doctor/session";
@@ -98,6 +99,24 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
       router.replace("/doctor/login");
     }
   }, [isPublic, router, session]);
+
+  useEffect(() => {
+    if (isPublic || !session) return;
+    const remainingMs = getDoctorSessionRemainingMs(session);
+    if (remainingMs === null) return;
+    if (remainingMs <= 0) {
+      clearDoctorLoginSession();
+      router.replace("/doctor/login");
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      clearDoctorLoginSession();
+      router.replace("/doctor/login");
+    }, remainingMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isPublic, session, router]);
 
   if (isPublic) {
     return <>{children}</>;
