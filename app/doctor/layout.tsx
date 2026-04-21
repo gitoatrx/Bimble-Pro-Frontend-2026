@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -18,7 +18,11 @@ import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   clearDoctorLoginSession,
-  resolveDoctorLayoutSession,
+  DOCTOR_LOGIN_SESSION_KEY,
+  DOCTOR_UI_PREVIEW_OFF_KEY,
+  getDoctorUiPreviewSession,
+  getDoctorUiPreviewSessionRaw,
+  readDoctorLoginSession,
   suppressDoctorUiPreviewForTab,
 } from "@/lib/doctor/session";
 import { cn } from "@/lib/utils";
@@ -46,19 +50,54 @@ function isPublicDoctorRoute(pathname: string) {
   return false;
 }
 
+function subscribeToDoctorSessionChanges(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+
+  function handleStorage(event: StorageEvent) {
+    if (
+      event.key === DOCTOR_LOGIN_SESSION_KEY ||
+      event.key === DOCTOR_UI_PREVIEW_OFF_KEY ||
+      event.key === null
+    ) {
+      onStoreChange();
+    }
+  }
+
+  window.addEventListener("storage", handleStorage);
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+
+function readDoctorSessionSnapshot() {
+  if (typeof window === "undefined") return null;
+
+  const rawSession = localStorage.getItem(DOCTOR_LOGIN_SESSION_KEY);
+  if (rawSession) return rawSession;
+
+  return getDoctorUiPreviewSessionRaw();
+}
+
 export default function DoctorLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const session = resolveDoctorLayoutSession();
-
   const isPublic = isPublicDoctorRoute(pathname);
+  const sessionRaw = useSyncExternalStore(
+    subscribeToDoctorSessionChanges,
+    readDoctorSessionSnapshot,
+    () => null,
+  );
+  const session = useMemo(() => {
+    if (!sessionRaw) return null;
+    return readDoctorLoginSession() ?? getDoctorUiPreviewSession();
+  }, [sessionRaw]);
 
   useEffect(() => {
     if (isPublic) return;
     if (!session) {
       router.replace("/doctor/login");
     }
-  }, [isPublic, session, router]);
+  }, [isPublic, router, session]);
 
   if (isPublic) {
     return <>{children}</>;
@@ -96,8 +135,12 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Current clinic
                 </p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{session.clinicName}</p>
-                <p className="text-xs text-muted-foreground">{session.clinicSlug}</p>
+                <p className="mt-1 text-sm font-semibold text-foreground" suppressHydrationWarning>
+                  {session.clinicName}
+                </p>
+                <p className="text-xs text-muted-foreground" suppressHydrationWarning>
+                  {session.clinicSlug}
+                </p>
               </div>
             </div>
 
@@ -163,10 +206,10 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
               <div className="flex items-center gap-3 min-w-0">
                 <BrandMark size={32} className="h-8 w-8 flex-shrink-0" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">
+                  <p className="truncate text-sm font-semibold text-foreground" suppressHydrationWarning>
                     {session.clinicName}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="truncate text-xs text-muted-foreground" suppressHydrationWarning>
                     {session.clinicSlug}
                   </p>
                 </div>

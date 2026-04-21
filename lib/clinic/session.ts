@@ -9,7 +9,8 @@ import type {
 const CLINIC_ONBOARDING_STATE_KEY = "bimble:clinic:onboarding-state";
 const CLINIC_SELECTED_PLAN_KEY = "bimble:clinic:selected-plan";
 const CLINIC_SIGNUP_RESULT_KEY = "bimble:clinic:signup-result";
-const CLINIC_LOGIN_SESSION_KEY = "bimble:clinic:login-session";
+export const CLINIC_LOGIN_SESSION_KEY = "bimble:clinic:login-session";
+export const CLINIC_ONBOARDING_COMPLETE_KEY = "bimble:clinic:onboarding-complete";
 
 export type StoredClinicOnboardingState = {
   step: OnboardingStepKey;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -17,7 +17,12 @@ import {
 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { clearClinicLoginSession, readClinicLoginSession } from "@/lib/clinic/session";
+import {
+  CLINIC_LOGIN_SESSION_KEY,
+  CLINIC_ONBOARDING_COMPLETE_KEY,
+  clearClinicLoginSession,
+  readClinicLoginSession,
+} from "@/lib/clinic/session";
 import { fetchClinicSetupState } from "@/lib/api/clinic-dashboard";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +45,21 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/clinic/analytics",              label: "Analytics",      Icon: BarChart3,       requiresOnboarding: true  },
   { href: "/clinic/settings",               label: "Settings",       Icon: Settings,        requiresOnboarding: true  },
 ];
+
+function subscribeToClinicStorage(onStoreChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const handleChange = () => onStoreChange();
+  window.addEventListener("storage", handleChange);
+  window.addEventListener("bimble:clinic:onboarding-complete", handleChange);
+
+  return () => {
+    window.removeEventListener("storage", handleChange);
+    window.removeEventListener("bimble:clinic:onboarding-complete", handleChange);
+  };
+}
 
 // ── Sidebar ───────────────────────────────────────────────────────
 
@@ -187,14 +207,28 @@ function SidebarNavItem({
 
 export default function ClinicLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [session] = useState(() => readClinicLoginSession());
+  const sessionRaw = useSyncExternalStore(
+    subscribeToClinicStorage,
+    () => {
+      if (typeof window === "undefined") return null;
+      return window.localStorage.getItem(CLINIC_LOGIN_SESSION_KEY);
+    },
+    () => null,
+  );
+  const session = useMemo(() => {
+    if (!sessionRaw) return null;
+    return readClinicLoginSession();
+  }, [sessionRaw]);
   const [backendOnboardingComplete, setBackendOnboardingComplete] = useState(false);
-
-  // Check onboarding completion (stored flag, updated after go-live)
-  const [onboardingComplete, setOnboardingComplete] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("bimble:clinic:onboarding-complete") === "true";
-  });
+  const onboardingCompleteRaw = useSyncExternalStore(
+    subscribeToClinicStorage,
+    () => {
+      if (typeof window === "undefined") return null;
+      return window.localStorage.getItem(CLINIC_ONBOARDING_COMPLETE_KEY);
+    },
+    () => null,
+  );
+  const onboardingComplete = onboardingCompleteRaw === "true";
 
   useEffect(() => {
     if (!session) {
@@ -244,8 +278,7 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
         setBackendOnboardingComplete(complete);
 
         if (complete) {
-          setOnboardingComplete(true);
-          localStorage.setItem("bimble:clinic:onboarding-complete", "true");
+          localStorage.setItem(CLINIC_ONBOARDING_COMPLETE_KEY, "true");
         }
       })
       .catch(() => {
@@ -260,7 +293,7 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
   // Listen for onboarding completion signal from child pages
   useEffect(() => {
     function handleComplete() {
-      setOnboardingComplete(true);
+      localStorage.setItem(CLINIC_ONBOARDING_COMPLETE_KEY, "true");
     }
     window.addEventListener("bimble:clinic:onboarding-complete", handleComplete);
     return () => window.removeEventListener("bimble:clinic:onboarding-complete", handleComplete);

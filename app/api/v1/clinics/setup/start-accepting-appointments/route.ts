@@ -3,6 +3,7 @@ import { extractBackendErrorMessage, requestBackendApiJson } from "@/lib/api/bac
 
 export async function PATCH(request: Request) {
   let payload: { enabled?: boolean; doctor_ids?: number[] };
+  const authorization = request.headers.get("Authorization") ?? "";
 
   try {
     payload = (await request.json()) as { enabled?: boolean };
@@ -22,6 +23,7 @@ export async function PATCH(request: Request) {
       path: "/clinics/setup/start-accepting-appointments",
       method: "PATCH",
       body: payload,
+      headers: authorization ? { Authorization: authorization } : undefined,
     });
 
     if (!backendResponse.ok) {

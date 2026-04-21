@@ -1,8 +1,8 @@
 import type { DoctorLoginSession } from "@/lib/doctor/types";
 
-const DOCTOR_LOGIN_SESSION_KEY = "bimble:doctor:login-session";
+export const DOCTOR_LOGIN_SESSION_KEY = "bimble:doctor:login-session";
 /** When UI preview is on, user can opt out for this tab until reload (set on Sign out). */
-const DOCTOR_UI_PREVIEW_OFF_KEY = "bimble:doctor:ui-preview-off";
+export const DOCTOR_UI_PREVIEW_OFF_KEY = "bimble:doctor:ui-preview-off";
 // Short-lived OTP token kept in sessionStorage (cleared on tab close)
 const DOCTOR_OTP_TOKEN_KEY = "bimble:doctor:otp-token";
 // Short-lived clinic-selection token
@@ -79,6 +79,11 @@ export function getDoctorUiPreviewSession(): DoctorLoginSession | null {
   if (!isDoctorUiPreviewEnabled()) return null;
   if (isDoctorUiPreviewSuppressedForTab()) return null;
   return MOCK_DOCTOR_UI_SESSION;
+}
+
+export function getDoctorUiPreviewSessionRaw(): string | null {
+  const session = getDoctorUiPreviewSession();
+  return session ? JSON.stringify(session) : null;
 }
 
 /** Real login session, or preview mock if enabled — use in doctor layout only. */

@@ -11,7 +11,6 @@ import {
   deleteClinicDoctorInvite,
   fetchClinicDoctors,
   fetchClinicDoctorInvites,
-  fetchClinicMe,
   inviteClinicDoctor,
   updateClinicDoctorStatus,
   resendClinicDoctorInvite,
@@ -270,7 +269,7 @@ export default function DoctorsPage() {
   const hasSession = Boolean(session?.accessToken);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
-  const [seatLimit, setSeatLimit] = useState(5);
+  const seatLimit = 5;
   const [loading, setLoading] = useState(hasSession);
   const [error, setError] = useState(
     hasSession ? "" : "You are not logged in. Please sign in again.",
@@ -284,20 +283,15 @@ export default function DoctorsPage() {
     let active = true;
 
     Promise.all([
-      fetchClinicMe(accessToken),
       fetchClinicDoctors(accessToken),
       fetchClinicDoctorInvites(accessToken),
     ])
-      .then(([clinic, doctorRecords, inviteRecords]) => {
+      .then(([doctorRecords, inviteRecords]) => {
         if (!active) return;
 
-        const clinicRecord = clinic as Record<string, unknown>;
         const doctorList = (doctorRecords as Record<string, unknown>[]).map(toDoctor);
         const inviteList = (inviteRecords as Record<string, unknown>[]).map(toInvite);
 
-        setSeatLimit(
-          Number(clinicRecord.provider_limit ?? clinicRecord.seat_limit ?? doctorList.length + 1) || 5,
-        );
         setDoctors(doctorList);
         setInvites(inviteList);
       })
@@ -430,7 +424,7 @@ export default function DoctorsPage() {
         </section>
       )}
 
-      {invites.length > 0 && (
+      {pendingInvites.length > 0 && (
         <section className="mb-6">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Pending invites
@@ -444,9 +438,6 @@ export default function DoctorsPage() {
                 onResend={handleResendInvite}
               />
             ))}
-            {pendingInvites.length === 0 && (
-              <p className="text-sm text-muted-foreground">No pending invites.</p>
-            )}
           </div>
         </section>
       )}

@@ -485,182 +485,6 @@ function EmailStep({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-type ServicePickerProps = {
-  buttonLabel: string;
-  onSaved: () => void;
-  introText?: string;
-};
-
-function ServicePickerField({
-  buttonLabel,
-  onSaved,
-  introText,
-}: ServicePickerProps) {
-  const session = readClinicLoginSession();
-  const accessToken = session?.accessToken ?? "";
-  const [selected, setSelected] = useState<string[]>([]);
-  const [services, setServices] = useState<
-    { service_code: string; service_name: string; user_friendly_service_name?: string }[]
-  >([]);
-  const [search, setSearch] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(
-    accessToken ? "" : "You are not logged in. Please refresh and try again.",
-  );
-  const hasSearchTerm = search.trim().length >= 2;
-
-  useEffect(() => {
-    if (!accessToken || !hasSearchTerm) {
-      setServices([]);
-      setLoading(false);
-      return;
-    }
-
-    let active = true;
-    setLoading(true);
-
-    const timer = window.setTimeout(() => {
-      searchFeeScheduleServices(accessToken, search.trim())
-        .then((items) => {
-          if (!active) return;
-          setServices(
-            items
-              .map((record) => ({
-                service_code: record.service_code ?? "",
-                service_name:
-                  record.user_friendly_service_name?.trim() ||
-                  record.service_name?.trim() ||
-                  "",
-                user_friendly_service_name: record.user_friendly_service_name,
-              }))
-              .filter((svc) => svc.service_code.trim() !== "" && svc.service_name.trim() !== ""),
-          );
-        })
-        .catch((err) => {
-          if (!active) return;
-          setError(err instanceof Error ? err.message : "Failed to load services.");
-          setServices([]);
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    }, 250);
-
-    return () => {
-      active = false;
-      window.clearTimeout(timer);
-    };
-  }, [accessToken, hasSearchTerm, search]);
-
-  function toggle(serviceCode: string) {
-    setSelected((current) =>
-      current.includes(serviceCode)
-        ? current.filter((code) => code !== serviceCode)
-        : [...current, serviceCode],
-    );
-  }
-
-  async function handleSave() {
-    if (!accessToken || selected.length === 0) return;
-    setSaving(true);
-
-    try {
-      const response = await saveClinicServiceSelections(accessToken, selected);
-      if (response.missing_service_codes.length > 0) {
-        setError(`Missing service codes: ${response.missing_service_codes.join(", ")}`);
-        return;
-      }
-      onSaved();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save services.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const selectedNames = services
-    .filter((s) => selected.includes(s.service_code))
-    .map((s) => s.service_name);
-
-  return (
-    <div className="space-y-4">
-      {introText ? <p className="text-sm text-muted-foreground">{introText}</p> : null}
-
-      {error && <p className="text-xs text-destructive">{error}</p>}
-
-      <div className="w-full max-w-sm space-y-2">
-        <div className="flex w-full items-center rounded-2xl border border-border bg-card px-4 py-3 text-sm transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
-          <Input
-            disabled={loading}
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Select services…"
-            className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
-          />
-          <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-        </div>
-
-        {hasSearchTerm && (
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-            <div className="max-h-72 overflow-auto">
-              {loading ? (
-                <div className="px-4 py-4 text-sm text-muted-foreground">Loading services…</div>
-              ) : services.length === 0 ? (
-                <div className="px-4 py-4 text-sm text-muted-foreground">No matching services found.</div>
-              ) : (
-                services.map((svc) => (
-                  <button
-                    key={svc.service_code}
-                    onClick={() => toggle(svc.service_code)}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent"
-                  >
-                    <span
-                      className={cn(
-                        "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all",
-                        selected.includes(svc.service_code)
-                          ? "border-primary bg-primary"
-                          : "border-border",
-                      )}
-                    >
-                      {selected.includes(svc.service_code) && (
-                        <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 12 12" fill="none">
-                          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </span>
-                    <span className={selected.includes(svc.service_code) ? "text-foreground" : "text-muted-foreground"}>
-                      {svc.service_name}
-                    </span>
-                    <span className="ml-auto text-[11px] text-muted-foreground">{svc.service_code}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {selectedNames.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedNames.map((name) => (
-            <span
-              key={name}
-              className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-            >
-              {name}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <Button onClick={handleSave} disabled={selected.length === 0 || saving || loading} size="sm">
-        {saving ? "Saving…" : loading ? "Loading…" : buttonLabel}
-      </Button>
-    </div>
-  );
-}
-
 // ── Services Step ─────────────────────────────────────────────────
 
 function ServicesStep({ onComplete }: { onComplete: () => void }) {
@@ -954,11 +778,15 @@ function GoLiveStep({
   onGoLive: () => Promise<void>;
 }) {
   const [going, setGoing] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleGoLive() {
     setGoing(true);
+    setError("");
     try {
       await onGoLive();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start accepting appointments.");
     } finally {
       setGoing(false);
     }
@@ -981,6 +809,12 @@ function GoLiveStep({
               {r}
             </p>
           ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
         </div>
       )}
 
