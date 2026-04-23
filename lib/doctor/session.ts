@@ -1,7 +1,8 @@
 import type { DoctorLoginSession } from "@/lib/doctor/types";
 
 export const DOCTOR_LOGIN_SESSION_KEY = "bimble:doctor:login-session";
-export const DOCTOR_SETUP_COMPLETE_KEY = "bimble:doctor:setup-complete";
+const DOCTOR_SETUP_COMPLETE_KEY_PREFIX = "bimble:doctor:setup-complete:";
+const DOCTOR_ONBOARDING_STAGE_KEY_PREFIX = "bimble:doctor:onboarding-stage:";
 /** When UI preview is on, user can opt out for this tab until reload (set on Sign out). */
 export const DOCTOR_UI_PREVIEW_OFF_KEY = "bimble:doctor:ui-preview-off";
 // Short-lived OTP token kept in sessionStorage (cleared on tab close)
@@ -38,7 +39,11 @@ function isDoctorLoginSession(value: unknown): value is DoctorLoginSession {
     typeof value.clinicSlug === "string" &&
     typeof value.clinicName === "string" &&
     typeof value.accessToken === "string" &&
-    typeof value.appUrl === "string" &&
+    (typeof value.appUrl === "string" ||
+      typeof value.bootstrapUrl === "string" ||
+      typeof value.emrLaunchUrl === "string") &&
+    (value.bootstrapUrl === undefined || typeof value.bootstrapUrl === "string") &&
+    (value.emrLaunchUrl === undefined || typeof value.emrLaunchUrl === "string") &&
     (value.expiresAt === undefined || typeof value.expiresAt === "string")
   );
 }
@@ -63,6 +68,12 @@ export function readDoctorLoginSession(): DoctorLoginSession | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!isDoctorLoginSession(parsed)) return null;
+    if (!parsed.appUrl) {
+      return {
+        ...parsed,
+        appUrl: parsed.bootstrapUrl || parsed.emrLaunchUrl || "/",
+      };
+    }
     if (!parsed.expiresAt) {
       const hydrated = {
         ...parsed,
@@ -93,6 +104,57 @@ const MOCK_DOCTOR_UI_SESSION: DoctorLoginSession = {
   accessToken: "",
   appUrl: "/",
 };
+
+function onboardingCompleteStorageKey(doctorId: number) {
+  return `${DOCTOR_SETUP_COMPLETE_KEY_PREFIX}${doctorId}`;
+}
+
+function onboardingStageStorageKey(doctorId: number) {
+  return `${DOCTOR_ONBOARDING_STAGE_KEY_PREFIX}${doctorId}`;
+}
+
+export function isDoctorOnboardingComplete(doctorId?: number | null) {
+  if (!doctorId || typeof window === "undefined") {
+    return false;
+  }
+
+  return localStorage.getItem(onboardingCompleteStorageKey(doctorId)) === "1";
+}
+
+export function markDoctorOnboardingComplete(doctorId: number) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  localStorage.setItem(onboardingCompleteStorageKey(doctorId), "1");
+}
+
+export function clearDoctorOnboardingComplete(doctorId?: number | null) {
+  if (typeof window === "undefined" || !doctorId) return;
+  localStorage.removeItem(onboardingCompleteStorageKey(doctorId));
+}
+
+export type DoctorOnboardingStage = "hlth_2870" | "hlth_2950" | "hlth_2832" | "hlth_2991";
+
+export function readDoctorOnboardingStage(doctorId?: number | null): DoctorOnboardingStage | null {
+  if (typeof window === "undefined" || !doctorId) return null;
+  const value = localStorage.getItem(onboardingStageStorageKey(doctorId));
+  return value === "hlth_2870" || value === "hlth_2950" || value === "hlth_2832" || value === "hlth_2991"
+    ? value
+    : value === "hlth_2820"
+      ? "hlth_2991"
+    : null;
+}
+
+export function storeDoctorOnboardingStage(doctorId: number, stage: DoctorOnboardingStage) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(onboardingStageStorageKey(doctorId), stage);
+}
+
+export function clearDoctorOnboardingStage(doctorId?: number | null) {
+  if (typeof window === "undefined" || !doctorId) return;
+  localStorage.removeItem(onboardingStageStorageKey(doctorId));
+}
 
 function isDoctorUiPreviewEnabled() {
   return process.env.NEXT_PUBLIC_DOCTOR_UI_PREVIEW === "true";

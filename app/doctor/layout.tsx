@@ -22,7 +22,7 @@ import {
   DOCTOR_UI_PREVIEW_OFF_KEY,
   getDoctorUiPreviewSession,
   getDoctorUiPreviewSessionRaw,
-  getDoctorSessionRemainingMs,
+  isDoctorOnboardingComplete,
   readDoctorLoginSession,
   suppressDoctorUiPreviewForTab,
 } from "@/lib/doctor/session";
@@ -83,46 +83,44 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
   const router = useRouter();
   const pathname = usePathname();
   const isPublic = isPublicDoctorRoute(pathname);
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
+  const isOnboardingRoute = pathname === "/doctor/onboarding";
   const sessionRaw = useSyncExternalStore(
     subscribeToDoctorSessionChanges,
     readDoctorSessionSnapshot,
     () => null,
   );
   const session = useMemo(() => {
-    if (!sessionRaw) return null;
+    if (!hydrated || !sessionRaw) return null;
     return readDoctorLoginSession() ?? getDoctorUiPreviewSession();
-  }, [sessionRaw]);
+  }, [hydrated, sessionRaw]);
 
   useEffect(() => {
-    if (isPublic) return;
+    if (!hydrated || isPublic) return;
     if (!session) {
-      router.replace("/doctor/login");
-    }
-  }, [isPublic, router, session]);
-
-  useEffect(() => {
-    if (isPublic || !session) return;
-    const remainingMs = getDoctorSessionRemainingMs(session);
-    if (remainingMs === null) return;
-    if (remainingMs <= 0) {
-      clearDoctorLoginSession();
       router.replace("/doctor/login");
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
-      clearDoctorLoginSession();
-      router.replace("/doctor/login");
-    }, remainingMs);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [isPublic, session, router]);
+    if (!isDoctorOnboardingComplete(session.doctorId) && pathname !== "/doctor/onboarding") {
+      router.replace("/doctor/onboarding");
+    }
+  }, [hydrated, isPublic, pathname, router, session]);
 
   if (isPublic) {
     return <>{children}</>;
   }
 
+  if (!hydrated) return null;
   if (!session) return null;
+
+  if (isOnboardingRoute) {
+    return <>{children}</>;
+  }
 
   function handleLogout() {
     clearDoctorLoginSession();

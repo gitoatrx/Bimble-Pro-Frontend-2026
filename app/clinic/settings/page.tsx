@@ -5,6 +5,8 @@ import { Check, Eye, EyeOff, KeyRound, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { MspFacilityNumberApplicationSection } from "@/components/clinic/msp-facility-number-application";
+import { TeleplanServiceApplicationSection } from "@/components/clinic/teleplan-service-application";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import {
   fetchClinicSettingsCredentials,
@@ -27,10 +29,10 @@ function SettingsSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card">
-      <div className="border-b border-border px-6 py-5">
+    <div className="overflow-hidden rounded-2xl border border-border bg-white">
+      <div className="px-6 py-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
             <Icon className="h-4 w-4 text-primary" />
           </div>
           <div>
@@ -489,6 +491,8 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-4">
+        <TeleplanServiceApplicationSection />
+        <MspFacilityNumberApplicationSection />
         <ClinicProfileSettings />
         <SmtpSettings />
         <CredentialsSettings />

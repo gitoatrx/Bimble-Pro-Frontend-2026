@@ -85,6 +85,8 @@ export type DoctorLoginSession = {
   clinicName: string;
   accessToken: string;
   appUrl: string;
+  bootstrapUrl?: string;
+  emrLaunchUrl?: string;
   expiresAt?: string;
 };
 

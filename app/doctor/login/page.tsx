@@ -14,6 +14,7 @@ import {
   storeDoctorSelectionToken,
   clearDoctorSelectionToken,
   clearDoctorOtpToken,
+  isDoctorOnboardingComplete,
 } from "@/lib/doctor/session";
 import type {
   DoctorClinicOption,
@@ -199,7 +200,11 @@ export default function DoctorLoginPage() {
           accessToken: response.access_token,
           appUrl: response.app_url,
         });
-        router.push("/doctor/dashboard");
+        router.replace(
+          isDoctorOnboardingComplete(response.doctor_id)
+            ? "/doctor/dashboard"
+            : "/doctor/onboarding",
+        );
         return;
       }
 
@@ -239,7 +244,11 @@ export default function DoctorLoginPage() {
           accessToken: response.access_token,
           appUrl: response.app_url,
         });
-        router.push("/doctor/dashboard");
+        router.replace(
+          isDoctorOnboardingComplete(response.doctor_id)
+            ? "/doctor/dashboard"
+            : "/doctor/onboarding",
+        );
       }
     } catch (error) {
       setOtpError(error instanceof Error ? error.message : "Verification failed.");
@@ -278,7 +287,11 @@ export default function DoctorLoginPage() {
         accessToken: response.access_token,
         appUrl: response.app_url,
       });
-      router.push("/doctor/dashboard");
+      router.replace(
+        isDoctorOnboardingComplete(response.doctor_id)
+          ? "/doctor/dashboard"
+          : "/doctor/onboarding",
+      );
     } catch (error) {
       setClinicSelectError(error instanceof Error ? error.message : "Could not select clinic.");
     } finally {

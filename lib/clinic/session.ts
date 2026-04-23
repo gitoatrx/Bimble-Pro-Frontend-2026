@@ -100,7 +100,9 @@ function isClinicLoginSession(value: unknown): value is ClinicLoginSession {
     isRecord(value) &&
     typeof value.clinicSlug === "string" &&
     typeof value.accessToken === "string" &&
-    typeof value.appUrl === "string" &&
+    (typeof value.appUrl === "string" ||
+      typeof value.bootstrapUrl === "string" ||
+      typeof value.emrLaunchUrl === "string") &&
     (value.expiresAt === undefined || typeof value.expiresAt === "string") &&
     (value.bootstrapUrl === undefined || typeof value.bootstrapUrl === "string") &&
     (value.emrLaunchUrl === undefined || typeof value.emrLaunchUrl === "string")
@@ -247,6 +249,13 @@ export function readClinicLoginSession() {
     const parsed: unknown = JSON.parse(raw);
     if (!isClinicLoginSession(parsed)) {
       return null;
+    }
+
+    if (!parsed.appUrl) {
+      return {
+        ...parsed,
+        appUrl: parsed.bootstrapUrl || parsed.emrLaunchUrl || "/",
+      };
     }
 
     if (!parsed.expiresAt) {

@@ -29,6 +29,165 @@ export type ClinicAnalyticsRecord = Record<string, unknown>;
 export type ClinicSettingsRecord = Record<string, unknown>;
 export type ClinicSetupStateRecord = Record<string, unknown>;
 
+export type ClinicFacilityFormDeclaration = {
+  id: string;
+  summary_text: string;
+  full_text: string;
+};
+
+export type ClinicFacilityFormUiContent = {
+  field_labels: Record<string, string>;
+  part_b?: {
+    title: string;
+    summary: string;
+    selection_type: string;
+    consent_style: string;
+    options: Array<{
+      value: string;
+      label: string;
+      full_text: string;
+      summary_text: string;
+    }>;
+  };
+  part_c?: {
+    title: string;
+    summary: string;
+    consent_label: string;
+    consent_required: boolean;
+    declarations: ClinicFacilityFormDeclaration[];
+  };
+};
+
+export type ClinicFacilityFormSignature = {
+  signatureDataUrl: string;
+  signatureLabel: string;
+};
+
+export type ClinicFacilityFormSubmission = {
+  administratorLastName: string;
+  administratorFirstName: string;
+  mspPractitionerNumber: string;
+  facilityOrPracticeName: string;
+  facilityEffectiveDate: string;
+  contactEmail?: string;
+  contactPhoneNumber: string;
+  contactFaxNumber?: string;
+  facilityPhysicalAddress: string;
+  facilityPhysicalCity: string;
+  facilityPhysicalPostalCode: string;
+  facilityMailingAddress?: string;
+  facilityMailingCity?: string;
+  facilityMailingPostalCode?: string;
+  bcpAppliedToEligibleFees: boolean;
+  confirmDeclarations: boolean;
+  dateSigned: string;
+  signature: ClinicFacilityFormSignature;
+};
+
+export type ClinicFacilityFormResponse = {
+  form_code: string;
+  title: string;
+  saved_at: string;
+  field_values: Record<string, unknown>;
+  saved_values: Record<string, unknown>;
+  missing_fields: string[];
+  confirm_declarations: boolean;
+  pdf_name: string | null;
+  download_url: string | null;
+  ui_content: ClinicFacilityFormUiContent;
+};
+
+export type ClinicTeleplan2820FacilityType =
+  | "CLINIC"
+  | "HOSPITAL"
+  | "PRACTITIONER"
+  | "SERVICE_BUREAU"
+  | "VENDOR";
+
+export type ClinicTeleplan2820Mode =
+  | "NEW_DATA_CENTRE"
+  | "EXISTING_DATA_CENTRE"
+  | "SERVICE_BUREAU";
+
+export type ClinicTeleplan2820Signature = {
+  signatureDataUrl: string;
+  signatureLabel: string;
+};
+
+export type ClinicTeleplan2820SavedValues = {
+  name?: string | null;
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  phone_number?: string | null;
+  organization_name?: string | null;
+  contact_person?: string | null;
+  facility_type?: ClinicTeleplan2820FacilityType | null;
+  teleplan_mode?: ClinicTeleplan2820Mode | null;
+  new_data_centre_name?: string | null;
+  new_data_centre_contact?: string | null;
+  existing_data_centre_name?: string | null;
+  existing_data_centre_number?: string | null;
+  service_bureau_name?: string | null;
+  service_bureau_number?: string | null;
+  computer_make_model?: string | null;
+  computer_make_model2?: string | null;
+  modem_make_model?: string | null;
+  modem_type?: string | null;
+  modem_speed?: string | null;
+  software_name?: string | null;
+  vendor_name?: string | null;
+  supplier?: string | null;
+  msp_payee_number?: string | null;
+  signature?: ClinicTeleplan2820Signature | null;
+  Signature_Date?: string | null;
+};
+
+export type ClinicTeleplan2820Request = {
+  name: string;
+  address: string;
+  city: string;
+  postal_code: string;
+  phone_number: string;
+  organization_name: string;
+  contact_person: string;
+  facility_type: ClinicTeleplan2820FacilityType;
+  teleplan_mode: ClinicTeleplan2820Mode;
+  new_data_centre_name: string | null;
+  new_data_centre_contact: string | null;
+  existing_data_centre_name: string | null;
+  existing_data_centre_number: string | null;
+  service_bureau_name: string | null;
+  service_bureau_number: string | null;
+  computer_make_model: string;
+  computer_make_model2: string;
+  modem_make_model: string;
+  modem_type: string;
+  modem_speed: string;
+  software_name: string;
+  vendor_name: string;
+  supplier: string;
+  msp_payee_number: string;
+  Signature_Date: string;
+  signature: ClinicTeleplan2820Signature;
+};
+
+export type ClinicTeleplan2820Response = {
+  form_code: string;
+  title: string;
+  saved_at: string;
+  field_values: Record<string, unknown>;
+  saved_values: ClinicTeleplan2820SavedValues;
+  missing_fields: string[];
+  signature_captured?: boolean;
+  signature_signed_at?: string | null;
+  signature_label?: string | null;
+  signature_data_url?: string | null;
+  pdf_name: string | null;
+  download_url: string | null;
+  ui_content: null;
+};
+
 export type AvailableServiceRecord = {
   service_id: number;
   service_code: string;
@@ -609,6 +768,48 @@ export async function updateClinicSettingsCredentials(
   return apiRequest<ClinicSettingsRecord, Record<string, unknown>>({
     endpoint: API_ENDPOINTS.clinicMeSettingsCredentials,
     method: "PATCH",
+    body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicFacilityForm(
+  accessToken: string,
+  formCode = "hlth-2948",
+) {
+  return apiRequest<ClinicFacilityFormResponse>({
+    endpoint: `/api/v1/clinics/me/facility-forms/${formCode}`,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function submitClinicFacilityForm(
+  accessToken: string,
+  formCode: string,
+  payload: ClinicFacilityFormSubmission,
+) {
+  return apiRequest<ClinicFacilityFormResponse, ClinicFacilityFormSubmission>({
+    endpoint: `/api/v1/clinics/me/facility-forms/${formCode}`,
+    method: "POST",
+    body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicTeleplan2820Form(accessToken: string) {
+  return apiRequest<ClinicTeleplan2820Response>({
+    endpoint: API_ENDPOINTS.clinicMeTeleplanHlth2820,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function submitClinicTeleplan2820Form(
+  accessToken: string,
+  payload: ClinicTeleplan2820Request,
+) {
+  return apiRequest<ClinicTeleplan2820Response, ClinicTeleplan2820Request>({
+    endpoint: API_ENDPOINTS.clinicMeTeleplanHlth2820,
+    method: "POST",
     body: payload,
     headers: authHeaders(accessToken),
   });

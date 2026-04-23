@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import React, { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -21,7 +21,6 @@ import {
   clearClinicLoginSession,
   CLINIC_LOGIN_SESSION_KEY,
   CLINIC_ONBOARDING_COMPLETE_KEY,
-  getClinicSessionRemainingMs,
   readClinicLoginSession,
 } from "@/lib/clinic/session";
 import { fetchClinicSetupState } from "@/lib/api/clinic-dashboard";
@@ -208,6 +207,11 @@ function SidebarNavItem({
 
 export default function ClinicLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const sessionRaw = useSyncExternalStore(
     subscribeToClinicStorage,
     () => {
@@ -216,10 +220,6 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     },
     () => null,
   );
-  const session = useMemo(() => {
-    if (!sessionRaw) return null;
-    return readClinicLoginSession();
-  }, [sessionRaw]);
   const [backendOnboardingComplete, setBackendOnboardingComplete] = useState(false);
   const onboardingCompleteRaw = useSyncExternalStore(
     subscribeToClinicStorage,
@@ -230,30 +230,14 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     () => null,
   );
   const onboardingComplete = onboardingCompleteRaw === "true";
+  const session = hydrated && sessionRaw ? readClinicLoginSession() : null;
 
   useEffect(() => {
+    if (!hydrated) return;
     if (!session) {
       router.replace("/login");
     }
-  }, [session, router]);
-
-  useEffect(() => {
-    if (!session) return;
-    const remainingMs = getClinicSessionRemainingMs(session);
-    if (remainingMs === null) return;
-    if (remainingMs <= 0) {
-      clearClinicLoginSession();
-      router.replace("/login");
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      clearClinicLoginSession();
-      router.replace("/login");
-    }, remainingMs);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [session, router]);
+  }, [hydrated, session, router]);
 
   useEffect(() => {
     if (!session?.accessToken) return;
@@ -318,6 +302,7 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     return () => window.removeEventListener("bimble:clinic:onboarding-complete", handleComplete);
   }, []);
 
+  if (!hydrated) return null;
   if (!session) return null;
   const clinicSession = session;
 
