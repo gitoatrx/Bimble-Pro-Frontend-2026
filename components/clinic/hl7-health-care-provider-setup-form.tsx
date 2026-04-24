@@ -357,6 +357,7 @@ function Hl7SetupDialog({
       }
 
       setFormState(parseResponseState(response));
+      onClose();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Could not submit the form.");
     } finally {

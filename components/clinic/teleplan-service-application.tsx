@@ -314,6 +314,7 @@ function Teleplan2820Dialog({
     createEmptyState(),
   );
   const [fieldErrors, setFieldErrors] = useState<Teleplan2820FieldErrors>({});
+  const signatureDataUrlRef = React.useRef("");
 
   useEffect(() => {
     if (!open) return;
@@ -334,6 +335,7 @@ function Teleplan2820Dialog({
         missingFields: [],
       });
       setFormState(createEmptyState());
+      signatureDataUrlRef.current = "";
       return () => {
         active = false;
       };
@@ -350,6 +352,7 @@ function Teleplan2820Dialog({
           missingFields: response.missing_fields ?? [],
         });
         setFormState(parseResponseState(response));
+        signatureDataUrlRef.current = response.saved_values.signature?.signature_data_url ?? response.signature_data_url ?? "";
       })
       .catch((fetchError) => {
         if (!active) return;
@@ -364,6 +367,7 @@ function Teleplan2820Dialog({
           missingFields: [],
         });
         setFormState(createEmptyState());
+        signatureDataUrlRef.current = "";
       })
       .finally(() => {
         if (active) {
@@ -393,6 +397,7 @@ function Teleplan2820Dialog({
 
   function validate(current: Teleplan2820FormState) {
     const nextErrors: Teleplan2820FieldErrors = {};
+    const signatureValue = signatureDataUrlRef.current || current.signatureDataUrl;
     const addRequired = (field: keyof Teleplan2820FormState, message: string) => {
       if (!current[field]?.trim()) {
         nextErrors[field] = message;
@@ -419,7 +424,9 @@ function Teleplan2820Dialog({
     addRequired("mspPayeeNumber", "MSP payee number is required.");
     addRequired("signatureDate", "Date signed is required.");
     addRequired("signatureLabel", "Signature label is required.");
-    addRequired("signatureDataUrl", "Signature is required.");
+    if (!signatureValue.trim()) {
+      nextErrors.signatureDataUrl = "Signature is required.";
+    }
 
     if (current.teleplanMode === "NEW_DATA_CENTRE") {
       addRequired("newDataCentreName", "New data centre name is required.");
@@ -447,7 +454,12 @@ function Teleplan2820Dialog({
       return;
     }
 
-    const nextErrors = validate(formState);
+    const signatureValue = signatureDataUrlRef.current || formState.signatureDataUrl;
+    const submitState = {
+      ...formState,
+      signatureDataUrl: signatureValue,
+    };
+    const nextErrors = validate(submitState);
     setFieldErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -459,52 +471,52 @@ function Teleplan2820Dialog({
     setError("");
 
     const payload: ClinicTeleplan2820Request = {
-      name: formState.name.trim(),
-      address: formState.address.trim(),
-      city: formState.city.trim(),
-      postal_code: normalizePostalCode(formState.postalCode),
-      phone_number: digitsOnly(formState.phoneNumber),
-      organization_name: formState.organizationName.trim(),
-      contact_person: formState.contactPerson.trim(),
-      facility_type: formState.facilityType,
-      teleplan_mode: formState.teleplanMode,
+      name: submitState.name.trim(),
+      address: submitState.address.trim(),
+      city: submitState.city.trim(),
+      postal_code: normalizePostalCode(submitState.postalCode),
+      phone_number: digitsOnly(submitState.phoneNumber),
+      organization_name: submitState.organizationName.trim(),
+      contact_person: submitState.contactPerson.trim(),
+      facility_type: submitState.facilityType,
+      teleplan_mode: submitState.teleplanMode,
       new_data_centre_name:
-        formState.teleplanMode === "NEW_DATA_CENTRE"
-          ? formState.newDataCentreName.trim()
+        submitState.teleplanMode === "NEW_DATA_CENTRE"
+          ? submitState.newDataCentreName.trim()
           : null,
       new_data_centre_contact:
-        formState.teleplanMode === "NEW_DATA_CENTRE"
-          ? formState.newDataCentreContact.trim()
+        submitState.teleplanMode === "NEW_DATA_CENTRE"
+          ? submitState.newDataCentreContact.trim()
           : null,
       existing_data_centre_name:
-        formState.teleplanMode === "EXISTING_DATA_CENTRE"
-          ? formState.existingDataCentreName.trim()
+        submitState.teleplanMode === "EXISTING_DATA_CENTRE"
+          ? submitState.existingDataCentreName.trim()
           : null,
       existing_data_centre_number:
-        formState.teleplanMode === "EXISTING_DATA_CENTRE"
-          ? formState.existingDataCentreNumber.trim()
+        submitState.teleplanMode === "EXISTING_DATA_CENTRE"
+          ? submitState.existingDataCentreNumber.trim()
           : null,
       service_bureau_name:
-        formState.teleplanMode === "SERVICE_BUREAU"
-          ? formState.serviceBureauName.trim()
+        submitState.teleplanMode === "SERVICE_BUREAU"
+          ? submitState.serviceBureauName.trim()
           : null,
       service_bureau_number:
-        formState.teleplanMode === "SERVICE_BUREAU"
-          ? formState.serviceBureauNumber.trim()
+        submitState.teleplanMode === "SERVICE_BUREAU"
+          ? submitState.serviceBureauNumber.trim()
           : null,
-      computer_make_model: formState.computerMakeModel.trim(),
-      computer_make_model2: formState.computerMakeModel2.trim(),
-      modem_make_model: formState.modemMakeModel.trim(),
-      modem_type: formState.modemType.trim(),
-      modem_speed: formState.modemSpeed.trim(),
-      software_name: formState.softwareName.trim(),
-      vendor_name: formState.vendorName.trim(),
-      supplier: formState.supplier.trim(),
-      msp_payee_number: digitsOnly(formState.mspPayeeNumber),
-      Signature_Date: formState.signatureDate,
+      computer_make_model: submitState.computerMakeModel.trim(),
+      computer_make_model2: submitState.computerMakeModel2.trim(),
+      modem_make_model: submitState.modemMakeModel.trim(),
+      modem_type: submitState.modemType.trim(),
+      modem_speed: submitState.modemSpeed.trim(),
+      software_name: submitState.softwareName.trim(),
+      vendor_name: submitState.vendorName.trim(),
+      supplier: submitState.supplier.trim(),
+      msp_payee_number: digitsOnly(submitState.mspPayeeNumber),
+      Signature_Date: submitState.signatureDate,
       signature: {
-        signatureDataUrl: formState.signatureDataUrl,
-        signatureLabel: formState.signatureLabel.trim(),
+        signature_data_url: signatureValue,
+        signature_label: submitState.signatureLabel.trim(),
       },
     };
 
@@ -527,6 +539,7 @@ function Teleplan2820Dialog({
       }
 
       setFormState(parseResponseState(response));
+      onClose();
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -948,9 +961,10 @@ function Teleplan2820Dialog({
                   <DialogField label="Signature" required error={fieldErrors.signatureDataUrl}>
                     <SignaturePad
                       value={formState.signatureDataUrl}
-                      onChange={(value) =>
-                        setFormState((current) => ({ ...current, signatureDataUrl: value }))
-                      }
+                      onChange={(value) => {
+                        signatureDataUrlRef.current = value;
+                        setFormState((current) => ({ ...current, signatureDataUrl: value }));
+                      }}
                     />
                   </DialogField>
                 </div>

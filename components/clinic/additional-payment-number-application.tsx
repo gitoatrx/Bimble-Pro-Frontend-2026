@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -366,6 +366,7 @@ function Payment2876Dialog({
   });
   const [formState, setFormState] = useState<Payment2876FormState>(() => createEmptyState());
   const [fieldErrors, setFieldErrors] = useState<Payment2876FieldErrors>({});
+  const signatureDataUrlRef = useRef("");
 
   useEffect(() => {
     if (!open) return;
@@ -387,6 +388,7 @@ function Payment2876Dialog({
         missingFields: [],
       });
       setFormState(createEmptyState());
+      signatureDataUrlRef.current = "";
       return () => {
         active = false;
       };
@@ -403,7 +405,9 @@ function Payment2876Dialog({
           savedAt: response.saved_at,
           missingFields: response.missing_fields ?? [],
         });
-        setFormState(parseResponseState(response));
+        const nextState = parseResponseState(response);
+        setFormState(nextState);
+        signatureDataUrlRef.current = nextState.signatureDataUrl;
       })
       .catch((fetchError) => {
         if (!active) return;
@@ -419,6 +423,7 @@ function Payment2876Dialog({
           missingFields: [],
         });
         setFormState(createEmptyState());
+        signatureDataUrlRef.current = "";
       })
       .finally(() => {
         if (active) {
@@ -483,7 +488,12 @@ function Payment2876Dialog({
       return;
     }
 
-    const nextErrors = validate(formState);
+    const signatureValue = signatureDataUrlRef.current || formState.signatureDataUrl;
+    const submitState = {
+      ...formState,
+      signatureDataUrl: signatureValue,
+    };
+    const nextErrors = validate(submitState);
     setFieldErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -492,31 +502,31 @@ function Payment2876Dialog({
     }
 
     const paymentNumbers = [
-      formState.currentMspPaymentNumber1.trim(),
-      formState.currentMspPaymentNumber2.trim(),
-      formState.currentMspPaymentNumber3.trim(),
-      formState.currentMspPaymentNumber4.trim(),
+      submitState.currentMspPaymentNumber1.trim(),
+      submitState.currentMspPaymentNumber2.trim(),
+      submitState.currentMspPaymentNumber3.trim(),
+      submitState.currentMspPaymentNumber4.trim(),
     ].filter(Boolean);
 
     const payload: ClinicPayment2876Request = {
-      mspPractitionerNumber: formState.mspPractitionerNumber.trim(),
-      currentFullNameOrGroupName: formState.currentFullNameOrGroupName.trim(),
+      mspPractitionerNumber: submitState.mspPractitionerNumber.trim(),
+      currentFullNameOrGroupName: submitState.currentFullNameOrGroupName.trim(),
       currentMspPaymentNumbers: paymentNumbers,
-      currentPaymentMailingAddress: formState.currentPaymentMailingAddress.trim(),
-      contractName: formState.contractName.trim(),
-      paymentModality: formState.paymentModality,
-      dataCentreNumber: formState.dataCentreNumber.trim(),
-      effectiveDate: formState.effectiveDate,
-      responsiblePractitionerMspNumber: formState.responsiblePractitionerMspNumber.trim(),
-      responsiblePractitionerName: formState.responsiblePractitionerName.trim(),
-      telephoneNumber: digitsOnly(formState.telephoneNumber),
-      faxNumber: digitsOnly(formState.faxNumber),
-      emailAddress: formState.emailAddress.trim(),
-      serviceDescription: formState.serviceDescription.trim(),
-      encounterReportingOnly: formState.encounterReportingOnly,
+      currentPaymentMailingAddress: submitState.currentPaymentMailingAddress.trim(),
+      contractName: submitState.contractName.trim(),
+      paymentModality: submitState.paymentModality,
+      dataCentreNumber: submitState.dataCentreNumber.trim(),
+      effectiveDate: submitState.effectiveDate,
+      responsiblePractitionerMspNumber: submitState.responsiblePractitionerMspNumber.trim(),
+      responsiblePractitionerName: submitState.responsiblePractitionerName.trim(),
+      telephoneNumber: digitsOnly(submitState.telephoneNumber),
+      faxNumber: digitsOnly(submitState.faxNumber),
+      emailAddress: submitState.emailAddress.trim(),
+      serviceDescription: submitState.serviceDescription.trim(),
+      encounterReportingOnly: submitState.encounterReportingOnly,
       signature: {
-        signatureDataUrl: formState.signatureDataUrl.trim(),
-        signatureLabel: formState.signatureLabel.trim(),
+        signatureDataUrl: signatureValue.trim(),
+        signatureLabel: submitState.signatureLabel.trim(),
       },
     };
 
@@ -546,6 +556,7 @@ function Payment2876Dialog({
       }
 
       setFormState(parseResponseState(response));
+      onClose();
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -950,9 +961,10 @@ function Payment2876Dialog({
                 <DialogField label="Signature" required error={fieldErrors.signatureDataUrl}>
                   <SignaturePad
                     value={formState.signatureDataUrl}
-                    onChange={(value) =>
-                      setFormState((current) => ({ ...current, signatureDataUrl: value }))
-                    }
+                    onChange={(value) => {
+                      signatureDataUrlRef.current = value;
+                      setFormState((current) => ({ ...current, signatureDataUrl: value }));
+                    }}
                   />
                 </DialogField>
               </section>

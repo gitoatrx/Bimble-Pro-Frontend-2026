@@ -479,6 +479,7 @@ function PhysicianChangeDialog({
       }
 
       setFormState(parseResponseState(response));
+      onClose();
     } catch (submitError) {
       setError(
         submitError instanceof Error
