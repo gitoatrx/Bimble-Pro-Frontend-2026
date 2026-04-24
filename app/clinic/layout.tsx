@@ -66,14 +66,12 @@ function subscribeToClinicStorage(onStoreChange: () => void) {
 function Sidebar({
   clinicSlug,
   clinicName,
-  clinicStatus,
   onboardingComplete,
   onOpenOscar,
   onLogout,
 }: {
   clinicSlug: string;
   clinicName: string;
-  clinicStatus: string;
   onboardingComplete: boolean;
   onOpenOscar: () => void;
   onLogout: () => void;
@@ -100,9 +98,6 @@ function Sidebar({
         </p>
         <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
           {clinicName || clinicSlug}
-        </p>
-        <p className="mt-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-          {clinicStatus || "Active"}
         </p>
       </div>
 
@@ -350,8 +345,7 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar
         clinicSlug={clinicSession.clinicSlug}
-        clinicName={clinicSession.clinicSlug}
-        clinicStatus="Active"
+        clinicName={clinicSession.clinicName || clinicSession.clinicSlug}
         onboardingComplete={resolvedOnboardingComplete}
         onOpenOscar={handleOpenOscar}
         onLogout={handleLogout}

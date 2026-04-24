@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Building2, CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, Eye, EyeOff, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { DoctorInviteDetailsResponse } from "@/lib/doctor/types";
@@ -24,6 +24,8 @@ export default function DoctorInviteAcceptPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPin, setShowPin] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -144,7 +146,7 @@ export default function DoctorInviteAcceptPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
             <CheckCircle2 className="h-7 w-7 text-green-600" />
           </div>
-          <h1 className="mb-2 text-xl font-bold text-foreground">You're all set!</h1>
+          <h1 className="mb-2 text-xl font-bold text-foreground">You&apos;re all set!</h1>
           <p className="mb-6 text-sm text-muted-foreground">
             Your doctor account has been created. You can now log in with your email and
             password.
@@ -250,14 +252,25 @@ export default function DoctorInviteAcceptPage() {
             <label htmlFor="password" className="text-sm font-medium text-foreground">
               Password
             </label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Min. 6 characters"
-              value={form.password}
-              onChange={set("password")}
-              required
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Min. 6 characters"
+                value={form.password}
+                onChange={set("password")}
+                required
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -281,15 +294,27 @@ export default function DoctorInviteAcceptPage() {
             <label htmlFor="pin" className="text-sm font-medium text-foreground">
               PIN
             </label>
-            <Input
-              id="pin"
-              inputMode="numeric"
-              placeholder="4-digit PIN"
-              value={form.pin}
-              onChange={set("pin")}
-              maxLength={4}
-              required
-            />
+            <div className="relative">
+              <Input
+                id="pin"
+                type={showPin ? "text" : "password"}
+                inputMode="numeric"
+                placeholder="4-digit PIN"
+                value={form.pin}
+                onChange={set("pin")}
+                maxLength={4}
+                required
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin((current) => !current)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                aria-label={showPin ? "Hide PIN" : "Show PIN"}
+              >
+                {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           {error && (

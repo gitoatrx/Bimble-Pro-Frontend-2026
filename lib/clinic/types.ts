@@ -177,6 +177,7 @@ export type ClinicLoginResponse = {
 
 export type ClinicLoginSession = {
   clinicSlug: string;
+  clinicName?: string;
   accessToken: string;
   appUrl: string;
   bootstrapUrl?: string;

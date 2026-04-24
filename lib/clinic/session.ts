@@ -99,6 +99,7 @@ function isClinicLoginSession(value: unknown): value is ClinicLoginSession {
   return (
     isRecord(value) &&
     typeof value.clinicSlug === "string" &&
+    (value.clinicName === undefined || typeof value.clinicName === "string") &&
     typeof value.accessToken === "string" &&
     (typeof value.appUrl === "string" ||
       typeof value.bootstrapUrl === "string" ||

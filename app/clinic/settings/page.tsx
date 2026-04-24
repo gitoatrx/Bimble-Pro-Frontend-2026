@@ -177,7 +177,7 @@ function SmtpSettings() {
       </div>
 
       {enabled && (
-        <div className="max-w-sm space-y-3">
+        <div className="w-full space-y-3">
           <div className="flex gap-3">
             <Input
               className="flex-1"
@@ -256,7 +256,7 @@ function CredentialsSettings() {
 
   return (
     <SettingsSection icon={KeyRound} title="Login credentials" description="Update your password and PIN">
-      <div className="max-w-sm space-y-3">
+      <div className="w-full space-y-3">
         <SecretInput
           value={fields.currentPassword}
           placeholder="Current password"
@@ -437,7 +437,7 @@ function ClinicProfileSettings() {
 
   return (
     <SettingsSection icon={User} title="Clinic profile" description="Your clinic&apos;s public-facing details">
-      <div className="max-w-sm space-y-3">
+      <div className="w-full space-y-3">
         <Input
           placeholder="Display name"
           value={fields.displayName}
@@ -480,7 +480,7 @@ function ClinicProfileSettings() {
 
 export default function SettingsPage() {
   return (
-    <div className="mx-auto max-w-2xl px-6 py-10">
+    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
       <div className="mb-8">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Configuration
