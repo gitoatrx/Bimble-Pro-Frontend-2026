@@ -1091,7 +1091,7 @@ export default function ClinicDashboardPage() {
           Clinic setup
         </p>
         <h1 className="mt-1.5 font-display text-2xl font-bold tracking-tight text-foreground">
-          {`Welcome, ${session?.clinicSlug ?? "Clinic"}`}
+          {`Welcome, ${session?.clinicName ?? session?.clinicSlug ?? "Clinic"}`}
         </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
           Complete these steps to start accepting appointments from Bimble patients.

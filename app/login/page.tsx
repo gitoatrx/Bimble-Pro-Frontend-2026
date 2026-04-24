@@ -72,6 +72,7 @@ export default function ClinicLoginPage() {
         clearClinicSessionState();
         storeClinicLoginSession({
           clinicSlug: response.clinic_slug,
+          clinicName: response.clinic_name,
           accessToken: response.access_token,
           appUrl: response.app_url,
           bootstrapUrl: response.bootstrap_url,
@@ -111,6 +112,7 @@ export default function ClinicLoginPage() {
       clearClinicSessionState();
       storeClinicLoginSession({
         clinicSlug: response.clinic_slug,
+        clinicName: response.clinic_name,
         accessToken: response.access_token,
         appUrl: response.app_url,
         bootstrapUrl: response.bootstrap_url,
