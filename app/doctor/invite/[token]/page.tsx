@@ -1,213 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { CheckCircle2, ChevronDown, Loader2, X } from "lucide-react";
+import { Building2, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import {
-  FeeScheduleServiceRecord,
-  searchFeeScheduleServicesPublic,
-} from "@/lib/api/clinic-dashboard";
-
-type ServicePickerProps = {
-  value: FeeScheduleServiceRecord[];
-  onChange: (services: FeeScheduleServiceRecord[]) => void;
-};
-
-function ServicePickerField({ value, onChange }: ServicePickerProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<FeeScheduleServiceRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    function onDocumentClick(event: MouseEvent) {
-      if (rootRef.current?.contains(event.target as Node)) {
-        return;
-      }
-
-      setOpen(false);
-    }
-
-    document.addEventListener("mousedown", onDocumentClick);
-    return () => document.removeEventListener("mousedown", onDocumentClick);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const trimmed = query.trim();
-
-    if (!open) {
-      return;
-    }
-
-    if (trimmed.length < 2) {
-      setResults([]);
-      setLoading(false);
-      setError("");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    const timer = window.setTimeout(async () => {
-      try {
-        const items = await searchFeeScheduleServicesPublic(trimmed);
-        if (cancelled) {
-          return;
-        }
-        setResults(items);
-      } catch {
-        if (!cancelled) {
-          setResults([]);
-          setError("Could not load services right now.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }, 250);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [open, query]);
-
-  function toggleService(service: FeeScheduleServiceRecord) {
-    const exists = value.some((item) => item.service_code === service.service_code);
-    const next = exists
-      ? value.filter((item) => item.service_code !== service.service_code)
-      : [...value, service];
-
-    onChange(next);
-  }
-
-  return (
-    <div ref={rootRef} className="space-y-2">
-      <div className="flex items-center justify-between gap-3">
-        <label className="text-sm font-semibold text-foreground">Services</label>
-        <span className="text-xs text-muted-foreground">{value.length} selected</span>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-background shadow-sm">
-        <div className={cn(
-          "flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition-colors",
-          open ? "ring-2 ring-primary/20" : "hover:bg-muted/40",
-        )}>
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setOpen(true)}
-            placeholder="Select services..."
-            className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
-          />
-          <ChevronDown
-            onClick={() => setOpen((current) => !current)}
-            className={`h-4 w-4 flex-shrink-0 cursor-pointer text-muted-foreground transition-transform ${
-              open ? "rotate-180" : ""
-            }`}
-          />
-        </div>
-
-        {value.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-4 pb-3">
-            {value.map((service) => (
-              <span
-                key={service.service_code}
-                className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary"
-              >
-                {service.user_friendly_service_name || service.service_name}
-                <button
-                  type="button"
-                  onClick={() => toggleService(service)}
-                  className="rounded-full p-0.5 transition-colors hover:bg-primary/10"
-                  aria-label={`Remove ${service.service_name}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {open && query.trim().length >= 2 && (
-          <div className="p-3">
-            <div className="mt-1 max-h-64 space-y-1 overflow-auto">
-              {loading && (
-                <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading services...
-                </div>
-              )}
-
-              {!loading && error && (
-                <p className="px-3 py-2 text-sm text-destructive">{error}</p>
-              )}
-
-              {!loading && !error && query.trim().length >= 2 && results.length === 0 && (
-                <p className="px-3 py-2 text-sm text-muted-foreground">No matching services found.</p>
-              )}
-
-              {!loading &&
-                !error &&
-                results.map((service) => {
-                  const checked = value.some(
-                    (item) => item.service_code === service.service_code,
-                  );
-
-                  return (
-                    <button
-                      key={service.service_code}
-                      type="button"
-                      onClick={() => toggleService(service)}
-                      className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2 text-left transition-colors ${
-                        checked
-                          ? "border-primary/30 bg-primary/5"
-                          : "border-border bg-background hover:bg-muted/40"
-                      }`}
-                    >
-                      <span
-                        className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded border ${
-                          checked
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-background"
-                        }`}
-                      >
-                        {checked && <CheckCircle2 className="h-3 w-3" />}
-                      </span>
-
-                      <span className="flex-1">
-                        <span className="block text-sm font-medium text-foreground">
-                          {service.user_friendly_service_name || service.service_name}
-                        </span>
-                        <span className="block text-xs text-muted-foreground">
-                          {service.service_code}
-                          {service.price ? ` • $${service.price}` : ""}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+import type { DoctorInviteDetailsResponse } from "@/lib/doctor/types";
 
 export default function DoctorInviteAcceptPage() {
   const params = useParams();
   const router = useRouter();
   const token = typeof params.token === "string" ? params.token : "";
 
+  const [invite, setInvite] = useState<DoctorInviteDetailsResponse | null>(null);
+  const [loadingInvite, setLoadingInvite] = useState(true);
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -215,10 +21,55 @@ export default function DoctorInviteAcceptPage() {
     confirm_password: "",
     pin: "",
   });
-  const [services, setServices] = useState<FeeScheduleServiceRecord[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadInvite() {
+      if (!token) {
+        if (active) {
+          setError("Invite token is missing.");
+          setLoadingInvite(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/v1/doctor-auth/invite/${token}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const data = (await response.json().catch(() => ({}))) as
+          | DoctorInviteDetailsResponse
+          | { message?: string };
+        if (!response.ok) {
+          const message =
+            "message" in data && typeof data.message === "string"
+              ? data.message
+              : "Failed to load invite.";
+          throw new Error(message);
+        }
+        if (!active) return;
+        setInvite(data as DoctorInviteDetailsResponse);
+      } catch (loadError) {
+        if (active) {
+          setError(loadError instanceof Error ? loadError.message : "Failed to load invite.");
+        }
+      } finally {
+        if (active) {
+          setLoadingInvite(false);
+        }
+      }
+    }
+
+    void loadInvite();
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -265,7 +116,6 @@ export default function DoctorInviteAcceptPage() {
           last_name: form.last_name.trim(),
           password: form.password,
           pin: form.pin.trim(),
-          service_codes: services.map((service) => service.service_code),
         }),
       });
 
@@ -307,6 +157,54 @@ export default function DoctorInviteAcceptPage() {
     );
   }
 
+  if (loadingInvite) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-5 py-4 text-sm text-muted-foreground shadow-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading invite…
+        </div>
+      </div>
+    );
+  }
+
+  if (invite?.existing_doctor) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+              <Building2 className="h-6 w-6 text-primary" />
+            </div>
+            <h1 className="text-xl font-bold text-foreground">Join {invite.clinic_name}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This invite belongs to an existing doctor account for {invite.email}. Sign in to join this clinic.
+            </p>
+          </div>
+
+          {invite.already_member ? (
+            <div className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+              You are already a member of this clinic. You can sign in and select it from your clinic list.
+            </div>
+          ) : null}
+
+          {error && (
+            <p className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
+          )}
+
+          <Button
+            className="w-full"
+            onClick={() => router.push(`/doctor/login?invite_token=${encodeURIComponent(token)}`)}
+          >
+            Continue to Doctor Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
@@ -316,7 +214,7 @@ export default function DoctorInviteAcceptPage() {
           </div>
           <h1 className="text-xl font-bold text-foreground">Accept clinic invite</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create your Bimble doctor account to join the clinic.
+            Create your Bimble doctor account to join {invite?.clinic_name || "the clinic"}.
           </p>
         </div>
 
@@ -393,8 +291,6 @@ export default function DoctorInviteAcceptPage() {
               required
             />
           </div>
-
-          <ServicePickerField value={services} onChange={setServices} />
 
           {error && (
             <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">

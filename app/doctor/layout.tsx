@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useMemo, useSyncExternalStore } from "react";
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  ChevronDown,
   CalendarDays,
   ClipboardList,
   ExternalLink,
@@ -24,8 +25,10 @@ import {
   getDoctorUiPreviewSessionRaw,
   isDoctorOnboardingComplete,
   readDoctorLoginSession,
+  storeDoctorLoginSession,
   suppressDoctorUiPreviewForTab,
 } from "@/lib/doctor/session";
+import { fetchDoctorClinics, type DoctorClinicListItem } from "@/lib/api/doctor-dashboard";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -98,6 +101,35 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
     if (!hydrated || !sessionRaw) return null;
     return readDoctorLoginSession() ?? getDoctorUiPreviewSession();
   }, [hydrated, sessionRaw]);
+  const [clinics, setClinics] = useState<DoctorClinicListItem[]>([]);
+  const [switchingClinic, setSwitchingClinic] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadClinics() {
+      if (!session?.accessToken) {
+        if (active) setClinics([]);
+        return;
+      }
+
+      try {
+        const items = await fetchDoctorClinics(session.accessToken);
+        if (active) {
+          setClinics(items);
+        }
+      } catch {
+        if (active) {
+          setClinics([]);
+        }
+      }
+    }
+
+    void loadClinics();
+    return () => {
+      active = false;
+    };
+  }, [session?.accessToken, session?.clinicSlug]);
 
   useEffect(() => {
     if (!hydrated || isPublic) return;
@@ -130,6 +162,55 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
     router.replace("/doctor/login");
   }
 
+  async function handleClinicSwitch(nextClinicSlug: string) {
+    if (!session?.accessToken || !nextClinicSlug || nextClinicSlug === session.clinicSlug) {
+      return;
+    }
+
+    setSwitchingClinic(true);
+    try {
+      const response = await fetch("/api/v1/doctor-auth/switch-clinic", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({ clinic_slug: nextClinicSlug }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error((data as { message?: string }).message || "Could not switch clinic.");
+      }
+
+      const payload = data as {
+        access_token: string;
+        doctor_id: number;
+        clinic_slug: string;
+        clinic_name: string;
+        app_url: string;
+        oscar_app_url?: string | null;
+        emr_launch_url?: string | null;
+      };
+
+      storeDoctorLoginSession({
+        doctorId: payload.doctor_id,
+        clinicSlug: payload.clinic_slug,
+        clinicName: payload.clinic_name,
+        accessToken: payload.access_token,
+        appUrl: payload.app_url,
+        oscarAppUrl: payload.oscar_app_url ?? undefined,
+        emrLaunchUrl: payload.emr_launch_url ?? undefined,
+      });
+      window.dispatchEvent(new StorageEvent("storage", { key: DOCTOR_LOGIN_SESSION_KEY }));
+      router.replace("/doctor/dashboard");
+      router.refresh();
+    } catch {
+      // Keep the shell stable; user can retry from the selector.
+    } finally {
+      setSwitchingClinic(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="flex min-h-screen">
@@ -158,6 +239,30 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
                 <p className="text-xs text-muted-foreground" suppressHydrationWarning>
                   {session.clinicSlug}
                 </p>
+                {clinics.length > 1 ? (
+                  <div className="mt-3">
+                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Switch clinic
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={session.clinicSlug}
+                        onChange={(event) => {
+                          void handleClinicSwitch(event.target.value);
+                        }}
+                        disabled={switchingClinic}
+                        className="w-full appearance-none rounded-xl border border-border bg-card px-3 py-2 pr-9 text-sm text-foreground outline-none transition-colors focus:border-primary"
+                      >
+                        {clinics.map((clinic) => (
+                          <option key={clinic.clinic_slug} value={clinic.clinic_slug}>
+                            {clinic.clinic_name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 

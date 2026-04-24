@@ -42,6 +42,7 @@ function isDoctorLoginSession(value: unknown): value is DoctorLoginSession {
     (typeof value.appUrl === "string" ||
       typeof value.bootstrapUrl === "string" ||
       typeof value.emrLaunchUrl === "string") &&
+    (value.oscarAppUrl === undefined || typeof value.oscarAppUrl === "string") &&
     (value.bootstrapUrl === undefined || typeof value.bootstrapUrl === "string") &&
     (value.emrLaunchUrl === undefined || typeof value.emrLaunchUrl === "string") &&
     (value.expiresAt === undefined || typeof value.expiresAt === "string")

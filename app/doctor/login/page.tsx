@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Building2, ChevronRight, Stethoscope } from "lucide-react";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { ClinicCredentialsCard } from "@/components/clinic-access/clinic-credentials-card";
@@ -17,9 +17,12 @@ import {
   isDoctorOnboardingComplete,
 } from "@/lib/doctor/session";
 import type {
+  DoctorAcceptExistingInviteResponse,
   DoctorClinicOption,
+  DoctorInviteDetailsResponse,
   DoctorLoginFormData,
   DoctorLoginStep1Response,
+  DoctorSelectClinicResponse,
 } from "@/lib/doctor/types";
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -83,6 +86,50 @@ async function submitDoctorSelectClinic(selectionToken: string, clinicSlug: stri
   return res.json();
 }
 
+async function fetchDoctorInviteDetails(inviteToken: string) {
+  const res = await fetch(`/api/v1/doctor-auth/invite/${inviteToken}`, {
+    method: "GET",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message ?? "Could not load invite details.");
+  }
+  return (await res.json()) as DoctorInviteDetailsResponse;
+}
+
+async function acceptDoctorExistingInvite(accessToken: string, inviteToken: string) {
+  const res = await fetch("/api/v1/doctor-auth/invite-accept-existing", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ invite_token: inviteToken }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message ?? "Could not join clinic.");
+  }
+  return (await res.json()) as DoctorAcceptExistingInviteResponse;
+}
+
+async function switchDoctorClinic(accessToken: string, clinicSlug: string) {
+  const res = await fetch("/api/v1/doctor-auth/switch-clinic", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ clinic_slug: clinicSlug }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message ?? "Could not switch clinic.");
+  }
+  return (await res.json()) as DoctorSelectClinicResponse;
+}
+
 // ── Clinic picker ─────────────────────────────────────────────────
 
 function ClinicPicker({
@@ -130,6 +177,8 @@ function ClinicPicker({
 
 export default function DoctorLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get("invite_token")?.trim() ?? "";
 
   const [step, setStep] = useState<LoginStep>("credentials");
   const [formData, setFormData] = useState<DoctorLoginFormData>(emptyForm);
@@ -147,6 +196,47 @@ export default function DoctorLoginPage() {
   const [clinicOptions, setClinicOptions] = useState<DoctorClinicOption[]>([]);
   const [selectingClinic, setSelectingClinic] = useState<string | null>(null);
   const [clinicSelectError, setClinicSelectError] = useState("");
+  const [inviteNotice, setInviteNotice] = useState("");
+
+  async function finalizeDoctorSession(
+    response: {
+      access_token: string;
+      doctor_id: number;
+      clinic_slug: string;
+      clinic_name: string;
+      app_url: string;
+      oscar_app_url?: string | null;
+      emr_launch_url?: string | null;
+    },
+    options: { inviteToken?: string } = {},
+  ) {
+    let finalResponse = response;
+
+    if (options.inviteToken) {
+      const invite = await fetchDoctorInviteDetails(options.inviteToken);
+      if (!invite.already_member) {
+        await acceptDoctorExistingInvite(response.access_token, options.inviteToken);
+      }
+      finalResponse = await switchDoctorClinic(response.access_token, invite.clinic_slug);
+      setInviteNotice(`You have joined ${invite.clinic_name}.`);
+    }
+
+    storeDoctorLoginSession({
+      doctorId: finalResponse.doctor_id,
+      clinicSlug: finalResponse.clinic_slug,
+      clinicName: finalResponse.clinic_name,
+      accessToken: finalResponse.access_token,
+      appUrl: finalResponse.app_url,
+      oscarAppUrl: finalResponse.oscar_app_url ?? undefined,
+      emrLaunchUrl: finalResponse.emr_launch_url ?? undefined,
+    });
+
+    router.replace(
+      isDoctorOnboardingComplete(finalResponse.doctor_id)
+        ? "/doctor/dashboard"
+        : "/doctor/onboarding",
+    );
+  }
 
   function updateField(field: keyof DoctorLoginFormData, value: string) {
     setFormData((f) => ({ ...f, [field]: value }));
@@ -193,17 +283,17 @@ export default function DoctorLoginPage() {
           );
         }
 
-        storeDoctorLoginSession({
-          doctorId: response.doctor_id,
-          clinicSlug: response.clinic_slug,
-          clinicName: response.clinic_name,
-          accessToken: response.access_token,
-          appUrl: response.app_url,
-        });
-        router.replace(
-          isDoctorOnboardingComplete(response.doctor_id)
-            ? "/doctor/dashboard"
-            : "/doctor/onboarding",
+        await finalizeDoctorSession(
+          {
+            access_token: response.access_token,
+            doctor_id: response.doctor_id,
+            clinic_slug: response.clinic_slug,
+            clinic_name: response.clinic_name,
+            app_url: response.app_url,
+            oscar_app_url: response.oscar_app_url,
+            emr_launch_url: response.emr_launch_url,
+          },
+          { inviteToken },
         );
         return;
       }
@@ -237,17 +327,17 @@ export default function DoctorLoginPage() {
         setStep("clinic_select");
       } else {
         // Single clinic: session ready
-        storeDoctorLoginSession({
-          doctorId: response.doctor_id,
-          clinicSlug: response.clinic_slug,
-          clinicName: response.clinic_name,
-          accessToken: response.access_token,
-          appUrl: response.app_url,
-        });
-        router.replace(
-          isDoctorOnboardingComplete(response.doctor_id)
-            ? "/doctor/dashboard"
-            : "/doctor/onboarding",
+        await finalizeDoctorSession(
+          {
+            access_token: response.access_token,
+            doctor_id: response.doctor_id,
+            clinic_slug: response.clinic_slug,
+            clinic_name: response.clinic_name,
+            app_url: response.app_url,
+            oscar_app_url: response.oscar_app_url,
+            emr_launch_url: response.emr_launch_url,
+          },
+          { inviteToken },
         );
       }
     } catch (error) {
@@ -280,17 +370,17 @@ export default function DoctorLoginPage() {
       const selToken = sessionStorage.getItem("bimble:doctor:selection-token") ?? "";
       const response = await submitDoctorSelectClinic(selToken, clinicSlug);
       clearDoctorSelectionToken();
-      storeDoctorLoginSession({
-        doctorId: response.doctor_id,
-        clinicSlug: response.clinic_slug,
-        clinicName: response.clinic_name,
-        accessToken: response.access_token,
-        appUrl: response.app_url,
-      });
-      router.replace(
-        isDoctorOnboardingComplete(response.doctor_id)
-          ? "/doctor/dashboard"
-          : "/doctor/onboarding",
+      await finalizeDoctorSession(
+        {
+          access_token: response.access_token,
+          doctor_id: response.doctor_id,
+          clinic_slug: response.clinic_slug,
+          clinic_name: response.clinic_name,
+          app_url: response.app_url,
+          oscar_app_url: response.oscar_app_url,
+          emr_launch_url: response.emr_launch_url,
+        },
+        { inviteToken },
       );
     } catch (error) {
       setClinicSelectError(error instanceof Error ? error.message : "Could not select clinic.");
@@ -341,9 +431,21 @@ export default function DoctorLoginPage() {
             </p>
           </div>
 
+          {inviteToken && (
+            <div className="mb-4 max-w-xl rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
+              Sign in to join the invited clinic and add it to your doctor account.
+            </div>
+          )}
+
           {credentialsNotice && (
             <div className="mb-4 max-w-xl rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
               {credentialsNotice}
+            </div>
+          )}
+
+          {inviteNotice && (
+            <div className="mb-4 max-w-xl rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+              {inviteNotice}
             </div>
           )}
 

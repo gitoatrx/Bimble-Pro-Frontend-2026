@@ -18,6 +18,8 @@ export type DoctorLoginStep1Response = {
   clinic_slug?: string;
   clinic_name?: string;
   app_url?: string;
+  oscar_app_url?: string;
+  emr_launch_url?: string;
   clinics?: DoctorClinicOption[];
   selection_token?: string;
 };
@@ -39,6 +41,9 @@ export type DoctorClinicOption = {
   clinic_slug: string;
   clinic_name: string;
   app_url: string;
+  oscar_app_url?: string | null;
+  emr_launch_url?: string | null;
+  current?: boolean;
 };
 
 // POST /api/v1/doctor-auth/verify-otp — response
@@ -58,6 +63,8 @@ export type DoctorOtpVerifyResponse =
       clinic_slug: string;
       clinic_name: string;
       app_url: string;
+      oscar_app_url?: string | null;
+      emr_launch_url?: string | null;
       message: string;
     };
 
@@ -75,7 +82,28 @@ export type DoctorSelectClinicResponse = {
   clinic_slug: string;
   clinic_name: string;
   app_url: string;
+  oscar_app_url?: string | null;
+  emr_launch_url?: string | null;
   message: string;
+};
+
+export type DoctorInviteDetailsResponse = {
+  invite_token: string;
+  clinic_slug: string;
+  clinic_name: string;
+  email: string;
+  status: string;
+  expires_at: string;
+  existing_doctor: boolean;
+  requires_login: boolean;
+  requires_registration: boolean;
+  already_member: boolean;
+};
+
+export type DoctorAcceptExistingInviteResponse = {
+  message: string;
+  clinic_slug: string;
+  clinic_name: string;
 };
 
 // Persisted after full login
@@ -85,6 +113,7 @@ export type DoctorLoginSession = {
   clinicName: string;
   accessToken: string;
   appUrl: string;
+  oscarAppUrl?: string;
   bootstrapUrl?: string;
   emrLaunchUrl?: string;
   expiresAt?: string;

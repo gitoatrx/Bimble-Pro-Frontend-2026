@@ -33,7 +33,23 @@ export type DoctorSummary = {
   specialty: string | null;
   status: string;
   app_url: string;
+  available_clinics?: Array<{
+    clinic_id: number;
+    clinic_slug: string;
+    clinic_name: string;
+    current: boolean;
+  }>;
   today?: DoctorMeTodayStats;
+};
+
+export type DoctorClinicListItem = {
+  clinic_id: number;
+  clinic_slug: string;
+  clinic_name: string;
+  current: boolean;
+  app_url?: string | null;
+  oscar_app_url?: string | null;
+  emr_launch_url?: string | null;
 };
 
 export type DoctorAppointment = {
@@ -145,6 +161,13 @@ export type DoctorOscarLaunch = {
 export async function fetchDoctorSummary(accessToken: string) {
   return apiRequest<DoctorSummary>({
     endpoint: API_ENDPOINTS.doctorMe,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchDoctorClinics(accessToken: string) {
+  return apiRequest<DoctorClinicListItem[]>({
+    endpoint: API_ENDPOINTS.doctorMeClinics,
     headers: authHeaders(accessToken),
   });
 }
