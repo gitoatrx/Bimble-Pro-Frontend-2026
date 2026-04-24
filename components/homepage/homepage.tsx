@@ -105,6 +105,7 @@ export function Homepage() {
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const locationInputRef = useRef<HTMLInputElement>(null);
   const [serviceOptions, setServiceOptions] = useState<AvailableServiceRecord[]>([]);
+  const [locationResolved, setLocationResolved] = useState(false);
 
   const requestCurrentLocation = useCallback(() => {
     if (typeof window === "undefined" || !navigator.geolocation) return;
@@ -118,16 +119,18 @@ export function Homepage() {
           );
           if (response.location) {
             setLocationQuery(response.location);
+            setLocationResolved(true);
           } else {
-            setLocationQuery("Vancouver, BC");
+            setLocationResolved(false);
           }
         } catch {
-          setLocationQuery("Vancouver, BC");
+          setLocationResolved(false);
         }
         setGeoStatus("done");
       },
       () => {
         setGeoStatus("denied");
+        setLocationResolved(false);
       },
       {
         timeout: 10000,
@@ -275,6 +278,7 @@ export function Homepage() {
 
   const handleSelectCity = useCallback((city: string) => {
     setLocationQuery(city + ", BC");
+    setLocationResolved(true);
     setShowCitySuggestions(false);
   }, []);
 
@@ -401,7 +405,11 @@ export function Homepage() {
                   ref={locationInputRef}
                   type="text"
                   value={locationQuery}
-                  onChange={(e) => { setLocationQuery(e.target.value); setShowCitySuggestions(true); }}
+                  onChange={(e) => {
+                    setLocationQuery(e.target.value);
+                    setLocationResolved(false);
+                    setShowCitySuggestions(true);
+                  }}
                   onFocus={() => setShowCitySuggestions(true)}
                   onBlur={() => setTimeout(() => setShowCitySuggestions(false), 150)}
                   placeholder={geoStatus === "loading" ? "Detecting location…" : "City in BC"}
@@ -445,7 +453,9 @@ export function Homepage() {
                   const resolvedServiceId = selectedServiceId ?? resolveServiceId(careQuery);
                   if (careQuery.trim()) params.set("reason", careQuery.trim());
                   if (resolvedServiceId) params.set("serviceId", String(resolvedServiceId));
-                  if (locationQuery.trim()) params.set("location", locationQuery.trim());
+                  if (locationQuery.trim() && (locationResolved || geoStatus !== "done")) {
+                    params.set("location", locationQuery.trim());
+                  }
                   const q = params.toString();
                   router.push(q ? `/patient/onboarding?${q}` : "/patient/onboarding");
                 }}

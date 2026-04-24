@@ -136,8 +136,8 @@ export function PatientOnboardingWizard() {
     return {
       ...baseDraft,
       serviceId: baseDraft.serviceId ?? (Number.isFinite(serviceId) ? serviceId : null),
-      careReason: baseDraft.careReason || reason,
-      careLocation: baseDraft.careLocation || location,
+      careReason: reason || baseDraft.careReason,
+      careLocation: location || baseDraft.careLocation,
     };
   });
   const [otpCode, setOtpCode] = useState("");
