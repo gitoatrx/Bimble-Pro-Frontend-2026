@@ -29,6 +29,11 @@ export const API_ENDPOINTS = {
   clinicSetupStartAcceptingAppointments: "/api/v1/clinics/setup/start-accepting-appointments",
   clinicMeSettingsCredentials: "/api/v1/clinics/me/settings/credentials",
   clinicMeTeleplanHlth2820: "/api/v1/clinics/me/teleplan-forms/hlth-2820",
+  clinicMePaymentHlth2876: "/api/v1/clinics/me/payment-forms/hlth-2876",
+  clinicMePhysicianChangeInformation:
+    "/api/v1/clinics/me/settings-forms/physician-change-information",
+  clinicMeReportDeliveryHl7HealthCareProviderSetup:
+    "/api/v1/clinics/me/report-delivery-forms/hl7-health-care-provider-setup",
   doctorInviteDetails: "/api/v1/doctor-auth/invite",
   doctorMe: "/api/v1/doctors/me",
   doctorMeClinics: "/api/v1/doctors/me/clinics",
@@ -48,6 +53,8 @@ export const API_ENDPOINTS = {
   doctorMeOnboardingHlth2832: "/api/v1/doctors/me/onboarding/payment-forms/hlth-2832",
   doctorMeOnboardingTeleplanHlth2820: "/api/v1/doctors/me/onboarding/teleplan-forms/hlth-2820",
   doctorMeOnboardingEnrolmentHlth2991: "/api/v1/doctors/me/onboarding/enrolment-forms/hlth-2991",
+  doctorMeSettingsDuplicatePrescriptionPadOrder:
+    "/api/v1/doctors/me/onboarding/settings-forms/duplicate-prescription-pad-order",
   servicesCatalog: "/api/v1/services",
   mspFeeScheduleSearch: "/api/v1/services/msp-fee-schedule/search",
   mspFeeScheduleSelection: "/api/v1/services/msp-fee-schedule/selection",

@@ -236,9 +236,6 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
                 <p className="mt-1 text-sm font-semibold text-foreground" suppressHydrationWarning>
                   {session.clinicName}
                 </p>
-                <p className="text-xs text-muted-foreground" suppressHydrationWarning>
-                  {session.clinicSlug}
-                </p>
                 {clinics.length > 1 ? (
                   <div className="mt-3">
                     <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">

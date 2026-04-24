@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   CalendarDays,
@@ -12,7 +12,6 @@ import {
   HeartPulse,
   MapPin,
   Package,
-  Phone,
   Pill,
   Sparkles,
   Truck,
@@ -27,10 +26,8 @@ import type {
   PatientFulfillment,
   PatientOnboardingDraft,
   PatientOnboardingStep,
-  PatientPharmacyChoice,
   PatientVisitType,
 } from "@/lib/patient/types";
-import { initialPatientOnboardingDraft } from "@/lib/patient/types";
 import {
   clearDemoPatientOtp,
   clearPatientOnboardingSession,
@@ -108,26 +105,23 @@ function stepLabel(step: PatientOnboardingStep): string {
 
 export function PatientOnboardingWizard() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [step, setStep] = useState<PatientOnboardingStep>("phone");
-  const [draft, setDraft] = useState<PatientOnboardingDraft>(initialPatientOnboardingDraft);
-  const [hydrated, setHydrated] = useState(false);
+  const hydrated = useSyncExternalStore(() => () => {}, () => true, () => false);
+  const [step, setStep] = useState<PatientOnboardingStep>(() => readPatientOnboardingStep());
+  const [draft, setDraft] = useState<PatientOnboardingDraft>(() => {
+    const baseDraft = readPatientOnboardingDraft();
+    if (typeof window === "undefined") return baseDraft;
+
+    const params = new URLSearchParams(window.location.search);
+    const reason = params.get("reason")?.trim() ?? "";
+    const location = params.get("location")?.trim() ?? "";
+    return {
+      ...baseDraft,
+      careReason: baseDraft.careReason || reason,
+      careLocation: baseDraft.careLocation || location,
+    };
+  });
   const [otpCode, setOtpCode] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const d = readPatientOnboardingDraft();
-    const s = readPatientOnboardingStep();
-    const reason = searchParams.get("reason")?.trim() ?? "";
-    const location = searchParams.get("location")?.trim() ?? "";
-    setDraft({
-      ...d,
-      careReason: d.careReason || reason,
-      careLocation: d.careLocation || location,
-    });
-    setStep(s);
-    setHydrated(true);
-  }, [searchParams]);
 
   const persist = useCallback((nextDraft: PatientOnboardingDraft, nextStep: PatientOnboardingStep) => {
     writePatientOnboardingDraft(nextDraft);
@@ -299,18 +293,6 @@ export function PatientOnboardingWizard() {
       {step === "phone" && (
         <div className="space-y-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5">
-              <Phone className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs font-semibold text-primary">Mobile number</span>
-            </div>
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              How can we reach you?
-            </h1>
-            <p className="text-sm leading-6 text-muted-foreground">
-              We&apos;ll send a one-time code to verify your number before booking.
-            </p>
-          </div>
-          <div className="space-y-2">
             <label htmlFor="pt-phone" className="text-sm font-medium text-foreground">
               Phone number
             </label>
@@ -336,11 +318,6 @@ export function PatientOnboardingWizard() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            After you continue, use verification code{" "}
-            <span className="font-mono font-semibold text-foreground">{PATIENT_PREVIEW_OTP}</span>{" "}
-            (preview until SMS is connected).
-          </p>
         </div>
       )}
 

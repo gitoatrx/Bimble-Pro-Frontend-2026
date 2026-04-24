@@ -115,7 +115,11 @@ function validateForm(form: DoctorHlth2820FormState, signatureDataUrl: string) {
   return errors;
 }
 
-export function DoctorHlth2820Editor() {
+export function DoctorHlth2820Editor({
+  onSaved,
+}: {
+  onSaved?: () => void;
+} = {}) {
   const [form, setForm] = useState(initialFormState);
   const [signatureDataUrl, setSignatureDataUrl] = useState("");
   const [errors, setErrors] = useState<FieldErrorState<keyof DoctorHlth2820FormState | "signature">>({});
@@ -251,6 +255,7 @@ export function DoctorHlth2820Editor() {
       }
 
       setSaved(true);
+      onSaved?.();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Could not save the HLTH 2820 form.");
     } finally {

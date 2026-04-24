@@ -9,6 +9,7 @@ import {
   RefreshCcw,
 } from "lucide-react";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
+import { DoctorHlth2820Editor } from "@/components/doctor/doctor-hlth2820-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -40,7 +41,7 @@ import {
   type DoctorHlth2991UiContent,
 } from "@/lib/api/doctor-onboarding";
 
-type OnboardingStage = "hlth_2870" | "hlth_2950" | "hlth_2832" | "hlth_2991" | "complete";
+type OnboardingStage = "hlth_2870" | "hlth_2950" | "hlth_2832" | "hlth_2991" | "hlth_2820" | "complete";
 
 type DoctorHlth2870FormState = Omit<DoctorHlth2870Request, "signature"> & {
   signature_label: string;
@@ -988,6 +989,14 @@ export function DoctorOnboardingWizard() {
     setStep4SubmitError("");
   }
 
+  function completeOnboarding() {
+    setStage("complete");
+    if (doctorId) {
+      clearDoctorOnboardingStage(doctorId);
+      markDoctorOnboardingComplete(doctorId);
+    }
+  }
+
   async function handleSubmitStep1() {
     if (step1SignatureExportPromiseRef.current) {
       await step1SignatureExportPromiseRef.current;
@@ -1282,10 +1291,9 @@ export function DoctorOnboardingWizard() {
         );
       }
 
-      setStage("complete");
+      setStage("hlth_2820");
       if (doctorId) {
-        clearDoctorOnboardingStage(doctorId);
-        markDoctorOnboardingComplete(doctorId);
+        storeDoctorOnboardingStage(doctorId, "hlth_2820");
       }
     } catch (error) {
       setStep4SubmitError(error instanceof Error ? error.message : "Could not save the onboarding form.");
@@ -1325,6 +1333,37 @@ export function DoctorOnboardingWizard() {
     );
   }
 
+  const onboardingStepNumber =
+    stage === "hlth_2870"
+      ? 1
+      : stage === "hlth_2950"
+        ? 2
+        : stage === "hlth_2832"
+          ? 3
+          : stage === "hlth_2991"
+            ? 4
+            : 5;
+  const onboardingStepLabel =
+    stage === "hlth_2870"
+      ? "HLTH 2870"
+      : stage === "hlth_2950"
+        ? "HLTH 2950"
+        : stage === "hlth_2832"
+          ? "HLTH 2832"
+          : stage === "hlth_2991"
+            ? "HLTH 2991"
+            : "HLTH 2820";
+  const onboardingProgressWidth =
+    stage === "hlth_2870"
+      ? "20%"
+      : stage === "hlth_2950"
+        ? "40%"
+        : stage === "hlth_2832"
+          ? "60%"
+          : stage === "hlth_2991"
+            ? "80%"
+            : "100%";
+
   return (
     <DoctorPageShell>
       <DoctorSection>
@@ -1338,39 +1377,18 @@ export function DoctorOnboardingWizard() {
             <span>
               Step
               {" "}
-              {stage === "hlth_2870"
-                ? "1"
-                : stage === "hlth_2950"
-                  ? "2"
-                  : stage === "hlth_2832"
-                    ? "3"
-                    : "4"}
+              {onboardingStepNumber}
               {" "}
-              of 4
+              of 5
             </span>
             <span>
-              {stage === "hlth_2870"
-                ? "HLTH 2870"
-                : stage === "hlth_2950"
-                  ? "HLTH 2950"
-                : stage === "hlth_2832"
-                  ? "HLTH 2832"
-                    : "HLTH 2991"}
+              {onboardingStepLabel}
             </span>
           </div>
           <div className="h-1.5 rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-all duration-300"
-              style={{
-                width:
-                  stage === "hlth_2870"
-                    ? "25%"
-                    : stage === "hlth_2950"
-                      ? "50%"
-                      : stage === "hlth_2832"
-                        ? "75%"
-                        : "100%",
-              }}
+              style={{ width: onboardingProgressWidth }}
             />
           </div>
         </div>
@@ -2152,7 +2170,7 @@ export function DoctorOnboardingWizard() {
               </div>
             </form>
           </div>
-        ) : (
+        ) : stage === "hlth_2991" ? (
           <div className="space-y-6">
             <form
               className="space-y-6"
@@ -2857,7 +2875,22 @@ export function DoctorOnboardingWizard() {
               </div>
             </form>
           </div>
-        )}
+        ) : stage === "hlth_2820" ? (
+          <div className="space-y-6">
+            <DoctorHlth2820Editor onSaved={completeOnboarding} />
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 sm:min-w-32"
+                onClick={() => setStage("hlth_2991")}
+              >
+                <ArrowRight className="h-4 w-4 rotate-180" />
+                Back
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </DoctorSection>
     </DoctorPageShell>
   );

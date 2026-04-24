@@ -188,6 +188,291 @@ export type ClinicTeleplan2820Response = {
   ui_content: null;
 };
 
+export type ClinicPayment2876Modality = "CONTRACT" | "SESSIONAL" | "SALARY";
+
+export type ClinicPayment2876UiContent = {
+  field_labels: Record<string, string>;
+  payment_modality_options: Array<{
+    value: ClinicPayment2876Modality;
+    label: string;
+  }>;
+  notes?: string[];
+};
+
+export type ClinicPayment2876SavedValues = {
+  mspPractitionerNumber?: string | null;
+  currentFullNameOrGroupName?: string | null;
+  currentMspPaymentNumbers?: string[] | null;
+  currentPaymentMailingAddress?: string | null;
+  contractName?: string | null;
+  paymentModality?: ClinicPayment2876Modality | null;
+  dataCentreNumber?: string | null;
+  effectiveDate?: string | null;
+  responsiblePractitionerMspNumber?: string | null;
+  responsiblePractitionerName?: string | null;
+  telephoneNumber?: string | null;
+  faxNumber?: string | null;
+  emailAddress?: string | null;
+  serviceDescription?: string | null;
+  encounterReportingOnly?: boolean | null;
+  signature?: ClinicFacilityFormSignature | null;
+};
+
+export type ClinicPayment2876Request = {
+  mspPractitionerNumber: string;
+  currentFullNameOrGroupName: string;
+  currentMspPaymentNumbers: string[];
+  currentPaymentMailingAddress: string;
+  contractName: string;
+  paymentModality: ClinicPayment2876Modality;
+  dataCentreNumber: string;
+  effectiveDate: string;
+  responsiblePractitionerMspNumber: string;
+  responsiblePractitionerName: string;
+  telephoneNumber: string;
+  faxNumber: string;
+  emailAddress: string;
+  serviceDescription: string;
+  encounterReportingOnly: boolean;
+  signature: ClinicFacilityFormSignature;
+};
+
+export type ClinicPayment2876Response = {
+  form_code: string;
+  title: string;
+  saved_at: string;
+  field_values: Record<string, unknown>;
+  saved_values: ClinicPayment2876SavedValues;
+  missing_fields: string[];
+  pdf_name: string | null;
+  download_url: string | null;
+  ui_content: ClinicPayment2876UiContent;
+};
+
+export type ClinicPhysicianChangeOfficeHourSlot = {
+  from: string;
+  to: string;
+  lunchFrom: string;
+  lunchTo: string;
+};
+
+export type ClinicPhysicianChangeOfficeHours = {
+  sunday: ClinicPhysicianChangeOfficeHourSlot;
+  monday: ClinicPhysicianChangeOfficeHourSlot;
+  tuesday: ClinicPhysicianChangeOfficeHourSlot;
+  wednesday: ClinicPhysicianChangeOfficeHourSlot;
+  thursday: ClinicPhysicianChangeOfficeHourSlot;
+  friday: ClinicPhysicianChangeOfficeHourSlot;
+  saturday: ClinicPhysicianChangeOfficeHourSlot;
+};
+
+export type ClinicPhysicianChangeInformationSavedValues = {
+  formType?: string | null;
+  name?: string | null;
+  mohBillingNumber?: string | null;
+  address?: string | null;
+  specialty?: string | null;
+  officeContactName?: string | null;
+  officePhone?: string | null;
+  officeFax?: string | null;
+  officePrivatePhone?: string | null;
+  officeEmailAddress?: string | null;
+  officeHours?: Partial<ClinicPhysicianChangeOfficeHours> | null;
+  afterHoursPhone?: string | null;
+  afterHoursDescription?: string | null;
+  afterHoursBeeper?: string | null;
+  afterHoursCellPhone?: string | null;
+  afterHoursHomePhone?: string | null;
+  backupPhysicianNumber?: string | null;
+  backupName?: string | null;
+  backupPhone?: string | null;
+  hospitalAffiliation?: string | null;
+  hospitalPhone?: string | null;
+  otherAffiliation?: string | null;
+  otherPhone?: string | null;
+  specialHandling?: string | null;
+};
+
+export type ClinicPhysicianChangeInformationRequest = {
+  formType: string;
+  name: string;
+  mohBillingNumber: string;
+  address: string;
+  specialty: string;
+  officeContactName: string;
+  officePhone: string;
+  officeFax: string;
+  officePrivatePhone: string;
+  officeEmailAddress: string;
+  officeHours: ClinicPhysicianChangeOfficeHours;
+  afterHoursPhone: string;
+  afterHoursDescription: string;
+  afterHoursBeeper: string;
+  afterHoursCellPhone: string;
+  afterHoursHomePhone: string;
+  backupPhysicianNumber: string;
+  backupName: string;
+  backupPhone: string;
+  hospitalAffiliation: string;
+  hospitalPhone: string;
+  otherAffiliation: string;
+  otherPhone: string;
+  specialHandling: string;
+};
+
+export type ClinicPhysicianChangeInformationResponse = {
+  form_code: string;
+  title: string;
+  saved_at: string;
+  field_values: Record<string, unknown>;
+  saved_values: ClinicPhysicianChangeInformationSavedValues;
+  missing_fields: string[];
+  pdf_name: string | null;
+  download_url: string | null;
+  ui_content: null;
+};
+
+export type ClinicExcellerisDeliveryMethod = "LAUNCHPAD" | "EMR" | "FAX";
+
+export type ClinicExcellerisAcknowledgement = {
+  id: string;
+  summary_text: string;
+  full_text: string;
+};
+
+export type ClinicExcellerisUiContent = {
+  field_labels: Record<string, string>;
+  delivery_method_options: Array<{
+    value: ClinicExcellerisDeliveryMethod;
+    label: string;
+    summary_text: string;
+  }>;
+  acknowledgements: ClinicExcellerisAcknowledgement[];
+  consent_label: string;
+  consent_required: boolean;
+};
+
+export type ClinicExcellerisSavedValues = {
+  providerName?: string | null;
+  mspNumber?: string | null;
+  clinicNameAndAddress?: string | null;
+  dateSigned?: string | null;
+  telephoneNumber?: string | null;
+  emailAddress?: string | null;
+  faxNumber?: string | null;
+  deliveryMethod?: ClinicExcellerisDeliveryMethod | null;
+  launchpadUserNames?: string[] | null;
+  emrName?: string | null;
+  emrFaxNumber?: string | null;
+  reportFaxNumber?: string | null;
+  confirmAcknowledgement?: boolean | null;
+  signature?: ClinicFacilityFormSignature | null;
+};
+
+export type ClinicExcellerisRequest = {
+  providerName: string;
+  mspNumber: string;
+  clinicNameAndAddress: string;
+  dateSigned: string;
+  telephoneNumber: string;
+  emailAddress: string;
+  faxNumber: string;
+  deliveryMethod: ClinicExcellerisDeliveryMethod;
+  launchpadUserNames: string[];
+  emrName: string | null;
+  emrFaxNumber: string | null;
+  reportFaxNumber: string | null;
+  confirmAcknowledgement: boolean;
+  signature: ClinicFacilityFormSignature;
+};
+
+export type ClinicExcellerisResponse = {
+  form_code: string;
+  title: string;
+  saved_at: string;
+  field_values: Record<string, unknown>;
+  saved_values: ClinicExcellerisSavedValues;
+  missing_fields: string[];
+  confirm_acknowledgement: boolean;
+  pdf_name: string | null;
+  download_url: string | null;
+  ui_content: ClinicExcellerisUiContent;
+};
+
+export type ClinicHl7SetupInstruction = "NEW" | "ADD_EXISTING";
+export type ClinicHl7SupportedContentType =
+  | "TRANSCRIPTIONS"
+  | "NOTIFICATIONS"
+  | "PDF_REPORTS"
+  | "RTF_REPORTS"
+  | "VIHA_DIAGNOSTIC_IMAGING"
+  | "VIHA_CLINICAL_DOCUMENTS"
+  | "BCCA_SCREENING";
+
+export type ClinicHl7HealthCareProviderSetupUiContent = {
+  field_labels: Record<string, string>;
+  setup_instruction_options: Array<{
+    value: ClinicHl7SetupInstruction;
+    label: string;
+  }>;
+  supported_content_options: Array<{
+    value: ClinicHl7SupportedContentType;
+    label: string;
+  }>;
+};
+
+export type ClinicHl7HealthCareProviderSetupSavedValues = {
+  clinicName?: string | null;
+  primaryContact?: string | null;
+  address?: string | null;
+  telephoneNumber?: string | null;
+  email?: string | null;
+  setupInstruction?: ClinicHl7SetupInstruction | null;
+  existingExcellerisUserId?: string | null;
+  additionalSpecialInstructions?: string | null;
+  providerNamesAndMspNumbers?: string | null;
+  emrName?: string | null;
+  emrVersion?: string | null;
+  emrContact?: string | null;
+  emrTelephoneNumber?: string | null;
+  emrEmail?: string | null;
+  implementationDate?: string | null;
+  supportedContentTypes?: ClinicHl7SupportedContentType[] | null;
+  fallbackFaxNumber?: string | null;
+};
+
+export type ClinicHl7HealthCareProviderSetupRequest = {
+  clinicName: string;
+  primaryContact: string;
+  address: string;
+  telephoneNumber: string;
+  email: string;
+  setupInstruction: ClinicHl7SetupInstruction;
+  existingExcellerisUserId: string | null;
+  additionalSpecialInstructions: string;
+  providerNamesAndMspNumbers: string;
+  emrName: string;
+  emrVersion: string;
+  emrContact: string;
+  emrTelephoneNumber: string;
+  emrEmail: string;
+  implementationDate: string;
+  supportedContentTypes: ClinicHl7SupportedContentType[];
+  fallbackFaxNumber: string;
+};
+
+export type ClinicHl7HealthCareProviderSetupResponse = {
+  form_code: string;
+  title: string;
+  saved_at: string;
+  field_values: Record<string, unknown>;
+  saved_values: ClinicHl7HealthCareProviderSetupSavedValues;
+  missing_fields: string[];
+  pdf_name: string | null;
+  download_url: string | null;
+  ui_content: ClinicHl7HealthCareProviderSetupUiContent;
+};
+
 export type AvailableServiceRecord = {
   service_id: number;
   service_code: string;
@@ -809,6 +1094,88 @@ export async function submitClinicTeleplan2820Form(
 ) {
   return apiRequest<ClinicTeleplan2820Response, ClinicTeleplan2820Request>({
     endpoint: API_ENDPOINTS.clinicMeTeleplanHlth2820,
+    method: "POST",
+    body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicPayment2876Form(accessToken: string) {
+  return apiRequest<ClinicPayment2876Response>({
+    endpoint: API_ENDPOINTS.clinicMePaymentHlth2876,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function submitClinicPayment2876Form(
+  accessToken: string,
+  payload: ClinicPayment2876Request,
+) {
+  return apiRequest<ClinicPayment2876Response, ClinicPayment2876Request>({
+    endpoint: API_ENDPOINTS.clinicMePaymentHlth2876,
+    method: "POST",
+    body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicPhysicianChangeInformationForm(accessToken: string) {
+  return apiRequest<ClinicPhysicianChangeInformationResponse>({
+    endpoint: API_ENDPOINTS.clinicMePhysicianChangeInformation,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function submitClinicPhysicianChangeInformationForm(
+  accessToken: string,
+  payload: ClinicPhysicianChangeInformationRequest,
+) {
+  return apiRequest<
+    ClinicPhysicianChangeInformationResponse,
+    ClinicPhysicianChangeInformationRequest
+  >({
+    endpoint: API_ENDPOINTS.clinicMePhysicianChangeInformation,
+    method: "POST",
+    body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicExcellerisAcceptableUseForm(accessToken: string) {
+  return apiRequest<ClinicExcellerisResponse>({
+    endpoint: "/api/v1/clinics/me/report-delivery-forms/excelleris-acceptable-use",
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function submitClinicExcellerisAcceptableUseForm(
+  accessToken: string,
+  payload: ClinicExcellerisRequest,
+) {
+  return apiRequest<ClinicExcellerisResponse, ClinicExcellerisRequest>({
+    endpoint: "/api/v1/clinics/me/report-delivery-forms/excelleris-acceptable-use",
+    method: "POST",
+    body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicHl7HealthCareProviderSetupForm(accessToken: string) {
+  return apiRequest<ClinicHl7HealthCareProviderSetupResponse>({
+    endpoint: API_ENDPOINTS.clinicMeReportDeliveryHl7HealthCareProviderSetup,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function submitClinicHl7HealthCareProviderSetupForm(
+  accessToken: string,
+  payload: ClinicHl7HealthCareProviderSetupRequest,
+) {
+  return apiRequest<
+    ClinicHl7HealthCareProviderSetupResponse,
+    ClinicHl7HealthCareProviderSetupRequest
+  >({
+    endpoint: API_ENDPOINTS.clinicMeReportDeliveryHl7HealthCareProviderSetup,
     method: "POST",
     body: payload,
     headers: authHeaders(accessToken),

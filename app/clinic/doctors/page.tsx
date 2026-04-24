@@ -1,7 +1,17 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Clock, Mail, MoreVertical, Plus, Trash2, UserMinus, RotateCcw } from "lucide-react";
+import {
+  Clock,
+  Eye,
+  Mail,
+  MoreVertical,
+  Plus,
+  RotateCcw,
+  Trash2,
+  UserMinus,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -9,6 +19,7 @@ import { doctorStatusLabel } from "@/lib/doctor/types";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import {
   deleteClinicDoctorInvite,
+  fetchClinicDoctor,
   fetchClinicDoctors,
   fetchClinicDoctorInvites,
   inviteClinicDoctor,
@@ -25,6 +36,14 @@ type Doctor = {
   specialty: string;
   status: DoctorStatus;
   membership: string;
+};
+
+type DoctorDetailsRecord = Record<string, unknown> & {
+  doctor?: Record<string, unknown>;
+  platform_account?: Record<string, unknown>;
+  membership?: Record<string, unknown>;
+  summary?: Record<string, unknown>;
+  setup_profile?: Record<string, unknown>;
 };
 
 type PendingInvite = {
@@ -44,6 +63,81 @@ function normalizeDoctorStatus(value: unknown): DoctorStatus {
   const raw = typeof value === "string" ? value.toUpperCase() : "";
   if (raw === "ON_LEAVE" || raw === "INACTIVE") return raw;
   return "ACTIVE";
+}
+
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function firstNumber(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+
+  return null;
+}
+
+function firstBoolean(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "string") {
+      const raw = value.trim().toLowerCase();
+      if (raw === "true") return true;
+      if (raw === "false") return false;
+    }
+  }
+
+  return null;
+}
+
+function formatDateTime(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return "—";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("en-CA", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatDateOnly(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return "—";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("en-CA", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function toDoctor(record: Record<string, unknown>): Doctor {
@@ -70,6 +164,10 @@ function toDoctor(record: Record<string, unknown>): Doctor {
       (typeof record.clinic_membership === "string" && record.clinic_membership) ||
       "Member",
   };
+}
+
+function normalizeDoctorDetails(record: Record<string, unknown>): DoctorDetailsRecord {
+  return record as DoctorDetailsRecord;
 }
 
 function toInvite(record: Record<string, unknown>): PendingInvite {
@@ -213,52 +311,385 @@ function InviteRow({
 
 function DoctorRow({
   doctor,
+  onProfile,
   onDeactivate,
 }: {
   doctor: Doctor;
+  onProfile: (doctor: Doctor) => void;
   onDeactivate: (id: number) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 transition-colors hover:bg-accent/30">
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+    <div className="flex items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 transition-colors hover:border-primary/25 hover:bg-accent/25">
+      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
         {doctor.name.split(" ").pop()?.charAt(0) ?? "D"}
       </div>
 
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-foreground">{doctor.name}</p>
         <p className="truncate text-xs text-muted-foreground">
           {doctor.specialty} {doctor.email ? `· ${doctor.email}` : ""}
         </p>
       </div>
 
-      <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_COLORS[doctor.status])}>
+      <span
+        className={cn(
+          "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+          STATUS_COLORS[doctor.status],
+        )}
+      >
         {doctorStatusLabel(doctor.status)}
       </span>
 
       <div className="relative">
         <button
+          type="button"
           onClick={() => setMenuOpen((o) => !o)}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <MoreVertical className="h-4 w-4" />
         </button>
-        {menuOpen && doctor.status !== "INACTIVE" && (
-          <div className="absolute right-0 top-full z-10 mt-1 min-w-[160px] rounded-xl border border-border bg-card p-1 shadow-lg">
+        {menuOpen && (
+          <div className="absolute right-0 top-full z-10 mt-1 min-w-[160px] rounded-xl border border-border bg-card p-1 shadow-xl">
             <button
+              type="button"
               onClick={() => {
-                onDeactivate(doctor.id);
+                onProfile(doctor);
                 setMenuOpen(false);
               }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-accent"
             >
-              <UserMinus className="h-3.5 w-3.5" />
-              Deactivate
+              <Eye className="h-3.5 w-3.5" />
+              Profile
             </button>
+            {doctor.status !== "INACTIVE" && (
+              <button
+                type="button"
+                onClick={() => {
+                  onDeactivate(doctor.id);
+                  setMenuOpen(false);
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+              >
+                <UserMinus className="h-3.5 w-3.5" />
+                Deactivate
+              </button>
+            )}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function DoctorProfileModal({
+  summary,
+  doctor,
+  loading,
+  onClose,
+}: {
+  summary: Doctor | null;
+  doctor: DoctorDetailsRecord | null;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  const doctorInfo = doctor?.doctor ?? null;
+  const membership = doctor?.membership ?? null;
+  const platformAccount = doctor?.platform_account ?? null;
+  const detailsSummary = doctor?.summary ?? null;
+  const setupProfile = (doctor?.setup_profile as Record<string, unknown> | undefined) ?? null;
+  const identity = (setupProfile?.identity as Record<string, unknown> | undefined) ?? null;
+  const businessContact = (setupProfile?.business_contact as Record<string, unknown> | undefined) ?? null;
+  const payment = (setupProfile?.payment as Record<string, unknown> | undefined) ?? null;
+  const education = (setupProfile?.education as Record<string, unknown> | undefined) ?? null;
+  const meta = (setupProfile?.meta as Record<string, unknown> | undefined) ?? null;
+  const teleplan = (setupProfile?.teleplan as Record<string, unknown> | undefined) ?? null;
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  if (!summary && !doctor && !loading) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+      <button
+        type="button"
+        aria-label="Close doctor profile"
+        className="absolute inset-0 cursor-pointer bg-slate-950/55 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+
+      <div className="relative z-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+        <div className="bg-white px-6 py-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.34em] text-slate-500">
+                Doctor profile
+              </p>
+              <h2 className="mt-0.5 truncate text-base font-semibold tracking-tight text-slate-900">
+                {firstString(
+                  summary?.name,
+                  doctorInfo?.name,
+                  doctorInfo?.first_name,
+                  platformAccount?.first_name,
+                  "Doctor profile",
+                ) || "Doctor profile"}
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+        </div>
+
+        <div className="max-h-[72vh] overflow-y-auto bg-white px-6 py-4">
+          {loading ? (
+            <div className="flex min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm text-slate-500">
+              Loading doctor profile...
+            </div>
+          ) : doctor || summary ? (
+            <div className="space-y-6">
+              <section>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SimpleField label="Name" value={firstString(summary?.name, doctorInfo?.name, "—")} />
+                  <SimpleField label="Specialty" value={firstString(summary?.specialty, doctorInfo?.specialty, "—")} />
+                  <SimpleField
+                    label="Status"
+                    value={doctorStatusLabel(
+                      normalizeDoctorStatus(summary?.status ?? doctorInfo?.status),
+                    )}
+                  />
+                  <SimpleField
+                    label="Accepts pool"
+                    value={firstBoolean(doctorInfo?.accepts_pool) === true || summary?.status === "ACTIVE" ? "Yes" : "No"}
+                  />
+                  <SimpleField label="Email" value={firstString(summary?.email, doctorInfo?.email, "—")} />
+                  <SimpleField label="Clinic" value={firstString(membership?.clinic_name, "—")} />
+                </div>
+              </section>
+
+              {doctor && (
+                <section>
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
+                    Membership
+                  </h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <SimpleField label="Clinic name" value={firstString(membership?.clinic_name, "—")} />
+                    <SimpleField label="Clinic slug" value={firstString(membership?.clinic_slug, "—")} />
+                    <SimpleField
+                      label="Membership status"
+                      value={firstString(membership?.membership_status, membership?.status, "—")}
+                    />
+                    <SimpleField label="Joined" value={formatDateTime(membership?.joined_at)} />
+                  </div>
+                </section>
+              )}
+
+              {platformAccount && (
+                <section>
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
+                    Platform account
+                  </h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <SimpleField label="Username" value={firstString(platformAccount?.username, "—")} />
+                    <SimpleField label="Email" value={firstString(platformAccount?.email, "—")} />
+                    <SimpleField label="Record status" value={firstString(platformAccount?.record_status, "—")} />
+                    <SimpleField label="Created" value={formatDateTime(platformAccount?.created_at)} />
+                  </div>
+                </section>
+              )}
+
+              {detailsSummary && (
+                <section>
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
+                    Summary
+                  </h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <SimpleField
+                      label="Availability"
+                      value={String(firstNumber(detailsSummary?.availability_count) ?? 0)}
+                    />
+                    <SimpleField
+                      label="Service mappings"
+                      value={String(firstNumber(detailsSummary?.active_service_mapping_count) ?? 0)}
+                    />
+                    <SimpleField
+                      label="Setup completed"
+                      value={firstBoolean(detailsSummary?.setup_completed) === true ? "Yes" : "No"}
+                    />
+                    <SimpleField
+                      label="Signature"
+                      value={firstBoolean(detailsSummary?.has_signature) === true ? "Captured" : "Missing"}
+                    />
+                  </div>
+                </section>
+              )}
+
+              {(identity || businessContact || payment || education || meta || teleplan) && (
+                <section>
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
+                    Setup profile
+                  </h3>
+                  <div className="space-y-5">
+                    {identity && (
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                          Identity
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <SimpleField
+                            label="Name"
+                            value={
+                              [
+                                firstString(identity.first_name),
+                                firstString(identity.middle_name),
+                                firstString(identity.last_name),
+                              ]
+                                .filter((part) => part && part !== "—")
+                                .join(" ") || "—"
+                            }
+                          />
+                          <SimpleField label="Date of birth" value={formatDateOnly(identity.date_of_birth)} />
+                          <SimpleField label="Gender" value={firstString(identity.gender, "—")} />
+                          <SimpleField label="License type" value={firstString(identity.license_type, "—")} />
+                          <SimpleField label="License effective" value={formatDateOnly(identity.license_effective_date)} />
+                          <SimpleField label="MSP billing" value={firstString(identity.msp_billing_number, "—")} />
+                        </div>
+                      </div>
+                    )}
+
+                    {businessContact && (
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                          Business contact
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <SimpleField label="Phone" value={firstString(businessContact.phone_number, "—")} />
+                          <SimpleField label="Email" value={firstString(businessContact.email, "—")} />
+                          <SimpleField label="City" value={firstString(businessContact.city, "—")} />
+                          <SimpleField label="Province" value={firstString(businessContact.province, "—")} />
+                          <SimpleField label="Postal code" value={firstString(businessContact.postal_code, "—")} />
+                          <SimpleField label="Mailing address" value={firstString(businessContact.mailing_address, "—")} />
+                        </div>
+                      </div>
+                    )}
+
+                    {payment && (
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                          Payment
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <SimpleField label="Payee" value={firstString(payment.payee_name, "—")} />
+                          <SimpleField label="Payment number" value={firstString(payment.payment_number, "—")} />
+                          <SimpleField label="Bank" value={firstString(payment.bank_name, "—")} />
+                          <SimpleField label="Branch" value={firstString(payment.bank_branch_name, "—")} />
+                          <SimpleField label="Direction" value={firstString(payment.payment_direction, "—")} />
+                          <SimpleField label="Principal practitioner" value={firstString(payment.principal_practitioner_name, "—")} />
+                        </div>
+                      </div>
+                    )}
+
+                    {education && (
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                          Education
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <SimpleField label="Medical school" value={firstString(education.medical_school, "—")} />
+                          <SimpleField label="Graduation" value={formatDateOnly(education.date_of_graduation)} />
+                          <SimpleField label="Royal specialty" value={firstString(education.royal_college_specialty, "—")} />
+                          <SimpleField label="Royal subspecialty" value={firstString(education.royal_college_subspecialty, "—")} />
+                          <SimpleField label="Non-royal specialty" value={firstString(education.non_royal_college_specialty, "—")} />
+                          <SimpleField
+                            label="Certifications"
+                            value={
+                              Array.isArray(education.certification_dates)
+                                ? education.certification_dates.filter((value: unknown) => typeof value === "string").join(", ")
+                                : "—"
+                            }
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {meta && (
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                          Meta
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <SimpleField label="Facility attachment" value={firstBoolean(meta.facility_attachment_required) === true ? "Yes" : "No"} />
+                          <SimpleField label="MSP enrolment" value={firstBoolean(meta.msp_enrolment_required) === true ? "Yes" : "No"} />
+                          <SimpleField label="Payment choice" value={firstString(meta.payment_choice, "—")} />
+                          <SimpleField label="Updated from" value={firstString(meta.updated_from, "—")} />
+                        </div>
+                      </div>
+                    )}
+
+                    {teleplan && Object.keys(teleplan).length > 0 && (
+                      <div className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                          Teleplan
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {Object.entries(teleplan).map(([key, value]) => (
+                            <SimpleField
+                              key={key}
+                              label={key.replaceAll("_", " ")}
+                              value={typeof value === "string" ? value : JSON.stringify(value)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SimpleField({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+        {label}
+      </p>
+      <div className="mt-1 text-sm font-medium text-slate-900">{value}</div>
     </div>
   );
 }
@@ -269,6 +700,10 @@ export default function DoctorsPage() {
   const hasSession = Boolean(session?.accessToken);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
+  const [profileDoctorId, setProfileDoctorId] = useState<number | null>(null);
+  const [profileSummary, setProfileSummary] = useState<Doctor | null>(null);
+  const [profileDoctor, setProfileDoctor] = useState<DoctorDetailsRecord | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const seatLimit = 5;
   const [loading, setLoading] = useState(hasSession);
   const [error, setError] = useState(
@@ -327,6 +762,32 @@ export default function DoctorsPage() {
     });
   }
 
+  async function handleOpenProfile(doctor: Doctor) {
+    const session = readClinicLoginSession();
+    if (!session?.accessToken) return;
+
+    setProfileDoctorId(doctor.id);
+    setProfileSummary(doctor);
+    setProfileDoctor(null);
+    setProfileLoading(true);
+
+    try {
+      const record = await fetchClinicDoctor(session.accessToken, doctor.id);
+      setProfileDoctor(normalizeDoctorDetails(record as Record<string, unknown>));
+    } catch {
+      setProfileDoctor(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
+  function handleCloseProfile() {
+    setProfileDoctorId(null);
+    setProfileSummary(null);
+    setProfileDoctor(null);
+    setProfileLoading(false);
+  }
+
   async function handleDeactivate(id: number) {
     const session = readClinicLoginSession();
     if (!session?.accessToken) return;
@@ -336,6 +797,19 @@ export default function DoctorsPage() {
       setDoctors((current) =>
         current.map((doctor) => (doctor.id === id ? { ...doctor, status: "INACTIVE" } : doctor)),
       );
+      if (profileDoctorId === id) {
+        setProfileDoctor((current) =>
+          current
+            ? {
+                ...current,
+                doctor: {
+                  ...(current.doctor ?? {}),
+                  status: "INACTIVE",
+                },
+              }
+            : current,
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not deactivate the doctor.");
     }
@@ -365,7 +839,7 @@ export default function DoctorsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
+    <div className="mx-auto max-w-6xl px-6 py-10">
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -386,94 +860,117 @@ export default function DoctorsPage() {
         </div>
       )}
 
-      <div className="mb-6 rounded-2xl border border-border bg-card p-4">
-        <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Seats used</span>
-          <span className="font-semibold text-foreground">
-            {seatsUsed} / {seatLimit}
-          </span>
-        </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
-          <div
-            className={cn(
-              "h-full rounded-full transition-all",
-              seatsUsed >= seatLimit ? "bg-rose-500" : "bg-primary",
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div>
+          <div className="mb-6 rounded-2xl border border-border bg-card p-4">
+            <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Seats used</span>
+              <span className="font-semibold text-foreground">
+                {seatsUsed} / {seatLimit}
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all",
+                  seatsUsed >= seatLimit ? "bg-rose-500" : "bg-primary",
+                )}
+                style={{ width: `${Math.min((seatsUsed / seatLimit) * 100, 100)}%` }}
+              />
+            </div>
+            {seatsUsed >= seatLimit && (
+              <p className="mt-2 text-xs text-rose-600">
+                You&apos;ve used all your seats. Upgrade your plan to add more doctors.
+              </p>
             )}
-            style={{ width: `${Math.min((seatsUsed / seatLimit) * 100, 100)}%` }}
-          />
+          </div>
+
+          {!loading && doctors.filter((d) => d.status !== "INACTIVE").length > 0 && (
+            <section className="mb-6">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Active team
+              </h2>
+              <div className="space-y-2">
+                {doctors
+                  .filter((d) => d.status !== "INACTIVE")
+                  .map((doctor) => (
+                    <DoctorRow
+                      key={doctor.id}
+                      doctor={doctor}
+                      onProfile={handleOpenProfile}
+                      onDeactivate={handleDeactivate}
+                    />
+                  ))}
+              </div>
+            </section>
+          )}
+
+          {pendingInvites.length > 0 && (
+            <section className="mb-6">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Pending invites
+              </h2>
+              <div className="space-y-2">
+                {pendingInvites.map((invite) => (
+                  <InviteRow
+                    key={invite.inviteId}
+                    invite={invite}
+                    onDelete={handleDeleteInvite}
+                    onResend={handleResendInvite}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {acceptedInvites.length > 0 && (
+            <section className="mb-6">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Accepted invites
+              </h2>
+              <div className="space-y-2">
+                {acceptedInvites.map((invite) => (
+                  <InviteRow
+                    key={invite.inviteId}
+                    invite={invite}
+                    onDelete={handleDeleteInvite}
+                    onResend={handleResendInvite}
+                    showActions={false}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          <InviteForm onInvite={handleInvite} />
+
+          {inactiveDoctors.length > 0 && (
+            <section className="mt-8">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Deactivated
+              </h2>
+              <div className="space-y-2 opacity-50">
+                {inactiveDoctors.map((doctor) => (
+                  <DoctorRow
+                    key={doctor.id}
+                    doctor={doctor}
+                    onProfile={handleOpenProfile}
+                    onDeactivate={handleDeactivate}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
-        {seatsUsed >= seatLimit && (
-          <p className="mt-2 text-xs text-rose-600">
-            You&apos;ve used all your seats. Upgrade your plan to add more doctors.
-          </p>
-        )}
       </div>
 
-      {!loading && doctors.filter((d) => d.status !== "INACTIVE").length > 0 && (
-        <section className="mb-6">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Active team
-          </h2>
-          <div className="space-y-2">
-            {doctors
-              .filter((d) => d.status !== "INACTIVE")
-              .map((doctor) => (
-                <DoctorRow key={doctor.id} doctor={doctor} onDeactivate={handleDeactivate} />
-              ))}
-          </div>
-        </section>
-      )}
-
-      {pendingInvites.length > 0 && (
-        <section className="mb-6">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Pending invites
-          </h2>
-          <div className="space-y-2">
-            {pendingInvites.map((invite) => (
-              <InviteRow
-                key={invite.inviteId}
-                invite={invite}
-                onDelete={handleDeleteInvite}
-                onResend={handleResendInvite}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {acceptedInvites.length > 0 && (
-        <section className="mb-6">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Accepted invites
-          </h2>
-          <div className="space-y-2">
-            {acceptedInvites.map((invite) => (
-              <InviteRow
-                key={invite.inviteId}
-                invite={invite}
-                onDelete={handleDeleteInvite}
-                onResend={handleResendInvite}
-                showActions={false}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      <InviteForm onInvite={handleInvite} />
-
-      {inactiveDoctors.length > 0 && (
-        <section className="mt-8">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Deactivated
-          </h2>
-          <div className="space-y-2 opacity-50">
-            {inactiveDoctors.map((doctor) => (
-              <DoctorRow key={doctor.id} doctor={doctor} onDeactivate={handleDeactivate} />
-            ))}
-          </div>
-        </section>
+      {profileDoctorId !== null && (
+        <DoctorProfileModal
+          summary={profileSummary}
+          doctor={profileDoctor}
+          loading={profileLoading}
+          onClose={handleCloseProfile}
+        />
       )}
     </div>
   );

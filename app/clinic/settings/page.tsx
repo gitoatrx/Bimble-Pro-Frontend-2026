@@ -1,10 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Check, Eye, EyeOff, KeyRound, Mail, User } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Eye, EyeOff, FileText, KeyRound, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { AdditionalPaymentNumberApplicationSection } from "@/components/clinic/additional-payment-number-application";
+import { ExcellerisAcceptableUseSection } from "@/components/clinic/excelleris-acceptable-use-form";
+import { Hl7HealthCareProviderSetupSection } from "@/components/clinic/hl7-health-care-provider-setup-form";
+import { PhysicianChangeInformationSection } from "@/components/clinic/physician-change-information-form";
 import { MspFacilityNumberApplicationSection } from "@/components/clinic/msp-facility-number-application";
 import { TeleplanServiceApplicationSection } from "@/components/clinic/teleplan-service-application";
 import { readClinicLoginSession } from "@/lib/clinic/session";
@@ -17,31 +21,99 @@ import {
   updateClinicSettingsSmtp,
 } from "@/lib/api/clinic-dashboard";
 
+type ClinicFormHubKey =
+  | "teleplan"
+  | "mspFacility"
+  | "physicianChange"
+  | "additionalPayment"
+  | "excelleris"
+  | "hl7";
+
+type ClinicFormHubConfig = {
+  badge: string;
+  title: string;
+  subtitle: string;
+  component: React.ComponentType;
+};
+
+const CLINIC_FORM_HUB: Record<ClinicFormHubKey, ClinicFormHubConfig> = {
+  teleplan: {
+    badge: "HLTH 2820",
+    title: "Application for Teleplan Service",
+    subtitle: "Teleplan service application",
+    component: TeleplanServiceApplicationSection,
+  },
+  mspFacility: {
+    badge: "HLTH 2948",
+    title: "Application for MSP Facility Number",
+    subtitle: "Facility number application",
+    component: MspFacilityNumberApplicationSection,
+  },
+  physicianChange: {
+    badge: "Clinic settings",
+    title: "Physician Change Information",
+    subtitle: "Update clinic physician details",
+    component: PhysicianChangeInformationSection,
+  },
+  additionalPayment: {
+    badge: "Clinic settings",
+    title: "Additional Payment Number",
+    subtitle: "Payment setup form",
+    component: AdditionalPaymentNumberApplicationSection,
+  },
+  excelleris: {
+    badge: "Clinic settings",
+    title: "Excelleris Acceptable Use",
+    subtitle: "Provider agreement",
+    component: ExcellerisAcceptableUseSection,
+  },
+  hl7: {
+    badge: "Clinic settings",
+    title: "HL7 Health Care Provider Setup",
+    subtitle: "Report delivery setup",
+    component: Hl7HealthCareProviderSetupSection,
+  },
+};
+
+const CLINIC_FORM_HUB_ORDER: ClinicFormHubKey[] = [
+  "teleplan",
+  "mspFacility",
+  "physicianChange",
+  "additionalPayment",
+  "excelleris",
+  "hl7",
+];
+
 function SettingsSection({
   icon: Icon,
   title,
   description,
+  action,
+  dense = false,
   children,
 }: {
   icon: React.FC<{ className?: string }>;
   title: string;
   description: string;
+  action?: React.ReactNode;
+  dense?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-white">
-      <div className="px-6 py-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
-            <Icon className="h-4 w-4 text-primary" />
+      <div className={cn("flex items-center justify-between gap-4 px-6 py-5", dense && "px-5 py-2.5")}>
+        <div className={cn("flex min-w-0 items-center gap-3", dense && "gap-2.5")}>
+          <div className={cn("flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white", dense && "h-7 w-7 rounded-lg")}>
+            <Icon className={cn("h-4 w-4 text-primary", dense && "h-3.5 w-3.5")} />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">{title}</p>
-            <p className="text-xs text-muted-foreground">{description}</p>
+          <div className="min-w-0">
+            <p className={cn("text-sm font-semibold text-foreground", dense && "leading-tight")}>{title}</p>
+            <p className={cn("text-xs text-muted-foreground", dense && "leading-tight")}>{description}</p>
           </div>
         </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="space-y-4 px-6 py-5">{children}</div>
+      <div className={cn("space-y-4 px-6 py-5", dense && "px-5 pb-3 pt-0")}>{children}</div>
     </div>
   );
 }
@@ -479,6 +551,28 @@ function ClinicProfileSettings() {
 }
 
 export default function SettingsPage() {
+  const [showClinicFormsHub, setShowClinicFormsHub] = useState(false);
+  const [activeClinicForm, setActiveClinicForm] = useState<ClinicFormHubKey | null>(null);
+
+  useEffect(() => {
+    if (!activeClinicForm) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setActiveClinicForm(null);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activeClinicForm]);
+
   return (
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
       <div className="mb-8">
@@ -491,12 +585,93 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-4">
-        <TeleplanServiceApplicationSection />
-        <MspFacilityNumberApplicationSection />
+        <SettingsSection
+          icon={FileText}
+          title="Onboarding forms"
+          description="open the clinic onboarding forms"
+          dense
+          action={
+            <Button
+              type="button"
+              variant={showClinicFormsHub ? "outline" : "default"}
+              size="sm"
+              className="gap-2"
+              onClick={() => setShowClinicFormsHub((value) => !value)}
+            >
+              {showClinicFormsHub ? (
+                <>
+                  Hide forms
+                  <ChevronUp className="h-4 w-4" />
+                </>
+              ) : (
+                <>
+                  Open forms
+                  <ChevronDown className="h-4 w-4" />
+                </>
+              )}
+            </Button>
+          }
+        >
+          <div className="space-y-4">
+            {showClinicFormsHub ? (
+              <div className="grid gap-3">
+                {CLINIC_FORM_HUB_ORDER.map((key) => {
+                  const form = CLINIC_FORM_HUB[key];
+
+                  return (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant="outline"
+                      className="!flex h-auto !w-full !justify-between gap-4 px-4 py-4 text-left"
+                      onClick={() => setActiveClinicForm(key)}
+                    >
+                      <span className="flex flex-1 flex-col items-start space-y-1 text-left">
+                        <span className="block font-medium text-foreground">{form.title}</span>
+                        <span className="block text-xs text-muted-foreground">{form.subtitle}</span>
+                      </span>
+                      <span className="shrink-0 text-sm font-medium text-foreground">Open</span>
+                    </Button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        </SettingsSection>
         <ClinicProfileSettings />
         <SmtpSettings />
         <CredentialsSettings />
       </div>
+
+      {activeClinicForm ? (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 p-4 py-8 sm:items-center"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setActiveClinicForm(null);
+            }
+          }}
+        >
+          <div className="w-full max-w-5xl overflow-hidden rounded-3xl border border-border bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                  {CLINIC_FORM_HUB[activeClinicForm].badge}
+                </p>
+                <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
+                  {CLINIC_FORM_HUB[activeClinicForm].title}
+                </h2>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setActiveClinicForm(null)}>
+                Close
+              </Button>
+            </div>
+            <div className="max-h-[calc(100vh-8rem)] overflow-y-auto px-4 pb-4 pt-2 sm:px-5 sm:pb-5 sm:pt-2">
+              {React.createElement(CLINIC_FORM_HUB[activeClinicForm].component)}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

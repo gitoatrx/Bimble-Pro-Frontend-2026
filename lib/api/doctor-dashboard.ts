@@ -265,3 +265,96 @@ export async function fetchDoctorOscarLaunch(accessToken: string) {
     headers: authHeaders(accessToken),
   });
 }
+
+export type DoctorDuplicatePrescriptionPadOrderAddressDetailsOption =
+  | "INCLUDE_PRIMARY"
+  | "INCLUDE_ALTERNATE";
+
+export type DoctorDuplicatePrescriptionPadOrderDeliveryOption =
+  | "PRIMARY_ADDRESS"
+  | "ALTERNATE_ADDRESS";
+
+export type DoctorDuplicatePrescriptionPadOrderSignature = {
+  signature_data_url?: string | null;
+  signature_label?: string | null;
+};
+
+export type DoctorDuplicatePrescriptionPadOrderSavedValues = {
+  surname?: string | null;
+  given_names?: string | null;
+  college_id_number?: string | null;
+  primary_address?: string | null;
+  primary_phone?: string | null;
+  address_details_option?: DoctorDuplicatePrescriptionPadOrderAddressDetailsOption | null;
+  alternate_address?: string | null;
+  alternate_phone?: string | null;
+  delivery_option?: DoctorDuplicatePrescriptionPadOrderDeliveryOption | null;
+  delivery_address?: string | null;
+  delivery_phone?: string | null;
+  order_quantity?: string | null;
+  signature?: DoctorDuplicatePrescriptionPadOrderSignature | null;
+};
+
+export type DoctorDuplicatePrescriptionPadOrderRequest = {
+  surname: string;
+  given_names: string;
+  college_id_number: string;
+  primary_address: string;
+  primary_phone: string;
+  address_details_option: DoctorDuplicatePrescriptionPadOrderAddressDetailsOption;
+  alternate_address: string | null;
+  alternate_phone: string | null;
+  delivery_option: DoctorDuplicatePrescriptionPadOrderDeliveryOption;
+  delivery_address: string | null;
+  delivery_phone: string | null;
+  order_quantity: string;
+  signature: {
+    signature_data_url: string;
+    signature_label: string;
+  };
+};
+
+export type DoctorDuplicatePrescriptionPadOrderResponse = {
+  packet_id: number;
+  doctor_id: number;
+  clinic_id: number;
+  clinic_slug: string;
+  form_code: string;
+  payment_direction: string;
+  status: string;
+  generated_at: string;
+  signature_captured?: boolean;
+  signature_signed_at?: string | null;
+  signature_label?: string | null;
+  signature_data_url?: string | null;
+  missing_fields: string[];
+  field_values: Record<string, unknown>;
+  saved_values: DoctorDuplicatePrescriptionPadOrderSavedValues;
+  download_url: string | null;
+  ui_content: null;
+};
+
+export type DoctorDuplicatePrescriptionPadOrderGetResponse =
+  DoctorDuplicatePrescriptionPadOrderResponse;
+
+export async function fetchDoctorDuplicatePrescriptionPadOrder(accessToken: string) {
+  return apiRequest<DoctorDuplicatePrescriptionPadOrderResponse>({
+    endpoint: API_ENDPOINTS.doctorMeSettingsDuplicatePrescriptionPadOrder,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function submitDoctorDuplicatePrescriptionPadOrder(
+  accessToken: string,
+  payload: DoctorDuplicatePrescriptionPadOrderRequest,
+) {
+  return apiRequest<
+    DoctorDuplicatePrescriptionPadOrderResponse,
+    DoctorDuplicatePrescriptionPadOrderRequest
+  >({
+    endpoint: API_ENDPOINTS.doctorMeSettingsDuplicatePrescriptionPadOrder,
+    method: "POST",
+    body: payload,
+    headers: authHeaders(accessToken),
+  });
+}

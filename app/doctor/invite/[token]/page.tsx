@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { CheckCircle2, ChevronDown, Eye, EyeOff, Loader2, X } from "lucide-react";
+import { Building2, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { DoctorInviteDetailsResponse } from "@/lib/doctor/types";

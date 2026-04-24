@@ -135,16 +135,22 @@ export function clearDoctorOnboardingComplete(doctorId?: number | null) {
   localStorage.removeItem(onboardingCompleteStorageKey(doctorId));
 }
 
-export type DoctorOnboardingStage = "hlth_2870" | "hlth_2950" | "hlth_2832" | "hlth_2991";
+export type DoctorOnboardingStage = "hlth_2870" | "hlth_2950" | "hlth_2832" | "hlth_2991" | "hlth_2820";
 
 export function readDoctorOnboardingStage(doctorId?: number | null): DoctorOnboardingStage | null {
   if (typeof window === "undefined" || !doctorId) return null;
   const value = localStorage.getItem(onboardingStageStorageKey(doctorId));
-  return value === "hlth_2870" || value === "hlth_2950" || value === "hlth_2832" || value === "hlth_2991"
-    ? value
-    : value === "hlth_2820"
-      ? "hlth_2991"
-    : null;
+  if (
+    value === "hlth_2870" ||
+    value === "hlth_2950" ||
+    value === "hlth_2832" ||
+    value === "hlth_2991" ||
+    value === "hlth_2820"
+  ) {
+    return value === "hlth_2991" ? "hlth_2820" : value;
+  }
+
+  return null;
 }
 
 export function storeDoctorOnboardingStage(doctorId: number, stage: DoctorOnboardingStage) {
