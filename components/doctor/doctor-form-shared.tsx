@@ -45,9 +45,38 @@ export function SignaturePad({
   const currentStrokeRef = useRef<{ x: number; y: number }[]>([]);
   const strokesRef = useRef<{ x: number; y: number }[][]>([]);
   const exportPromiseRef = useRef<Promise<void> | null>(null);
+  const baseImageRef = useRef<HTMLImageElement | null>(null);
   const [strokes, setStrokes] = useState<{ x: number; y: number }[][]>([]);
   const [hasInk, setHasInk] = useState(Boolean(value));
   const [surfaceSize, setSurfaceSize] = useState({ width: 0, height: 180 });
+
+  useEffect(() => {
+    setHasInk(Boolean(value));
+  }, [value]);
+
+  useEffect(() => {
+    const source = value.trim();
+
+    if (!source) {
+      baseImageRef.current = null;
+      return;
+    }
+
+    const image = new Image();
+    let cancelled = false;
+
+    image.onload = () => {
+      if (!cancelled) {
+        baseImageRef.current = image;
+      }
+    };
+
+    image.src = source;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
 
   useEffect(() => {
     const target = surfaceRef.current;
@@ -79,53 +108,61 @@ export function SignaturePad({
     };
   }
 
-  function buildSvg(nextStrokes: { x: number; y: number }[][]) {
-    const width = Math.max(1, surfaceSize.width || 1);
-    const height = Math.max(1, surfaceSize.height || 180);
-    const strokeMarkup = nextStrokes
-      .map((stroke) => {
-        if (stroke.length === 0) return "";
+  function capture(nextStrokes: { x: number; y: number }[][]) {
+    const surface = surfaceRef.current;
+    const rect = surface?.getBoundingClientRect();
+    const width = Math.max(1, Math.floor(rect?.width || surfaceSize.width || 1));
+    const height = Math.max(1, Math.floor(rect?.height || surfaceSize.height || 180));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+
+    if (context) {
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (baseImageRef.current) {
+        context.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
+      }
+
+      context.strokeStyle = "#0f172a";
+      context.lineWidth = 2.25;
+      context.lineCap = "round";
+      context.lineJoin = "round";
+
+      nextStrokes.forEach((stroke) => {
+        if (stroke.length === 0) return;
+
         if (stroke.length === 1) {
           const point = stroke[0];
-          return `<circle cx="${point.x}" cy="${point.y}" r="1.5" fill="#0f172a" />`;
+          context.beginPath();
+          context.arc(point.x, point.y, 1.5, 0, Math.PI * 2);
+          context.fillStyle = "#0f172a";
+          context.fill();
+          return;
         }
-        const points = stroke.map((point) => `${point.x},${point.y}`).join(" ");
-        return `<polyline points="${points}" fill="none" stroke="#0f172a" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" />`;
-      })
-      .join("");
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" shape-rendering="geometricPrecision">${strokeMarkup}</svg>`;
-  }
+        context.beginPath();
+        stroke.forEach((point, index) => {
+          if (index === 0) {
+            context.moveTo(point.x, point.y);
+          } else {
+            context.lineTo(point.x, point.y);
+          }
+        });
+        context.stroke();
+      });
 
-  function capture(nextStrokes: { x: number; y: number }[][]) {
-    const svg = buildSvg(nextStrokes);
-    const promise = new Promise<void>((resolve) => {
-      const image = new Image();
-      image.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, surfaceSize.width || 1);
-        canvas.height = Math.max(1, surfaceSize.height || 180);
-        const context = canvas.getContext("2d");
-        if (context) {
-          context.fillStyle = "#ffffff";
-          context.fillRect(0, 0, canvas.width, canvas.height);
-          context.drawImage(image, 0, 0, canvas.width, canvas.height);
-          onChange(canvas.toDataURL("image/png"));
-        }
-        resolve();
-      };
-      image.onerror = () => resolve();
-      image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-    });
+      onChange(canvas.toDataURL("image/png"));
+    }
+
+    const promise = Promise.resolve();
 
     exportPromiseRef.current = promise;
     onExportPromiseChange?.(promise);
-    void promise.then(() => {
-      if (exportPromiseRef.current === promise) {
-        exportPromiseRef.current = null;
-        onExportPromiseChange?.(null);
-      }
-    });
+    exportPromiseRef.current = null;
+    onExportPromiseChange?.(null);
   }
 
   return (
@@ -133,7 +170,11 @@ export function SignaturePad({
       <div ref={surfaceRef} className="overflow-hidden rounded-3xl border border-border bg-white">
         <div
           className="relative block h-[180px] w-full cursor-crosshair"
-          style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none" }}
+          style={{
+            touchAction: "none",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+          }}
           onPointerDown={(event) => {
             event.preventDefault();
             const point = pointFromEvent(event);
@@ -160,18 +201,37 @@ export function SignaturePad({
               setStrokes(nextStrokes);
             }
           }}
-          onPointerUp={() => {
+          onPointerUp={(event) => {
+            event.preventDefault();
             drawingRef.current = false;
             currentStrokeRef.current = [];
             if (strokesRef.current.length > 0) {
               capture(strokesRef.current);
             }
           }}
-          onPointerCancel={() => {
+          onPointerCancel={(event) => {
+            event.preventDefault();
             drawingRef.current = false;
             currentStrokeRef.current = [];
+            if (strokesRef.current.length > 0) {
+              capture(strokesRef.current);
+            }
+          }}
+          onLostPointerCapture={() => {
+            drawingRef.current = false;
+            currentStrokeRef.current = [];
+            if (strokesRef.current.length > 0) {
+              capture(strokesRef.current);
+            }
           }}
         >
+          {value ? (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-contain bg-center bg-no-repeat"
+              style={{ backgroundImage: `url(${value})` }}
+            />
+          ) : null}
           <svg
             width="100%"
             height="100%"

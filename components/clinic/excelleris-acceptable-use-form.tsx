@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -260,6 +260,7 @@ function ExcellerisDialog({
   });
   const [formState, setFormState] = useState<ExcellerisFormState>(() => createEmptyState());
   const [fieldErrors, setFieldErrors] = useState<ExcellerisFieldErrors>({});
+  const signatureDataUrlRef = useRef("");
 
   useEffect(() => {
     if (!open) return;
@@ -283,7 +284,9 @@ function ExcellerisDialog({
           savedAt: response.saved_at,
           missingFields: response.missing_fields ?? [],
         });
-        setFormState(parseResponseState(response));
+        const nextState = parseResponseState(response);
+        setFormState(nextState);
+        signatureDataUrlRef.current = nextState.signatureDataUrl;
       })
       .catch((fetchError) => {
         if (!active) return;
@@ -295,6 +298,7 @@ function ExcellerisDialog({
         );
         setAssets({ uiContent: null, savedAt: "", missingFields: [] });
         setFormState(createEmptyState());
+        signatureDataUrlRef.current = "";
       })
       .finally(() => {
         if (active) {
@@ -366,7 +370,12 @@ function ExcellerisDialog({
       return;
     }
 
-    const nextErrors = validate(formState);
+    const signatureValue = signatureDataUrlRef.current || formState.signatureDataUrl;
+    const submitState = {
+      ...formState,
+      signatureDataUrl: signatureValue,
+    };
+    const nextErrors = validate(submitState);
     setFieldErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -375,29 +384,29 @@ function ExcellerisDialog({
     }
 
     const launchpadUserNames = [
-      formState.launchpadUserName1.trim(),
-      formState.launchpadUserName2.trim(),
-      formState.launchpadUserName3.trim(),
+      submitState.launchpadUserName1.trim(),
+      submitState.launchpadUserName2.trim(),
+      submitState.launchpadUserName3.trim(),
     ].filter(Boolean);
 
     const payload: ClinicExcellerisRequest = {
-      providerName: formState.providerName.trim(),
-      mspNumber: formState.mspNumber.trim(),
-      clinicNameAndAddress: formState.clinicNameAndAddress.trim(),
-      dateSigned: formState.dateSigned,
-      telephoneNumber: digitsOnly(formState.telephoneNumber),
-      emailAddress: formState.emailAddress.trim(),
-      faxNumber: digitsOnly(formState.faxNumber),
-      deliveryMethod: formState.deliveryMethod,
+      providerName: submitState.providerName.trim(),
+      mspNumber: submitState.mspNumber.trim(),
+      clinicNameAndAddress: submitState.clinicNameAndAddress.trim(),
+      dateSigned: submitState.dateSigned,
+      telephoneNumber: digitsOnly(submitState.telephoneNumber),
+      emailAddress: submitState.emailAddress.trim(),
+      faxNumber: digitsOnly(submitState.faxNumber),
+      deliveryMethod: submitState.deliveryMethod,
       launchpadUserNames,
-      emrName: formState.deliveryMethod === "EMR" ? formState.emrName.trim() : null,
-      emrFaxNumber: formState.deliveryMethod === "EMR" ? digitsOnly(formState.emrFaxNumber) : null,
+      emrName: submitState.deliveryMethod === "EMR" ? submitState.emrName.trim() : null,
+      emrFaxNumber: submitState.deliveryMethod === "EMR" ? digitsOnly(submitState.emrFaxNumber) : null,
       reportFaxNumber:
-        formState.deliveryMethod === "FAX" ? digitsOnly(formState.reportFaxNumber) : null,
+        submitState.deliveryMethod === "FAX" ? digitsOnly(submitState.reportFaxNumber) : null,
       confirmAcknowledgement: true,
       signature: {
-        signatureDataUrl: formState.signatureDataUrl.trim(),
-        signatureLabel: formState.signatureLabel.trim(),
+        signatureDataUrl: signatureValue.trim(),
+        signatureLabel: submitState.signatureLabel.trim(),
       },
     };
 
@@ -425,6 +434,7 @@ function ExcellerisDialog({
       }
 
       setFormState(parseResponseState(response));
+      onClose();
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -737,9 +747,10 @@ function ExcellerisDialog({
                 <DialogField label="Signature" required error={fieldErrors.signatureDataUrl}>
                   <SignaturePad
                     value={formState.signatureDataUrl}
-                    onChange={(value) =>
-                      setFormState((current) => ({ ...current, signatureDataUrl: value }))
-                    }
+                    onChange={(value) => {
+                      signatureDataUrlRef.current = value;
+                      setFormState((current) => ({ ...current, signatureDataUrl: value }));
+                    }}
                   />
                 </DialogField>
               </section>

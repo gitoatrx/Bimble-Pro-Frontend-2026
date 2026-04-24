@@ -142,8 +142,8 @@ export type ClinicTeleplan2820Mode =
   | "SERVICE_BUREAU";
 
 export type ClinicTeleplan2820Signature = {
-  signatureDataUrl: string;
-  signatureLabel: string;
+  signature_data_url: string;
+  signature_label: string;
 };
 
 export type ClinicTeleplan2820SavedValues = {

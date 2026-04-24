@@ -253,11 +253,13 @@ function SignatureField({
   value,
   onChange,
   onClear,
+  signatureDataUrlRef,
   error,
 }: {
   value: FacilityFormState;
   onChange: (next: Partial<FacilityFormState>) => void;
   onClear: () => void;
+  signatureDataUrlRef: React.MutableRefObject<string>;
   error?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -306,6 +308,47 @@ function SignatureField({
     };
   }, []);
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    if (!value.signatureDataUrl.trim()) {
+      return;
+    }
+
+    const image = new Image();
+    let cancelled = false;
+
+    image.onload = () => {
+      if (cancelled) {
+        return;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.max(1, Math.floor(rect.width));
+      const height = 220;
+
+      context.clearRect(0, 0, width, height);
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+    };
+
+    image.src = value.signatureDataUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [value.signatureDataUrl]);
+
   function getPoint(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -326,7 +369,9 @@ function SignatureField({
       return;
     }
 
-    onChange({ signatureDataUrl: canvas.toDataURL("image/png") });
+    const nextSignature = canvas.toDataURL("image/png");
+    signatureDataUrlRef.current = nextSignature;
+    onChange({ signatureDataUrl: nextSignature });
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
@@ -385,6 +430,16 @@ function SignatureField({
     commitCanvas();
   }
 
+  function handlePointerCancel() {
+    if (!drawingRef.current) {
+      return;
+    }
+
+    drawingRef.current = false;
+    previousPointRef.current = null;
+    commitCanvas();
+  }
+
   function handleClear() {
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
@@ -397,6 +452,7 @@ function SignatureField({
     }
 
     onClear();
+    signatureDataUrlRef.current = "";
   }
 
   return (
@@ -431,6 +487,7 @@ function SignatureField({
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerLeave={handlePointerLeave}
+              onPointerCancel={handlePointerCancel}
             />
           </div>
         </div>
@@ -487,6 +544,7 @@ function MSPApplicationDialog({
   onClose: () => void;
 }) {
   const session = readClinicLoginSession();
+  const signatureDataUrlRef = useRef("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -516,6 +574,7 @@ function MSPApplicationDialog({
     setLoading(true);
     setError("");
     setFieldErrors({});
+    signatureDataUrlRef.current = "";
 
     fetchClinicFacilityForm(session.accessToken, FORM_CODE)
       .then((response) => {
@@ -526,7 +585,9 @@ function MSPApplicationDialog({
           savedAt: response.saved_at,
           missingFields: response.missing_fields ?? [],
         });
-        setFormState(parseFormState(response));
+        const nextState = parseFormState(response);
+        setFormState(nextState);
+        signatureDataUrlRef.current = nextState.signatureDataUrl;
       })
       .catch((err) => {
         if (!active) return;
@@ -537,6 +598,7 @@ function MSPApplicationDialog({
           missingFields: [],
         });
         setFormState(createEmptyState());
+        signatureDataUrlRef.current = "";
       })
       .finally(() => {
         if (active) {
@@ -615,7 +677,13 @@ function MSPApplicationDialog({
       return;
     }
 
-    const nextErrors = validate(formState);
+    const signatureValue = signatureDataUrlRef.current || formState.signatureDataUrl;
+    const submitState = {
+      ...formState,
+      signatureDataUrl: signatureValue,
+    };
+
+    const nextErrors = validate(submitState);
     setFieldErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -624,26 +692,26 @@ function MSPApplicationDialog({
     }
 
     const payload: ClinicFacilityFormSubmission = {
-      administratorLastName: formState.administratorLastName.trim(),
-      administratorFirstName: formState.administratorFirstName.trim(),
-      mspPractitionerNumber: formState.mspPractitionerNumber.trim(),
-      facilityOrPracticeName: formState.facilityOrPracticeName.trim(),
-      facilityEffectiveDate: formState.facilityEffectiveDate,
-      contactEmail: formState.contactEmail.trim() || undefined,
-      contactPhoneNumber: formState.contactPhoneNumber.trim(),
-      contactFaxNumber: formState.contactFaxNumber.trim() || undefined,
-      facilityPhysicalAddress: formState.facilityPhysicalAddress.trim(),
-      facilityPhysicalCity: formState.facilityPhysicalCity.trim(),
-      facilityPhysicalPostalCode: formState.facilityPhysicalPostalCode.trim(),
-      facilityMailingAddress: formState.facilityMailingAddress.trim() || undefined,
-      facilityMailingCity: formState.facilityMailingCity.trim() || undefined,
-      facilityMailingPostalCode: formState.facilityMailingPostalCode.trim() || undefined,
-      bcpAppliedToEligibleFees: formState.bcpAppliedToEligibleFees,
+      administratorLastName: submitState.administratorLastName.trim(),
+      administratorFirstName: submitState.administratorFirstName.trim(),
+      mspPractitionerNumber: submitState.mspPractitionerNumber.trim(),
+      facilityOrPracticeName: submitState.facilityOrPracticeName.trim(),
+      facilityEffectiveDate: submitState.facilityEffectiveDate,
+      contactEmail: submitState.contactEmail.trim() || undefined,
+      contactPhoneNumber: submitState.contactPhoneNumber.trim(),
+      contactFaxNumber: submitState.contactFaxNumber.trim() || undefined,
+      facilityPhysicalAddress: submitState.facilityPhysicalAddress.trim(),
+      facilityPhysicalCity: submitState.facilityPhysicalCity.trim(),
+      facilityPhysicalPostalCode: submitState.facilityPhysicalPostalCode.trim(),
+      facilityMailingAddress: submitState.facilityMailingAddress.trim() || undefined,
+      facilityMailingCity: submitState.facilityMailingCity.trim() || undefined,
+      facilityMailingPostalCode: submitState.facilityMailingPostalCode.trim() || undefined,
+      bcpAppliedToEligibleFees: submitState.bcpAppliedToEligibleFees,
       confirmDeclarations: true,
-      dateSigned: formState.dateSigned,
+      dateSigned: submitState.dateSigned,
       signature: {
-        signatureDataUrl: formState.signatureDataUrl.trim(),
-        signatureLabel: formState.signatureLabel.trim(),
+        signatureDataUrl: signatureValue.trim(),
+        signatureLabel: submitState.signatureLabel.trim(),
       },
     };
 
@@ -675,6 +743,7 @@ function MSPApplicationDialog({
         missingFields: [],
       });
       setFormState(parseFormState(response));
+      onClose();
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -1115,6 +1184,7 @@ function MSPApplicationDialog({
                   <SignatureField
                     value={formState}
                     error={fieldErrors.signatureDataUrl || fieldErrors.signatureLabel}
+                    signatureDataUrlRef={signatureDataUrlRef}
                     onChange={(next) => setFormState((current) => ({ ...current, ...next }))}
                     onClear={() =>
                       setFormState((current) => ({
