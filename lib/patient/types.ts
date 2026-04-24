@@ -16,6 +16,8 @@ export type PatientOnboardingStep =
   | "complete";
 
 export type PatientOnboardingDraft = {
+  serviceId: number | null;
+  serviceName: string;
   careReason: string;
   careLocation: string;
   phone: string;
@@ -36,7 +38,26 @@ export type PatientOnboardingDraft = {
   pharmacyChoice: PatientPharmacyChoice | "";
 };
 
+export type PatientIntakeSummary = {
+  visit_type: PatientVisitType;
+  appointment_date: string;
+  appointment_time: string;
+  fulfillment: PatientFulfillment;
+  pharmacy_choice: PatientPharmacyChoice | null;
+  location: string | null;
+};
+
+export type PatientIntakeCompletion = {
+  appointmentId: number;
+  status: string;
+  patientId: number;
+  serviceName: string | null;
+  summary: PatientIntakeSummary;
+};
+
 export const initialPatientOnboardingDraft: PatientOnboardingDraft = {
+  serviceId: null,
+  serviceName: "",
   careReason: "",
   careLocation: "",
   phone: "",

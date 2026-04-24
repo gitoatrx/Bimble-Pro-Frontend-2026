@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {
   Building2,
@@ -22,7 +22,17 @@ import { FieldError } from "@/components/clinic-access/field-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ClinicOtpCard } from "@/components/clinic-access/clinic-otp-card";
+import {
+  completePatientIntake,
+  fetchPatientIntakeSlots,
+  savePatientIntakeHealth,
+  savePatientIntakeProfile,
+  savePatientIntakeVisit,
+  startPatientIntakePhone,
+  verifyPatientIntakePhone,
+} from "@/lib/api/patient-intake";
 import type {
+  PatientIntakeCompletion,
   PatientFulfillment,
   PatientOnboardingDraft,
   PatientOnboardingStep,
@@ -30,18 +40,25 @@ import type {
 } from "@/lib/patient/types";
 import {
   clearDemoPatientOtp,
+  clearPatientIntakeAccessToken,
+  clearPatientIntakeCompletion,
+  clearPatientIntakeSessionId,
+  clearPatientPreviewCode,
   clearPatientOnboardingSession,
-  readDemoPatientOtp,
+  readPatientIntakeAccessToken,
+  readPatientIntakeCompletion,
+  readPatientIntakeSessionId,
+  readPatientPreviewCode,
   readPatientOnboardingDraft,
   readPatientOnboardingStep,
-  storeDemoPatientOtp,
+  storePatientIntakeAccessToken,
+  storePatientIntakeCompletion,
+  storePatientIntakeSessionId,
+  storePatientPreviewCode,
   writePatientOnboardingDraft,
   writePatientOnboardingStep,
 } from "@/lib/patient/onboarding-session";
 import { cn } from "@/lib/utils";
-
-/** Fixed until patient SMS/OTP APIs exist — always works after “Send code” or on refresh. */
-const PATIENT_PREVIEW_OTP = "12345678";
 
 const PROVINCES = ["BC", "AB", "SK", "MB", "ON", "QC", "NB", "NS", "PE", "NL", "YT", "NT", "NU"];
 const GENDERS = ["Female", "Male", "Non-binary", "Prefer not to say", "Other"];
@@ -114,14 +131,24 @@ export function PatientOnboardingWizard() {
     const params = new URLSearchParams(window.location.search);
     const reason = params.get("reason")?.trim() ?? "";
     const location = params.get("location")?.trim() ?? "";
+    const serviceIdRaw = params.get("serviceId");
+    const serviceId = serviceIdRaw ? Number(serviceIdRaw) : null;
     return {
       ...baseDraft,
+      serviceId: baseDraft.serviceId ?? (Number.isFinite(serviceId) ? serviceId : null),
       careReason: baseDraft.careReason || reason,
       careLocation: baseDraft.careLocation || location,
     };
   });
   const [otpCode, setOtpCode] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [availableTimes, setAvailableTimes] = useState<string[]>(TIME_SLOTS);
+  const [completion, setCompletion] = useState<PatientIntakeCompletion | null>(() => readPatientIntakeCompletion());
+  const [previewCode, setPreviewCode] = useState<string | null>(() => readPatientPreviewCode());
+  const [intakeToken, setIntakeToken] = useState<string | null>(() => readPatientIntakeAccessToken());
+  const [intakeSessionId, setIntakeSessionId] = useState<number | null>(() => readPatientIntakeSessionId());
 
   const persist = useCallback((nextDraft: PatientOnboardingDraft, nextStep: PatientOnboardingStep) => {
     writePatientOnboardingDraft(nextDraft);
@@ -129,8 +156,6 @@ export function PatientOnboardingWizard() {
     setDraft(nextDraft);
     setStep(nextStep);
   }, []);
-
-  const dates = useMemo(() => nextDates(14), []);
 
   const { progressOrder, stepIndex, progressPct } = useMemo(() => {
     const f = draft.fulfillment;
@@ -156,6 +181,32 @@ export function PatientOnboardingWizard() {
     setErrors((e) => ({ ...e, [String(key)]: "" }));
   }
 
+  useEffect(() => {
+    if (step !== "slot" || !draft.visitType) return;
+    const visitType = draft.visitType;
+    let cancelled = false;
+
+    async function loadSlots() {
+      try {
+        const response = await fetchPatientIntakeSlots(visitType);
+        if (!cancelled) {
+          setAvailableDates(response.dates?.length ? response.dates : nextDates(14));
+          setAvailableTimes(response.time_slots?.length ? response.time_slots : TIME_SLOTS);
+        }
+      } catch {
+        if (!cancelled) {
+          setAvailableDates(nextDates(14));
+          setAvailableTimes(TIME_SLOTS);
+        }
+      }
+    }
+
+    void loadSlots();
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.visitType, step]);
+
   function validatePhone(): boolean {
     const d = draft.phone.replace(/\D/g, "");
     if (d.length < 10) {
@@ -165,36 +216,67 @@ export function PatientOnboardingWizard() {
     return true;
   }
 
-  function handleSendOtp() {
+  async function handleSendOtp() {
     if (!validatePhone()) return;
-    storeDemoPatientOtp(PATIENT_PREVIEW_OTP);
-    setOtpCode("");
-    setErrors({});
-    persist(draft, "otp");
+    setSubmitting(true);
+    try {
+      const response = await startPatientIntakePhone({
+        phone: draft.phone,
+        careReason: draft.careReason || "General consultation",
+        careLocation: draft.careLocation || undefined,
+        serviceId: draft.serviceId,
+      });
+      storePatientIntakeSessionId(response.intake_session_id);
+      setIntakeSessionId(response.intake_session_id);
+      storePatientPreviewCode(response.preview_code);
+      setPreviewCode(response.preview_code);
+      setOtpCode("");
+      setErrors({});
+      persist(draft, "otp");
+    } catch (error) {
+      setErrors({
+        phone: error instanceof Error ? error.message : "Could not start verification. Please try again.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function handleVerifyOtp() {
+  async function handleVerifyOtp() {
     const entered = otpCode.replace(/\D/g, "");
     if (entered.length !== 8) {
       setErrors({ otp: "Enter the full 8-digit code." });
       return;
     }
-    const stored = readDemoPatientOtp()?.replace(/\D/g, "") ?? "";
-    const ok =
-      entered === PATIENT_PREVIEW_OTP ||
-      (stored.length === 8 && entered === stored);
-    if (!ok) {
-      setErrors({ otp: "Invalid or expired code. Try again or resend." });
+    if (!intakeSessionId) {
+      setErrors({ otp: "Verification session is missing. Please restart from phone entry." });
       return;
     }
-    clearDemoPatientOtp();
-    setErrors({});
-    persist(draft, "health");
+    setSubmitting(true);
+    try {
+      const response = await verifyPatientIntakePhone({
+        intakeSessionId,
+        otpCode: entered,
+      });
+      clearDemoPatientOtp();
+      clearPatientPreviewCode();
+      setPreviewCode(null);
+      storePatientIntakeAccessToken(response.access_token);
+      setIntakeToken(response.access_token);
+      setErrors({});
+      persist(draft, "health");
+    } catch (error) {
+      setErrors({
+        otp: error instanceof Error ? error.message : "Invalid or expired code. Try again or resend.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function handleResendOtp() {
-    storeDemoPatientOtp(PATIENT_PREVIEW_OTP);
+  async function handleResendOtp() {
     setOtpCode("");
+    await handleSendOtp();
   }
 
   function validateHealth(): boolean {
@@ -238,6 +320,43 @@ export function PatientOnboardingWizard() {
     const prev = backMap[step];
     if (prev) persist(draft, prev);
     else if (step === "phone") router.push("/");
+  }
+
+  async function finalizeBooking(fulfillment: PatientFulfillment, pharmacyChoice?: "bimble" | "preferred") {
+    if (!intakeToken) {
+      setErrors({ slot: "Please verify your phone and try again." });
+      return;
+    }
+
+    const nextDraft: PatientOnboardingDraft = {
+      ...draft,
+      fulfillment,
+      pharmacyChoice: fulfillment === "delivery" ? (pharmacyChoice ?? "") : "",
+    };
+
+    setSubmitting(true);
+    try {
+      const response = await completePatientIntake(intakeToken, {
+        fulfillment,
+        pharmacyChoice: fulfillment === "delivery" ? pharmacyChoice ?? null : null,
+      });
+      const completionData: PatientIntakeCompletion = {
+        appointmentId: response.appointment_id,
+        status: response.status,
+        patientId: response.patient_id,
+        serviceName: response.service_name,
+        summary: response.summary,
+      };
+      storePatientIntakeCompletion(completionData);
+      setCompletion(completionData);
+      persist(nextDraft, "complete");
+    } catch (error) {
+      setErrors({
+        slot: error instanceof Error ? error.message : "Could not complete booking.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (!hydrated) {
@@ -313,7 +432,7 @@ export function PatientOnboardingWizard() {
               <ChevronLeft className="h-4 w-4" />
               Cancel
             </Button>
-            <Button type="button" className="rounded-xl" onClick={handleSendOtp}>
+            <Button type="button" className="rounded-xl" onClick={() => void handleSendOtp()} disabled={submitting}>
               Send verification code
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -327,19 +446,21 @@ export function PatientOnboardingWizard() {
           <ClinicOtpCard
             maskedEmail={maskPhone(draft.phone)}
             otpCode={otpCode}
-            isVerifying={false}
-            isResending={false}
+            isVerifying={submitting}
+            isResending={submitting}
             verifyError={errors.otp}
             onOtpChange={setOtpCode}
             onVerify={() => {
-              handleVerifyOtp();
+              void handleVerifyOtp();
             }}
-            onResend={handleResendOtp}
+            onResend={() => {
+              void handleResendOtp();
+            }}
             onBack={() => persist(draft, "phone")}
           />
           <p className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-center text-sm text-foreground">
             Preview code:{" "}
-            <span className="font-mono text-base font-bold tracking-widest">{PATIENT_PREVIEW_OTP}</span>
+            <span className="font-mono text-base font-bold tracking-widest">{previewCode ?? "12345678"}</span>
           </p>
         </div>
       )}
@@ -409,9 +530,29 @@ export function PatientOnboardingWizard() {
             <Button
               type="button"
               className="flex-1 rounded-xl"
-              onClick={() => {
+              disabled={submitting}
+              onClick={async () => {
                 if (!validateHealth()) return;
-                persist(draft, "demographics");
+                if (!intakeToken) {
+                  setErrors({ phn: "Please verify your phone first." });
+                  return;
+                }
+                setSubmitting(true);
+                try {
+                  await savePatientIntakeHealth(intakeToken, {
+                    dateOfBirth: draft.dateOfBirth,
+                    phn: draft.noPhn ? null : draft.phn,
+                    noPhn: draft.noPhn,
+                    emailIfNoPhn: draft.noPhn ? draft.emailIfNoPhn : null,
+                  });
+                  persist(draft, "demographics");
+                } catch (error) {
+                  setErrors({
+                    phn: error instanceof Error ? error.message : "Could not save health details.",
+                  });
+                } finally {
+                  setSubmitting(false);
+                }
               }}
             >
               Continue
@@ -510,9 +651,31 @@ export function PatientOnboardingWizard() {
             <Button
               type="button"
               className="flex-1 rounded-xl"
-              onClick={() => {
+              disabled={submitting}
+              onClick={async () => {
                 if (!validateDemographics()) return;
-                persist(draft, "visit_type");
+                if (!intakeToken) {
+                  setErrors({ fullName: "Please verify your phone first." });
+                  return;
+                }
+                setSubmitting(true);
+                try {
+                  await savePatientIntakeProfile(intakeToken, {
+                    fullName: draft.fullName,
+                    addressLine: draft.addressLine,
+                    city: draft.city,
+                    province: draft.province,
+                    postalCode: draft.postalCode,
+                    gender: draft.gender,
+                  });
+                  persist(draft, "visit_type");
+                } catch (error) {
+                  setErrors({
+                    fullName: error instanceof Error ? error.message : "Could not save profile.",
+                  });
+                } finally {
+                  setSubmitting(false);
+                }
               }}
             >
               Continue
@@ -542,13 +705,13 @@ export function PatientOnboardingWizard() {
                 key={id}
                 type="button"
                 onClick={() => {
-                  setDraft((prev) => {
-                    const next = { ...prev, visitType: id as PatientVisitType };
-                    writePatientOnboardingDraft(next);
-                    writePatientOnboardingStep("slot");
-                    return next;
-                  });
-                  setStep("slot");
+                  const next = {
+                    ...draft,
+                    visitType: id as PatientVisitType,
+                    appointmentDate: "",
+                    appointmentTime: "",
+                  };
+                  persist(next, "slot");
                 }}
                 className={cn(
                   "flex flex-col items-start gap-3 rounded-[1.5rem] border p-6 text-left shadow-sm transition-all",
@@ -589,7 +752,7 @@ export function PatientOnboardingWizard() {
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</p>
             <div className="flex gap-2 overflow-x-auto pb-2">
-              {dates.map((key) => {
+              {(availableDates.length ? availableDates : nextDates(14)).map((key) => {
                 const d = new Date(key + "T12:00:00");
                 const label = d.toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" });
                 const sel = draft.appointmentDate === key;
@@ -612,7 +775,7 @@ export function PatientOnboardingWizard() {
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Time</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {TIME_SLOTS.map((t) => {
+              {availableTimes.map((t) => {
                 const sel = draft.appointmentTime === t;
                 return (
                   <button
@@ -638,13 +801,32 @@ export function PatientOnboardingWizard() {
             <Button
               type="button"
               className="flex-1 rounded-xl"
-              onClick={() => {
+              disabled={submitting}
+              onClick={async () => {
                 if (!draft.appointmentDate || !draft.appointmentTime) {
                   setErrors({ slot: "Please select a date and time." });
                   return;
                 }
-                setErrors({});
-                persist(draft, "fulfillment");
+                if (!intakeToken || !draft.visitType) {
+                  setErrors({ slot: "Please start again from the previous step." });
+                  return;
+                }
+                setSubmitting(true);
+                try {
+                  await savePatientIntakeVisit(intakeToken, {
+                    visitType: draft.visitType,
+                    appointmentDate: draft.appointmentDate,
+                    appointmentTime: draft.appointmentTime,
+                  });
+                  setErrors({});
+                  persist(draft, "fulfillment");
+                } catch (error) {
+                  setErrors({
+                    slot: error instanceof Error ? error.message : "Could not save appointment slot.",
+                  });
+                } finally {
+                  setSubmitting(false);
+                }
               }}
             >
               Continue
@@ -666,14 +848,8 @@ export function PatientOnboardingWizard() {
           <div className="grid gap-4 sm:grid-cols-2">
             <button
               type="button"
-              onClick={() => {
-                const next: PatientOnboardingDraft = {
-                  ...draft,
-                  fulfillment: "pickup",
-                  pharmacyChoice: "",
-                };
-                persist(next, "complete");
-              }}
+              disabled={submitting}
+              onClick={() => void finalizeBooking("pickup")}
               className="flex flex-col items-start gap-3 rounded-[1.5rem] border border-border bg-card p-6 text-left shadow-sm transition-all hover:border-primary/40"
             >
               <Package className="h-8 w-8 text-primary" />
@@ -682,6 +858,7 @@ export function PatientOnboardingWizard() {
             </button>
             <button
               type="button"
+              disabled={submitting}
               onClick={() => {
                 const next = { ...draft, fulfillment: "delivery" as PatientFulfillment };
                 persist(next, "pharmacy");
@@ -757,10 +934,10 @@ export function PatientOnboardingWizard() {
             <Button
               type="button"
               className="flex-1 rounded-xl"
-              disabled={!draft.pharmacyChoice}
+              disabled={!draft.pharmacyChoice || submitting}
               onClick={() => {
                 if (!draft.pharmacyChoice) return;
-                persist(draft, "complete");
+                void finalizeBooking("delivery", draft.pharmacyChoice);
               }}
             >
               Confirm booking
@@ -790,31 +967,43 @@ export function PatientOnboardingWizard() {
               <li className="flex gap-2">
                 <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <span>
-                  <strong className="text-foreground">{draft.appointmentDate}</strong> at{" "}
-                  <strong className="text-foreground">{draft.appointmentTime}</strong> ·{" "}
-                  {draft.visitType === "virtual" ? "Virtual" : "Walk-in"}
+                  <strong className="text-foreground">
+                    {completion?.summary.appointment_date || draft.appointmentDate}
+                  </strong>{" "}
+                  at{" "}
+                  <strong className="text-foreground">
+                    {completion?.summary.appointment_time || draft.appointmentTime}
+                  </strong>{" "}
+                  ·{" "}
+                  {(completion?.summary.visit_type || draft.visitType) === "virtual" ? "Virtual" : "Walk-in"}
                 </span>
               </li>
               <li className="flex gap-2">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <span>
-                  {draft.careLocation || `${draft.city}, ${draft.province}`}
+                  {completion?.summary.location || draft.careLocation || `${draft.city}, ${draft.province}`}
                 </span>
               </li>
               <li className="flex gap-2">
-                {draft.fulfillment === "pickup" ? (
+                {(completion?.summary.fulfillment || draft.fulfillment) === "pickup" ? (
                   <Package className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 ) : (
                   <Truck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 )}
                 <span>
-                  {draft.fulfillment === "pickup"
+                  {(completion?.summary.fulfillment || draft.fulfillment) === "pickup"
                     ? "Pickup at clinic"
-                    : draft.pharmacyChoice === "bimble"
+                    : (completion?.summary.pharmacy_choice || draft.pharmacyChoice) === "bimble"
                       ? "Delivery — Bimble pharmacy (~1 hour)"
                       : "Delivery — your preferred pharmacy (3–5 hours)"}
                 </span>
               </li>
+              {completion?.serviceName ? (
+                <li className="flex gap-2">
+                  <HeartPulse className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <span>{completion.serviceName}</span>
+                </li>
+              ) : null}
             </ul>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -824,6 +1013,10 @@ export function PatientOnboardingWizard() {
               className="rounded-xl"
               onClick={() => {
                 clearPatientOnboardingSession();
+                setCompletion(null);
+                setPreviewCode(null);
+                setIntakeToken(null);
+                setIntakeSessionId(null);
                 router.push("/patient/onboarding");
               }}
             >
@@ -834,6 +1027,10 @@ export function PatientOnboardingWizard() {
               className="flex-1 rounded-xl"
               onClick={() => {
                 clearPatientOnboardingSession();
+                setCompletion(null);
+                setPreviewCode(null);
+                setIntakeToken(null);
+                setIntakeSessionId(null);
                 router.push("/");
               }}
             >

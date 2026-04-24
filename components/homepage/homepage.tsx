@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, ArrowRight, Battery, Brain, CalendarCheck, ChevronDown, Droplets, MapPin, Moon, Search, Stethoscope, Sun, TrendingUp, Users, Zap } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
+import { fetchAvailableServices, type AvailableServiceRecord } from "@/lib/api/clinic-dashboard";
+import { reverseGeocodePatientLocation } from "@/lib/api/patient-intake";
 import {
   bcCities,
   faqs,
@@ -14,26 +16,6 @@ import {
   testimonials,
 } from "./content";
 import "./homepage.css";
-
-/* ── Geolocation helpers ────────────────────── */
-
-async function reverseGeocodeCity(lat: number, lon: number): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
-      { headers: { "Accept-Language": "en" } },
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      address?: { city?: string; town?: string; village?: string; state?: string };
-    };
-    const city =
-      data.address?.city ?? data.address?.town ?? data.address?.village ?? null;
-    return city ? city : null;
-  } catch {
-    return null;
-  }
-}
 
 /* ── Animated stat counter ──────────────────── */
 
@@ -117,22 +99,29 @@ export function Homepage() {
 
   // Hero search state
   const [careQuery, setCareQuery] = useState("");
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
   const [locationQuery, setLocationQuery] = useState("");
   const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "done" | "denied">("idle");
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const locationInputRef = useRef<HTMLInputElement>(null);
+  const [serviceOptions, setServiceOptions] = useState<AvailableServiceRecord[]>([]);
 
-  /* ── Geolocation on mount ─────────────────── */
-  useEffect(() => {
+  const requestCurrentLocation = useCallback(() => {
     if (typeof window === "undefined" || !navigator.geolocation) return;
-
     setGeoStatus("loading");
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const city = await reverseGeocodeCity(pos.coords.latitude, pos.coords.longitude);
-        if (city) {
-          setLocationQuery(city + ", BC");
-        } else {
+        try {
+          const response = await reverseGeocodePatientLocation(
+            pos.coords.latitude,
+            pos.coords.longitude,
+          );
+          if (response.location) {
+            setLocationQuery(response.location);
+          } else {
+            setLocationQuery("Vancouver, BC");
+          }
+        } catch {
           setLocationQuery("Vancouver, BC");
         }
         setGeoStatus("done");
@@ -140,9 +129,68 @@ export function Homepage() {
       () => {
         setGeoStatus("denied");
       },
-      { timeout: 6000 },
+      {
+        timeout: 10000,
+        maximumAge: 300000,
+        enableHighAccuracy: true,
+      },
     );
   }, []);
+
+  /* ── Geolocation on mount / permission change ─────────────────── */
+  useEffect(() => {
+    requestCurrentLocation();
+  }, [requestCurrentLocation]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof navigator === "undefined") return;
+
+    const retryLocation = () => {
+      if (!locationQuery) {
+        requestCurrentLocation();
+      }
+    };
+
+    const handleFocus = () => retryLocation();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        retryLocation();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    let permissionStatus: PermissionStatus | null = null;
+
+    async function watchPermission() {
+      if (!("permissions" in navigator) || !navigator.permissions?.query) return;
+      try {
+        permissionStatus = await navigator.permissions.query({
+          name: "geolocation",
+        } as PermissionDescriptor);
+        permissionStatus.onchange = () => {
+          if (permissionStatus?.state === "granted") {
+            requestCurrentLocation();
+          } else if (permissionStatus?.state === "denied") {
+            setGeoStatus("denied");
+          }
+        };
+      } catch {
+        // Ignore permission watcher failures and rely on focus retries.
+      }
+    }
+
+    void watchPermission();
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (permissionStatus) {
+        permissionStatus.onchange = null;
+      }
+    };
+  }, [locationQuery, requestCurrentLocation]);
 
   /* ── Reveal animation ─────────────────────── */
   useEffect(() => {
@@ -175,10 +223,54 @@ export function Homepage() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadServices() {
+      try {
+        const response = await fetchAvailableServices();
+        if (!cancelled) {
+          setServiceOptions(Array.isArray(response) ? response : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setServiceOptions([]);
+        }
+      }
+    }
+
+    void loadServices();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filteredCities = bcCities.filter(
     (c) =>
       locationQuery.length > 0 &&
       c.toLowerCase().startsWith(locationQuery.toLowerCase()),
+  );
+
+  const resolveServiceId = useCallback(
+    (query: string) => {
+      const normalized = query.trim().toLowerCase();
+      if (!normalized) return null;
+      const exact = serviceOptions.find(
+        (service) => service.service_name.toLowerCase() === normalized,
+      );
+      if (exact) return exact.service_id;
+      const partial = serviceOptions.find((service) => {
+        const name = service.service_name.toLowerCase();
+        const description = (service.description ?? "").toLowerCase();
+        return (
+          name.includes(normalized) ||
+          normalized.includes(name) ||
+          description.includes(normalized)
+        );
+      });
+      return partial?.service_id ?? null;
+    },
+    [serviceOptions],
   );
 
   const handleSelectCity = useCallback((city: string) => {
@@ -280,10 +372,23 @@ export function Homepage() {
                 <input
                   type="text"
                   value={careQuery}
-                  onChange={(e) => setCareQuery(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setCareQuery(value);
+                    const selected = serviceOptions.find(
+                      (service) => service.service_name.toLowerCase() === value.trim().toLowerCase(),
+                    );
+                    setSelectedServiceId(selected?.service_id ?? null);
+                  }}
                   placeholder="What type of care do you need?"
                   autoComplete="off"
+                  list="homepage-care-options"
                 />
+                <datalist id="homepage-care-options">
+                  {serviceOptions.map((service) => (
+                    <option key={service.service_id} value={service.service_name} />
+                  ))}
+                </datalist>
               </div>
 
               <div className="hp-search-field" style={{ position: "relative" }}>
@@ -337,7 +442,9 @@ export function Homepage() {
                 className="hp-search-btn"
                 onClick={() => {
                   const params = new URLSearchParams();
+                  const resolvedServiceId = selectedServiceId ?? resolveServiceId(careQuery);
                   if (careQuery.trim()) params.set("reason", careQuery.trim());
+                  if (resolvedServiceId) params.set("serviceId", String(resolvedServiceId));
                   if (locationQuery.trim()) params.set("location", locationQuery.trim());
                   const q = params.toString();
                   router.push(q ? `/patient/onboarding?${q}` : "/patient/onboarding");
@@ -439,7 +546,18 @@ export function Homepage() {
                 ["Migraine",   <Zap key="i" size={14} />],
                 ["Anxiety",    <Brain key="i" size={14} />],
               ] as [string, React.ReactNode][]).map(([c, icon]) => (
-                <button key={c} type="button" className="hp-care-pill" onClick={() => setCareQuery(c)}>
+                <button
+                  key={c}
+                  type="button"
+                  className="hp-care-pill"
+                  onClick={() => {
+                    setCareQuery(c);
+                    const selected = serviceOptions.find(
+                      (service) => service.service_name.toLowerCase() === c.toLowerCase(),
+                    );
+                    setSelectedServiceId(selected?.service_id ?? null);
+                  }}
+                >
                   {icon}{c}
                 </button>
               ))}

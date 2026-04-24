@@ -65,6 +65,12 @@ export type DoctorAppointment = {
   chief_complaint: string | null;
   notes: string | null;
   prescription_notes: string | null;
+  visit_type?: string | null;
+  fulfillment?: string | null;
+  pharmacy_choice?: string | null;
+  appointment_date?: string | null;
+  appointment_time?: string | null;
+  care_location?: string | null;
   time: string;
   date_key: string;
   date: string;
