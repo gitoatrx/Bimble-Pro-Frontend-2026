@@ -30,6 +30,10 @@ function AppointmentTypeBadge({ type }: { type: "walkin" | "virtual" }) {
   );
 }
 
+function appointmentTypeFromRecord(appointment: DoctorAppointment): "walkin" | "virtual" {
+  return appointment.visit_type === "virtual" ? "virtual" : "walkin";
+}
+
 export default function DoctorPoolPage() {
   const [pool, setPool] = useState<DoctorAppointment[]>([]);
   const [claiming, setClaiming] = useState<number | null>(null);
@@ -130,12 +134,21 @@ export default function DoctorPoolPage() {
                   <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-foreground">{appointment.patient_name}</p>
-                      <AppointmentTypeBadge type={appointment.channel === "VIRTUAL" ? "virtual" : "walkin"} />
+                      <AppointmentTypeBadge type={appointmentTypeFromRecord(appointment)} />
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MessageSquareText className="h-3.5 w-3.5 flex-shrink-0" />
-                      <span className="truncate">{appointment.user_friendly_service_name || appointment.service_name}</span>
+                      <span className="truncate">
+                        {appointment.chief_complaint || appointment.user_friendly_service_name || appointment.service_name}
+                      </span>
                     </div>
+                    {(appointment.appointment_date || appointment.appointment_time || appointment.fulfillment) ? (
+                      <div className="text-xs text-muted-foreground">
+                        {[appointment.appointment_date, appointment.appointment_time, appointment.fulfillment]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    ) : null}
                   </div>
 
                   <Button

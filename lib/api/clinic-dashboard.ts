@@ -21,6 +21,33 @@ export type ClinicMeRecord = Record<string, unknown>;
 export type ClinicSetupStatusRecord = Record<string, unknown>;
 export type ClinicTodayRecord = Record<string, unknown>;
 export type ClinicAppointmentRecord = Record<string, unknown>;
+export type ClinicPoolAppointment = {
+  id: number;
+  appointment_id: number;
+  patient_id: number;
+  patient_name: string;
+  service: string;
+  service_name: string | null;
+  user_friendly_service_name: string;
+  status: string;
+  channel: string;
+  chief_complaint: string | null;
+  notes: string | null;
+  prescription_notes: string | null;
+  visit_type?: string | null;
+  fulfillment?: string | null;
+  pharmacy_choice?: string | null;
+  appointment_date?: string | null;
+  appointment_time?: string | null;
+  care_location?: string | null;
+  time: string;
+  date_key: string | null;
+  date: string;
+  queued_at: string | null;
+  assigned_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
 export type ClinicDoctorRecord = Record<string, unknown>;
 export type ClinicDoctorInviteRecord = Record<string, unknown>;
 export type ClinicServiceMappingRecord = Record<string, unknown>;
@@ -28,6 +55,11 @@ export type ClinicAvailabilityRecord = Record<string, unknown>;
 export type ClinicAnalyticsRecord = Record<string, unknown>;
 export type ClinicSettingsRecord = Record<string, unknown>;
 export type ClinicSetupStateRecord = Record<string, unknown>;
+export type ClinicPoolResponse = {
+  clinic_id: number;
+  clinic_slug: string;
+  appointments: ClinicPoolAppointment[];
+};
 
 export type ClinicFacilityFormDeclaration = {
   id: string;
@@ -709,6 +741,35 @@ export async function fetchClinicSetupStatus(accessToken: string) {
 export async function fetchClinicToday(accessToken: string) {
   return apiRequest<ClinicTodayRecord>({
     endpoint: API_ENDPOINTS.clinicMeToday,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicPool(accessToken: string) {
+  return apiRequest<ClinicPoolResponse>({
+    endpoint: API_ENDPOINTS.clinicMePool,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function acceptClinicPoolAppointment(
+  accessToken: string,
+  appointmentId: number,
+) {
+  return apiRequest<{ appointment: ClinicPoolAppointment }>({
+    endpoint: `${API_ENDPOINTS.clinicMePool}/${appointmentId}/accept`,
+    method: "POST",
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function rejectClinicPoolAppointment(
+  accessToken: string,
+  appointmentId: number,
+) {
+  return apiRequest<{ appointment: ClinicPoolAppointment }>({
+    endpoint: `${API_ENDPOINTS.clinicMePool}/${appointmentId}/reject`,
+    method: "POST",
     headers: authHeaders(accessToken),
   });
 }

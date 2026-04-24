@@ -1,9 +1,17 @@
-import type { PatientOnboardingDraft, PatientOnboardingStep } from "@/lib/patient/types";
+import type {
+  PatientIntakeCompletion,
+  PatientOnboardingDraft,
+  PatientOnboardingStep,
+} from "@/lib/patient/types";
 import { initialPatientOnboardingDraft } from "@/lib/patient/types";
 
 const DRAFT_KEY = "bimble:patient:onboarding-draft";
 const STEP_KEY = "bimble:patient:onboarding-step";
 const DEMO_OTP_KEY = "bimble:patient:demo-otp";
+const INTAKE_ACCESS_TOKEN_KEY = "bimble:patient:intake-access-token";
+const INTAKE_SESSION_ID_KEY = "bimble:patient:intake-session-id";
+const INTAKE_PREVIEW_CODE_KEY = "bimble:patient:intake-preview-code";
+const INTAKE_COMPLETION_KEY = "bimble:patient:intake-completion";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return Boolean(v && typeof v === "object" && !Array.isArray(v));
@@ -30,6 +38,8 @@ function parseDraft(raw: string | null): PatientOnboardingDraft {
     if (!isRecord(p)) return { ...initialPatientOnboardingDraft };
     return {
       ...initialPatientOnboardingDraft,
+      serviceId: typeof p.serviceId === "number" ? p.serviceId : null,
+      serviceName: typeof p.serviceName === "string" ? p.serviceName : "",
       careReason: typeof p.careReason === "string" ? p.careReason : "",
       careLocation: typeof p.careLocation === "string" ? p.careLocation : "",
       phone: typeof p.phone === "string" ? p.phone : "",
@@ -52,6 +62,62 @@ function parseDraft(raw: string | null): PatientOnboardingDraft {
     };
   } catch {
     return { ...initialPatientOnboardingDraft };
+  }
+}
+
+function parseCompletion(raw: string | null): PatientIntakeCompletion | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) return null;
+    if (
+      typeof parsed.appointmentId !== "number" ||
+      typeof parsed.status !== "string" ||
+      typeof parsed.patientId !== "number" ||
+      !isRecord(parsed.summary)
+    ) {
+      return null;
+    }
+
+    const summary = parsed.summary;
+    const visitType = summary.visit_type;
+    const fulfillment = summary.fulfillment;
+    const pharmacyChoice = summary.pharmacy_choice;
+
+    if (
+      (visitType !== "virtual" && visitType !== "walk_in") ||
+      (fulfillment !== "pickup" && fulfillment !== "delivery")
+    ) {
+      return null;
+    }
+
+    if (
+      pharmacyChoice !== null &&
+      pharmacyChoice !== undefined &&
+      pharmacyChoice !== "bimble" &&
+      pharmacyChoice !== "preferred"
+    ) {
+      return null;
+    }
+
+    return {
+      appointmentId: parsed.appointmentId,
+      status: parsed.status,
+      patientId: parsed.patientId,
+      serviceName: typeof parsed.serviceName === "string" ? parsed.serviceName : null,
+      summary: {
+        visit_type: visitType,
+        appointment_date:
+          typeof summary.appointment_date === "string" ? summary.appointment_date : "",
+        appointment_time:
+          typeof summary.appointment_time === "string" ? summary.appointment_time : "",
+        fulfillment,
+        pharmacy_choice: pharmacyChoice ?? null,
+        location: typeof summary.location === "string" ? summary.location : null,
+      },
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -81,6 +147,10 @@ export function clearPatientOnboardingSession() {
   sessionStorage.removeItem(DRAFT_KEY);
   sessionStorage.removeItem(STEP_KEY);
   sessionStorage.removeItem(DEMO_OTP_KEY);
+  sessionStorage.removeItem(INTAKE_ACCESS_TOKEN_KEY);
+  sessionStorage.removeItem(INTAKE_SESSION_ID_KEY);
+  sessionStorage.removeItem(INTAKE_PREVIEW_CODE_KEY);
+  sessionStorage.removeItem(INTAKE_COMPLETION_KEY);
 }
 
 export function storeDemoPatientOtp(code: string) {
@@ -96,4 +166,67 @@ export function readDemoPatientOtp(): string | null {
 export function clearDemoPatientOtp() {
   if (typeof window === "undefined") return;
   sessionStorage.removeItem(DEMO_OTP_KEY);
+}
+
+export function storePatientIntakeAccessToken(token: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(INTAKE_ACCESS_TOKEN_KEY, token);
+}
+
+export function readPatientIntakeAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem(INTAKE_ACCESS_TOKEN_KEY);
+}
+
+export function clearPatientIntakeAccessToken() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(INTAKE_ACCESS_TOKEN_KEY);
+}
+
+export function storePatientIntakeSessionId(sessionId: number) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(INTAKE_SESSION_ID_KEY, String(sessionId));
+}
+
+export function readPatientIntakeSessionId(): number | null {
+  if (typeof window === "undefined") return null;
+  const raw = sessionStorage.getItem(INTAKE_SESSION_ID_KEY);
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+export function clearPatientIntakeSessionId() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(INTAKE_SESSION_ID_KEY);
+}
+
+export function storePatientPreviewCode(code: string) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(INTAKE_PREVIEW_CODE_KEY, code);
+}
+
+export function readPatientPreviewCode(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem(INTAKE_PREVIEW_CODE_KEY);
+}
+
+export function clearPatientPreviewCode() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(INTAKE_PREVIEW_CODE_KEY);
+}
+
+export function storePatientIntakeCompletion(completion: PatientIntakeCompletion) {
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(INTAKE_COMPLETION_KEY, JSON.stringify(completion));
+}
+
+export function readPatientIntakeCompletion(): PatientIntakeCompletion | null {
+  if (typeof window === "undefined") return null;
+  return parseCompletion(sessionStorage.getItem(INTAKE_COMPLETION_KEY));
+}
+
+export function clearPatientIntakeCompletion() {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(INTAKE_COMPLETION_KEY);
 }
