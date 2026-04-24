@@ -7,7 +7,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, ArrowRight, Battery, Brain, CalendarCheck, ChevronDown, Droplets, MapPin, Moon, Search, Stethoscope, Sun, TrendingUp, Users, Zap } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { fetchAvailableServices, type AvailableServiceRecord } from "@/lib/api/clinic-dashboard";
-import { reverseGeocodePatientLocation } from "@/lib/api/patient-intake";
 import {
   bcCities,
   faqs,
@@ -16,6 +15,68 @@ import {
   testimonials,
 } from "./content";
 import "./homepage.css";
+
+type BrowserReverseGeocodeResponse = {
+  address?: {
+    city?: string;
+    town?: string;
+    village?: string;
+    hamlet?: string;
+    county?: string;
+    state?: string;
+    region?: string;
+    country_code?: string;
+  };
+  display_name?: string;
+};
+
+async function reverseGeocodeBrowserLocation(
+  lat: number,
+  lng: number,
+): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`,
+      {
+        headers: {
+          "Accept-Language": "en",
+        },
+      },
+    );
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as BrowserReverseGeocodeResponse;
+    const city =
+      payload.address?.city ??
+      payload.address?.town ??
+      payload.address?.village ??
+      payload.address?.hamlet ??
+      payload.address?.county ??
+      null;
+    const region =
+      payload.address?.state ??
+      payload.address?.region ??
+      payload.address?.country_code?.toUpperCase() ??
+      null;
+
+    const compactLocation = [city, region].filter(Boolean).join(", ").trim();
+    if (compactLocation) {
+      return compactLocation;
+    }
+
+    if (payload.display_name?.trim()) {
+      return payload.display_name
+        .split(",")
+        .slice(0, 2)
+        .join(",")
+        .trim();
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /* ── Animated stat counter ──────────────────── */
 
@@ -101,48 +162,130 @@ export function Homepage() {
   const [careQuery, setCareQuery] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
   const [locationQuery, setLocationQuery] = useState("");
-  const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "done" | "denied">("idle");
+  const [geoStatus, setGeoStatus] = useState<
+    "idle" | "loading" | "done" | "denied" | "unavailable"
+  >("idle");
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
+  const [showCareSuggestions, setShowCareSuggestions] = useState(false);
   const locationInputRef = useRef<HTMLInputElement>(null);
+  const careInputRef = useRef<HTMLInputElement>(null);
   const [serviceOptions, setServiceOptions] = useState<AvailableServiceRecord[]>([]);
   const [locationResolved, setLocationResolved] = useState(false);
+  const locationRequestSeqRef = useRef(0);
+  const locationRequestInFlightRef = useRef(false);
 
   const requestCurrentLocation = useCallback(() => {
-    if (typeof window === "undefined" || !navigator.geolocation) return;
-    setGeoStatus("loading");
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const response = await reverseGeocodePatientLocation(
-            pos.coords.latitude,
-            pos.coords.longitude,
-          );
-          if (response.location) {
-            setLocationQuery(response.location);
-            setLocationResolved(true);
-          } else {
-            setLocationResolved(false);
-          }
-        } catch {
-          setLocationResolved(false);
+    if (locationRequestInFlightRef.current) {
+      return;
+    }
+    locationRequestInFlightRef.current = true;
+    const requestId = ++locationRequestSeqRef.current;
+    const isLatestRequest = () => requestId === locationRequestSeqRef.current;
+
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      console.warn("Homepage geolocation unavailable: navigator.geolocation is missing.");
+      if (isLatestRequest()) {
+        setGeoStatus("unavailable");
+      }
+      locationRequestInFlightRef.current = false;
+      return;
+    }
+
+    // Browser geolocation only works on secure contexts (HTTPS or localhost).
+    if (!window.isSecureContext) {
+      console.warn("Homepage geolocation unavailable: window.isSecureContext is false.");
+      if (isLatestRequest()) {
+        setGeoStatus("unavailable");
+      }
+      locationRequestInFlightRef.current = false;
+      return;
+    }
+
+    const resolveDetectedPosition = async (pos: GeolocationPosition) => {
+      const latitude = pos.coords.latitude;
+      const longitude = pos.coords.longitude;
+
+      try {
+        let detectedLocation =
+          (await reverseGeocodeBrowserLocation(latitude, longitude)) ?? "";
+
+        if (!detectedLocation) {
+          detectedLocation = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
         }
+
+        if (!isLatestRequest()) return;
+        console.log("Homepage detected location:", detectedLocation, {
+          latitude,
+          longitude,
+        });
+        setLocationQuery(detectedLocation);
+        setLocationResolved(true);
+      } catch {
+        if (!isLatestRequest()) return;
+        const coordinateFallback = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+        console.log("Homepage detected location:", coordinateFallback, {
+          latitude,
+          longitude,
+        });
+        setLocationQuery(coordinateFallback);
+        setLocationResolved(true);
+      }
+      if (isLatestRequest()) {
         setGeoStatus("done");
-      },
-      () => {
+      }
+    };
+
+    const handleGeoError = (error: GeolocationPositionError) => {
+      if (!isLatestRequest()) return;
+      console.warn("Homepage geolocation failed:", {
+        code: error.code,
+        message: error.message,
+      });
+      if (error.code === error.PERMISSION_DENIED) {
         setGeoStatus("denied");
-        setLocationResolved(false);
-      },
-      {
-        timeout: 10000,
-        maximumAge: 300000,
-        enableHighAccuracy: true,
-      },
-    );
+      } else {
+        // TIMEOUT/POSITION_UNAVAILABLE can happen even when permission is granted.
+        setGeoStatus("unavailable");
+      }
+      setLocationResolved(false);
+    };
+
+    const requestWithOptions = (options: PositionOptions) =>
+      new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
+      });
+
+    setGeoStatus("loading");
+    void requestWithOptions({
+      timeout: 10000,
+      maximumAge: 300000,
+      enableHighAccuracy: true,
+    })
+      .catch(() =>
+        requestWithOptions({
+          timeout: 15000,
+          maximumAge: 600000,
+          enableHighAccuracy: false,
+        }),
+      )
+      .then(resolveDetectedPosition)
+      .catch(handleGeoError)
+      .finally(() => {
+        if (isLatestRequest()) {
+          locationRequestInFlightRef.current = false;
+        }
+      });
   }, []);
 
   /* ── Geolocation on mount / permission change ─────────────────── */
   useEffect(() => {
-    requestCurrentLocation();
+    const timer = window.setTimeout(() => {
+      requestCurrentLocation();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [requestCurrentLocation]);
 
   useEffect(() => {
@@ -161,7 +304,7 @@ export function Homepage() {
       }
     };
 
-    window.addEventListener("focus", handleFocus);
+      window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
 
     let permissionStatus: PermissionStatus | null = null;
@@ -172,7 +315,9 @@ export function Homepage() {
         permissionStatus = await navigator.permissions.query({
           name: "geolocation",
         } as PermissionDescriptor);
+        console.log("Homepage geolocation permission state:", permissionStatus.state);
         permissionStatus.onchange = () => {
+          console.log("Homepage geolocation permission changed:", permissionStatus?.state);
           if (permissionStatus?.state === "granted") {
             requestCurrentLocation();
           } else if (permissionStatus?.state === "denied") {
@@ -253,6 +398,21 @@ export function Homepage() {
       locationQuery.length > 0 &&
       c.toLowerCase().startsWith(locationQuery.toLowerCase()),
   );
+
+  const geoHint =
+    geoStatus === "loading"
+      ? "Checking your browser location access..."
+      : geoStatus === "denied"
+        ? "Location access is blocked in this browser. Allow location and try again."
+        : geoStatus === "unavailable"
+          ? "This in-app browser may not expose location on localhost. Tap to retry or open in a full browser."
+          : "";
+
+  const filteredServices = serviceOptions.filter((service) => {
+    if (!careQuery.trim()) return true;
+    const query = careQuery.trim().toLowerCase();
+    return service.service_name.toLowerCase().includes(query);
+  });
 
   const resolveServiceId = useCallback(
     (query: string) => {
@@ -371,28 +531,80 @@ export function Homepage() {
 
             {/* Search bar */}
             <div className="hp-search-box">
-              <div className="hp-search-field">
+              <div className="hp-search-field" style={{ position: "relative" }}>
                 <Search size={17} strokeWidth={2} />
                 <input
+                  ref={careInputRef}
                   type="text"
                   value={careQuery}
                   onChange={(e) => {
                     const value = e.target.value;
                     setCareQuery(value);
+                    setShowCareSuggestions(true);
                     const selected = serviceOptions.find(
                       (service) => service.service_name.toLowerCase() === value.trim().toLowerCase(),
                     );
                     setSelectedServiceId(selected?.service_id ?? null);
                   }}
+                  onFocus={() => setShowCareSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowCareSuggestions(false), 150)}
                   placeholder="What type of care do you need?"
                   autoComplete="off"
-                  list="homepage-care-options"
                 />
-                <datalist id="homepage-care-options">
-                  {serviceOptions.map((service) => (
-                    <option key={service.service_id} value={service.service_name} />
-                  ))}
-                </datalist>
+                <ChevronDown size={16} strokeWidth={2} style={{ color: "#22314d", flexShrink: 0 }} />
+
+                {showCareSuggestions && filteredServices.length > 0 ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 6px)",
+                      left: 0,
+                      width: "100%",
+                      background: "#fff",
+                      border: "1px solid #d0d8f0",
+                      borderRadius: "12px",
+                      boxShadow: "0 8px 32px rgba(15,31,61,0.12)",
+                      zIndex: 50,
+                      overflow: "hidden",
+                      maxHeight: "320px",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {filteredServices.slice(0, 10).map((service) => (
+                      <button
+                        key={service.service_id}
+                        type="button"
+                        onMouseDown={() => {
+                          setCareQuery(service.service_name);
+                          setSelectedServiceId(service.service_id);
+                          setShowCareSuggestions(false);
+                        }}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "10px 16px",
+                          fontSize: "14px",
+                          color: "#0f1f3d",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.background = "#eef2ff";
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.background = "none";
+                        }}
+                      >
+                        <Search size={13} style={{ color: "#8896b4", flexShrink: 0 }} />
+                        {service.service_name}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div className="hp-search-field" style={{ position: "relative" }}>
@@ -412,7 +624,7 @@ export function Homepage() {
                   }}
                   onFocus={() => setShowCitySuggestions(true)}
                   onBlur={() => setTimeout(() => setShowCitySuggestions(false), 150)}
-                  placeholder={geoStatus === "loading" ? "Detecting location…" : "City in BC"}
+                  placeholder={geoStatus === "loading" ? "Detecting location…" : "City, province, or area"}
                   autoComplete="off"
                 />
 
@@ -444,6 +656,41 @@ export function Homepage() {
                   </div>
                 )}
               </div>
+
+              {geoHint ? (
+                <div
+                  style={{
+                    gridColumn: "1 / -1",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    padding: "0 4px",
+                    color: geoStatus === "denied" ? "#b42318" : "#5f6f8f",
+                    fontSize: "13px",
+                  }}
+                >
+                  <span>{geoHint}</span>
+                  {geoStatus !== "loading" ? (
+                    <button
+                      type="button"
+                      onClick={requestCurrentLocation}
+                      style={{
+                        border: "none",
+                        background: "none",
+                        color: "#1f4fff",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        padding: 0,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Use my location
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
 
               <button
                 type="button"

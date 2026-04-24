@@ -25,7 +25,8 @@ export type PatientOnboardingDraft = {
   phn: string;
   noPhn: boolean;
   emailIfNoPhn: string;
-  fullName: string;
+  firstName: string;
+  lastName: string;
   addressLine: string;
   city: string;
   province: string;
@@ -65,7 +66,8 @@ export const initialPatientOnboardingDraft: PatientOnboardingDraft = {
   phn: "",
   noPhn: false,
   emailIfNoPhn: "",
-  fullName: "",
+  firstName: "",
+  lastName: "",
   addressLine: "",
   city: "",
   province: "",

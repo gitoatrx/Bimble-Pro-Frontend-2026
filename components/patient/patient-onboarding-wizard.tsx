@@ -76,6 +76,41 @@ function formatPhoneInput(raw: string) {
   return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
 }
 
+function splitDateOfBirth(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return { year: "", month: "", day: "" };
+  }
+  return { year: match[1], month: match[2], day: match[3] };
+}
+
+function composeDateOfBirth(month: string, day: string, year: string) {
+  const normalizedMonth = month.replace(/\D/g, "").slice(0, 2);
+  const normalizedDay = day.replace(/\D/g, "").slice(0, 2);
+  const normalizedYear = year.replace(/\D/g, "").slice(0, 4);
+  if (
+    normalizedMonth.length !== 2 ||
+    normalizedDay.length !== 2 ||
+    normalizedYear.length !== 4
+  ) {
+    return "";
+  }
+  return `${normalizedYear}-${normalizedMonth}-${normalizedDay}`;
+}
+
+function isFutureDateOfBirth(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const today = new Date();
+  const todayUtc = Date.UTC(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  const [year, month, day] = value.split("-").map(Number);
+  const dobUtc = Date.UTC(year, month - 1, day);
+  return dobUtc > todayUtc;
+}
+
 function nextDates(count: number): string[] {
   const out: string[] = [];
   const base = new Date();
@@ -149,6 +184,9 @@ export function PatientOnboardingWizard() {
   const [previewCode, setPreviewCode] = useState<string | null>(() => readPatientPreviewCode());
   const [intakeToken, setIntakeToken] = useState<string | null>(() => readPatientIntakeAccessToken());
   const [intakeSessionId, setIntakeSessionId] = useState<number | null>(() => readPatientIntakeSessionId());
+  const [dobMonth, setDobMonth] = useState(() => splitDateOfBirth(readPatientOnboardingDraft().dateOfBirth).month);
+  const [dobDay, setDobDay] = useState(() => splitDateOfBirth(readPatientOnboardingDraft().dateOfBirth).day);
+  const [dobYear, setDobYear] = useState(() => splitDateOfBirth(readPatientOnboardingDraft().dateOfBirth).year);
 
   const persist = useCallback((nextDraft: PatientOnboardingDraft, nextStep: PatientOnboardingStep) => {
     writePatientOnboardingDraft(nextDraft);
@@ -158,7 +196,6 @@ export function PatientOnboardingWizard() {
   }, []);
 
   const { progressOrder, stepIndex, progressPct } = useMemo(() => {
-    const f = draft.fulfillment;
     const order: PatientOnboardingStep[] = [
       "phone",
       "otp",
@@ -167,14 +204,14 @@ export function PatientOnboardingWizard() {
       "visit_type",
       "slot",
       "fulfillment",
-      ...(f === "delivery" ? (["pharmacy"] as const) : []),
+      "pharmacy",
       "complete",
     ];
     const idx = order.indexOf(step);
     const i = idx >= 0 ? idx : 0;
     const pct = Math.min(100, ((i + 1) / order.length) * 100);
     return { progressOrder: order, stepIndex: i, progressPct: pct };
-  }, [draft.fulfillment, step]);
+  }, [step]);
 
   function setField<K extends keyof PatientOnboardingDraft>(key: K, value: PatientOnboardingDraft[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -206,6 +243,13 @@ export function PatientOnboardingWizard() {
       cancelled = true;
     };
   }, [draft.visitType, step]);
+
+  useEffect(() => {
+    const dob = splitDateOfBirth(draft.dateOfBirth);
+    setDobMonth(dob.month);
+    setDobDay(dob.day);
+    setDobYear(dob.year);
+  }, [draft.dateOfBirth]);
 
   function validatePhone(): boolean {
     const d = draft.phone.replace(/\D/g, "");
@@ -282,6 +326,9 @@ export function PatientOnboardingWizard() {
   function validateHealth(): boolean {
     const e: Record<string, string> = {};
     if (!draft.dateOfBirth) e.dateOfBirth = "Date of birth is required.";
+    else if (isFutureDateOfBirth(draft.dateOfBirth)) {
+      e.dateOfBirth = "Date of birth cannot be in the future.";
+    }
     if (!draft.noPhn) {
       const phn = draft.phn.replace(/\D/g, "");
       if (phn.length < 10) e.phn = "Enter a valid PHN (10 digits), or check “I don’t have a PHN”.";
@@ -296,7 +343,8 @@ export function PatientOnboardingWizard() {
 
   function validateDemographics(): boolean {
     const e: Record<string, string> = {};
-    if (!draft.fullName.trim()) e.fullName = "Full name is required.";
+    if (!draft.firstName.trim()) e.firstName = "First name is required.";
+    if (!draft.lastName.trim()) e.lastName = "Last name is required.";
     if (!draft.addressLine.trim()) e.addressLine = "Street address is required.";
     if (!draft.city.trim()) e.city = "City is required.";
     if (!draft.province) e.province = "Province is required.";
@@ -315,14 +363,14 @@ export function PatientOnboardingWizard() {
       slot: "visit_type",
       fulfillment: "slot",
       pharmacy: "fulfillment",
-      complete: draft.fulfillment === "delivery" ? "pharmacy" : "fulfillment",
+      complete: "pharmacy",
     };
     const prev = backMap[step];
     if (prev) persist(draft, prev);
     else if (step === "phone") router.push("/");
   }
 
-  async function finalizeBooking(fulfillment: PatientFulfillment, pharmacyChoice?: "bimble" | "preferred") {
+  async function finalizeBooking(fulfillment: PatientFulfillment, pharmacyChoice: "bimble" | "preferred") {
     if (!intakeToken) {
       setErrors({ slot: "Please verify your phone and try again." });
       return;
@@ -331,14 +379,14 @@ export function PatientOnboardingWizard() {
     const nextDraft: PatientOnboardingDraft = {
       ...draft,
       fulfillment,
-      pharmacyChoice: fulfillment === "delivery" ? (pharmacyChoice ?? "") : "",
+      pharmacyChoice,
     };
 
     setSubmitting(true);
     try {
       const response = await completePatientIntake(intakeToken, {
         fulfillment,
-        pharmacyChoice: fulfillment === "delivery" ? pharmacyChoice ?? null : null,
+        pharmacyChoice,
       });
       const completionData: PatientIntakeCompletion = {
         appointmentId: response.appointment_id,
@@ -460,7 +508,7 @@ export function PatientOnboardingWizard() {
           />
           <p className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-center text-sm text-foreground">
             Preview code:{" "}
-            <span className="font-mono text-base font-bold tracking-widest">{previewCode ?? "12345678"}</span>
+            <span className="font-mono text-base font-bold tracking-widest">{previewCode ?? "Check console"}</span>
           </p>
         </div>
       )}
@@ -478,14 +526,55 @@ export function PatientOnboardingWizard() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Date of birth</label>
-            <Input
-              type="date"
-              value={draft.dateOfBirth}
-              onChange={(e) => setField("dateOfBirth", e.target.value)}
-              className="h-12 rounded-xl border-border"
-            />
+            <div className="grid grid-cols-3 gap-3">
+              <Input
+                inputMode="numeric"
+                placeholder="MM"
+                value={dobMonth}
+                onChange={(e) => {
+                  const month = e.target.value.replace(/\D/g, "").slice(0, 2);
+                  setDobMonth(month);
+                  setField("dateOfBirth", composeDateOfBirth(month, dobDay, dobYear));
+                }}
+                className="h-12 rounded-xl border-border"
+              />
+              <Input
+                inputMode="numeric"
+                placeholder="DD"
+                value={dobDay}
+                onChange={(e) => {
+                  const day = e.target.value.replace(/\D/g, "").slice(0, 2);
+                  setDobDay(day);
+                  setField("dateOfBirth", composeDateOfBirth(dobMonth, day, dobYear));
+                }}
+                className="h-12 rounded-xl border-border"
+              />
+              <Input
+                inputMode="numeric"
+                placeholder="YYYY"
+                value={dobYear}
+                onChange={(e) => {
+                  const year = e.target.value.replace(/\D/g, "").slice(0, 4);
+                  setDobYear(year);
+                  setField("dateOfBirth", composeDateOfBirth(dobMonth, dobDay, year));
+                }}
+                className="h-12 rounded-xl border-border"
+              />
+            </div>
             <FieldError message={errors.dateOfBirth} />
           </div>
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+            <input
+              type="checkbox"
+              checked={draft.noPhn}
+              onChange={(e) => {
+                setField("noPhn", e.target.checked);
+                setErrors({});
+              }}
+              className="size-4 rounded border-border"
+            />
+            <span className="text-sm text-foreground">I don&apos;t have a PHN — use my email instead</span>
+          </label>
           {!draft.noPhn ? (
             <div className="space-y-2">
               <label className="text-sm font-medium">Personal Health Number (PHN)</label>
@@ -511,18 +600,6 @@ export function PatientOnboardingWizard() {
               <FieldError message={errors.emailIfNoPhn} />
             </div>
           )}
-          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
-            <input
-              type="checkbox"
-              checked={draft.noPhn}
-              onChange={(e) => {
-                setField("noPhn", e.target.checked);
-                setErrors({});
-              }}
-              className="size-4 rounded border-border"
-            />
-            <span className="text-sm text-foreground">I don&apos;t have a PHN — use my email instead</span>
-          </label>
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" onClick={goBack}>
               Back
@@ -572,14 +649,24 @@ export function PatientOnboardingWizard() {
             <p className="text-sm text-muted-foreground">We use this to personalize your visit and prescriptions.</p>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Full legal name</label>
+            <label className="text-sm font-medium">First name</label>
             <Input
-              value={draft.fullName}
-              onChange={(e) => setField("fullName", e.target.value)}
+              value={draft.firstName}
+              onChange={(e) => setField("firstName", e.target.value)}
               className="h-12 rounded-xl border-border"
-              placeholder="Jordan Lee"
+              placeholder="Jordan"
             />
-            <FieldError message={errors.fullName} />
+            <FieldError message={errors.firstName} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Last name</label>
+            <Input
+              value={draft.lastName}
+              onChange={(e) => setField("lastName", e.target.value)}
+              className="h-12 rounded-xl border-border"
+              placeholder="Lee"
+            />
+            <FieldError message={errors.lastName} />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Street address</label>
@@ -655,13 +742,14 @@ export function PatientOnboardingWizard() {
               onClick={async () => {
                 if (!validateDemographics()) return;
                 if (!intakeToken) {
-                  setErrors({ fullName: "Please verify your phone first." });
+                  setErrors({ firstName: "Please verify your phone first." });
                   return;
                 }
                 setSubmitting(true);
                 try {
                   await savePatientIntakeProfile(intakeToken, {
-                    fullName: draft.fullName,
+                    firstName: draft.firstName,
+                    lastName: draft.lastName,
                     addressLine: draft.addressLine,
                     city: draft.city,
                     province: draft.province,
@@ -671,7 +759,7 @@ export function PatientOnboardingWizard() {
                   persist(draft, "visit_type");
                 } catch (error) {
                   setErrors({
-                    fullName: error instanceof Error ? error.message : "Could not save profile.",
+                    firstName: error instanceof Error ? error.message : "Could not save profile.",
                   });
                 } finally {
                   setSubmitting(false);
@@ -843,24 +931,37 @@ export function PatientOnboardingWizard() {
             <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               Prescription fulfillment
             </h1>
-            <p className="text-sm text-muted-foreground">Pick up at the clinic or have medication delivered.</p>
+            <p className="text-sm text-muted-foreground">
+              Choose whether you want to pick up from a pharmacy or have medication delivered from a pharmacy.
+            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <button
               type="button"
               disabled={submitting}
-              onClick={() => void finalizeBooking("pickup")}
+              onClick={() => {
+                const next = {
+                  ...draft,
+                  fulfillment: "pickup" as PatientFulfillment,
+                  pharmacyChoice: "" as const,
+                };
+                persist(next, "pharmacy");
+              }}
               className="flex flex-col items-start gap-3 rounded-[1.5rem] border border-border bg-card p-6 text-left shadow-sm transition-all hover:border-primary/40"
             >
               <Package className="h-8 w-8 text-primary" />
               <p className="font-semibold text-foreground">Pickup</p>
-              <p className="text-sm text-muted-foreground">Collect at the clinic after your visit.</p>
+              <p className="text-sm text-muted-foreground">Pick up your medication from the pharmacy you choose next.</p>
             </button>
             <button
               type="button"
               disabled={submitting}
               onClick={() => {
-                const next = { ...draft, fulfillment: "delivery" as PatientFulfillment };
+                const next = {
+                  ...draft,
+                  fulfillment: "delivery" as PatientFulfillment,
+                  pharmacyChoice: "" as const,
+                };
                 persist(next, "pharmacy");
               }}
               className="flex flex-col items-start gap-3 rounded-[1.5rem] border border-border bg-card p-6 text-left shadow-sm transition-all hover:border-primary/40"
@@ -883,7 +984,10 @@ export function PatientOnboardingWizard() {
             <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               Choose a pharmacy
             </h1>
-            <p className="text-sm text-muted-foreground">Delivery timing depends on which pharmacy you select.</p>
+            <p className="text-sm text-muted-foreground">
+              Choose the pharmacy that should prepare your medication for
+              {draft.fulfillment === "pickup" ? " pickup." : " delivery."}
+            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <button
@@ -918,13 +1022,29 @@ export function PatientOnboardingWizard() {
           {draft.pharmacyChoice === "bimble" ? (
             <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-foreground">
               <Sparkles className="mb-1 inline h-4 w-4 text-primary" />{" "}
-              <strong>Our pharmacist will deliver in about 1 hour</strong> after your prescription is ready.
+              {draft.fulfillment === "delivery" ? (
+                <>
+                  <strong>Our pharmacist will deliver in about 1 hour</strong> after your prescription is ready.
+                </>
+              ) : (
+                <>
+                  <strong>Bimble pharmacy will prepare your prescription quickly</strong> for pharmacy pickup.
+                </>
+              )}
             </div>
           ) : null}
           {draft.pharmacyChoice === "preferred" ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
               <Clock className="mb-1 inline h-4 w-4" />{" "}
-              If you choose your preferred pharmacy, delivery may take <strong>up to 3–5 hours</strong>.
+              {draft.fulfillment === "delivery" ? (
+                <>
+                  If you choose your preferred pharmacy, delivery may take <strong>up to 3–5 hours</strong>.
+                </>
+              ) : (
+                <>
+                  If you choose your preferred pharmacy, pickup timing will depend on that pharmacy&apos;s processing time.
+                </>
+              )}
             </div>
           ) : null}
           <div className="flex gap-3 pt-2">
@@ -937,7 +1057,7 @@ export function PatientOnboardingWizard() {
               disabled={!draft.pharmacyChoice || submitting}
               onClick={() => {
                 if (!draft.pharmacyChoice) return;
-                void finalizeBooking("delivery", draft.pharmacyChoice);
+                void finalizeBooking(draft.fulfillment || "pickup", draft.pharmacyChoice);
               }}
             >
               Confirm booking
@@ -992,7 +1112,9 @@ export function PatientOnboardingWizard() {
                 )}
                 <span>
                   {(completion?.summary.fulfillment || draft.fulfillment) === "pickup"
-                    ? "Pickup at clinic"
+                    ? (completion?.summary.pharmacy_choice || draft.pharmacyChoice) === "bimble"
+                      ? "Pickup — Bimble pharmacy"
+                      : "Pickup — your preferred pharmacy"
                     : (completion?.summary.pharmacy_choice || draft.pharmacyChoice) === "bimble"
                       ? "Delivery — Bimble pharmacy (~1 hour)"
                       : "Delivery — your preferred pharmacy (3–5 hours)"}

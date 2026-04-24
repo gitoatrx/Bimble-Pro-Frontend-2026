@@ -1,0 +1,43 @@
+
+> bimble@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.2 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.16.172.167:3000
+- Environments: .env.local
+✓ Ready in 578ms
+
+ GET / 200 in 2.3s (next.js: 958ms, application-code: 1312ms)
+ GET / 200 in 2.3s (next.js: 1315ms, application-code: 945ms)
+ GET /doctor/pool 200 in 2.2s (next.js: 1407ms, application-code: 841ms)
+ GET /clinic/appointments 200 in 2.3s (next.js: 1478ms, application-code: 777ms)
+ GET / 200 in 2.3s (next.js: 1328ms, application-code: 936ms)
+ GET /api/v1/services 200 in 242ms (next.js: 155ms, application-code: 87ms)
+ GET /api/v1/services 200 in 23ms (next.js: 3ms, application-code: 20ms)
+ GET /api/v1/services 200 in 20ms (next.js: 3ms, application-code: 16ms)
+ GET /api/v1/doctors/me/pool 200 in 1466ms (next.js: 1052ms, application-code: 414ms)
+ GET /api/v1/doctors/me/pool 200 in 45ms (next.js: 11ms, application-code: 34ms)
+ GET /api/v1/clinics/me/appointments?from=2026-04-24&to=2026-04-29 200 in 2.6s (next.js: 1074ms, application-code: 1566ms)
+ GET /api/v1/clinics/me/setup-status 500 in 2.7s (next.js: 1070ms, application-code: 1608ms)
+ GET /api/v1/clinics/me/appointments?date=2026-04-24 200 in 2.7s (next.js: 1073ms, application-code: 1625ms)
+ GET /api/v1/clinics/me/appointments?from=2026-04-24&to=2026-04-29 200 in 75ms (next.js: 12ms, application-code: 63ms)
+ GET /api/v1/clinics/me/appointments?date=2026-04-24 200 in 39ms (next.js: 4ms, application-code: 35ms)
+ GET /api/v1/doctors/me/clinics 200 in 5.6s (next.js: 927ms, application-code: 4.7s)
+ GET / 200 in 87ms (next.js: 5ms, application-code: 82ms)
+✓ Compiled in 168ms
+ GET / 200 in 224ms (next.js: 59ms, application-code: 165ms)
+ GET /api/v1/services 200 in 436ms (next.js: 193ms, application-code: 243ms)
+ GET / 200 in 146ms (next.js: 3ms, application-code: 143ms)
+ GET /api/v1/services 200 in 74ms (next.js: 48ms, application-code: 26ms)
+ GET / 200 in 84ms (next.js: 3ms, application-code: 81ms)
+ GET /api/v1/services 200 in 19ms (next.js: 3ms, application-code: 16ms)
+✓ Compiled in 105ms
+ GET /api/v1/services 200 in 15ms (next.js: 2ms, application-code: 13ms)
+ GET /api/v1/services 200 in 14ms (next.js: 3ms, application-code: 11ms)
+ GET / 200 in 205ms (next.js: 43ms, application-code: 162ms)
+ GET /api/v1/services 200 in 31ms (next.js: 2ms, application-code: 28ms)
+ GET / 200 in 90ms (next.js: 6ms, application-code: 83ms)
+ GET /api/v1/services 200 in 17ms (next.js: 4ms, application-code: 13ms)
+ GET / 200 in 85ms (next.js: 4ms, application-code: 81ms)
+ GET /api/v1/services 200 in 56ms (next.js: 9ms, application-code: 47ms)

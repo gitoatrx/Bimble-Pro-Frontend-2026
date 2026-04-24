@@ -53,7 +53,8 @@ export type PatientIntakeHealthRequest = {
 };
 
 export type PatientIntakeProfileRequest = {
-  fullName: string;
+  firstName: string;
+  lastName: string;
   addressLine: string;
   city: string;
   province: string;
@@ -74,7 +75,7 @@ export type PatientIntakeSlotsResponse = {
 
 export type PatientIntakeCompleteRequest = {
   fulfillment: PatientFulfillment;
-  pharmacyChoice?: PatientPharmacyChoice | null;
+  pharmacyChoice: PatientPharmacyChoice;
 };
 
 export type PatientIntakeCompletionResponse = {
