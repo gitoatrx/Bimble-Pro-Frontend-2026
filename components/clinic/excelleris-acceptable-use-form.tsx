@@ -5,6 +5,7 @@ import { AlertCircle, ArrowRight, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { hasExactDigits } from "@/lib/form-validation";
 import {
   fetchClinicExcellerisAcceptableUseForm,
   submitClinicExcellerisAcceptableUseForm,
@@ -169,18 +170,23 @@ function ChoiceCard({
   );
 }
 
-function parseSignature(source: Record<string, unknown>) {
+function parseSignature(
+  source: Record<string, unknown>,
+  response: ClinicExcellerisResponse,
+) {
   const nestedSignature = isRecord(source.signature) ? source.signature : null;
 
   return {
     signatureDataUrl:
       asString(source.signatureDataUrl) ||
       asString(source.signature_data_url) ||
+      asString(response.signature_data_url) ||
       asString(nestedSignature?.signatureDataUrl) ||
       asString(nestedSignature?.signature_data_url),
     signatureLabel:
       asString(source.signatureLabel) ||
       asString(source.signature_label) ||
+      asString(response.signature_label) ||
       asString(nestedSignature?.signatureLabel) ||
       asString(nestedSignature?.signature_label),
   };
@@ -192,7 +198,7 @@ function parseResponseState(response: ClinicExcellerisResponse) {
   const source = isRecord(saved) && Object.keys(saved).length > 0 ? saved : fallback;
   const sourceRecord = source as Record<string, unknown>;
   const fallbackRecord = fallback as Record<string, unknown>;
-  const signature = parseSignature(sourceRecord);
+  const signature = parseSignature(sourceRecord, response);
   const current = createEmptyState();
 
   const deliveryMethod = (() => {
@@ -337,8 +343,14 @@ function ExcellerisDialog({
     addRequired("clinicNameAndAddress", "Clinic name and address is required.");
     addRequired("dateSigned", "Date is required.");
     addRequired("telephoneNumber", "Telephone number is required.");
+    if (current.telephoneNumber.trim() && !hasExactDigits(current.telephoneNumber, 10)) {
+      nextErrors.telephoneNumber = "Telephone number must be a valid 10-digit number.";
+    }
     addRequired("emailAddress", "Email address is required.");
     addRequired("faxNumber", "Fax number is required.");
+    if (current.faxNumber.trim() && !hasExactDigits(current.faxNumber, 10)) {
+      nextErrors.faxNumber = "Fax number must be a valid 10-digit number.";
+    }
     addRequired("signatureLabel", "Signature label is required.");
     addRequired("signatureDataUrl", "Signature is required.");
 
@@ -349,10 +361,16 @@ function ExcellerisDialog({
     if (current.deliveryMethod === "EMR") {
       addRequired("emrName", "EMR name is required.");
       addRequired("emrFaxNumber", "EMR fax number is required.");
+      if (current.emrFaxNumber.trim() && !hasExactDigits(current.emrFaxNumber, 10)) {
+        nextErrors.emrFaxNumber = "EMR fax number must be a valid 10-digit number.";
+      }
     }
 
     if (current.deliveryMethod === "FAX") {
       addRequired("reportFaxNumber", "Report fax number is required.");
+      if (current.reportFaxNumber.trim() && !hasExactDigits(current.reportFaxNumber, 10)) {
+        nextErrors.reportFaxNumber = "Report fax number must be a valid 10-digit number.";
+      }
     }
 
     if (!current.confirmAcknowledgement) {

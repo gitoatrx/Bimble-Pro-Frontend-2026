@@ -45,15 +45,15 @@ export default function DoctorPoolPage() {
     let cancelled = false;
 
     async function load() {
-      const session = readDoctorLoginSession();
-      if (!session?.accessToken) {
+      const doctorSession = readDoctorLoginSession();
+      if (!doctorSession?.accessToken) {
         setError("You are not logged in.");
         setLoading(false);
         return;
       }
 
       try {
-        const response = await fetchDoctorPool(session.accessToken);
+        const response = await fetchDoctorPool(doctorSession.accessToken);
         if (!cancelled) {
           setPool(response.appointments ?? []);
         }

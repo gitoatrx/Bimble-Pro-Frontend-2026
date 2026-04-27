@@ -40,9 +40,6 @@ import type {
 } from "@/lib/patient/types";
 import {
   clearDemoPatientOtp,
-  clearPatientIntakeAccessToken,
-  clearPatientIntakeCompletion,
-  clearPatientIntakeSessionId,
   clearPatientPreviewCode,
   clearPatientOnboardingSession,
   readPatientIntakeAccessToken,
@@ -60,8 +57,128 @@ import {
 } from "@/lib/patient/onboarding-session";
 import { cn } from "@/lib/utils";
 
-const PROVINCES = ["BC", "AB", "SK", "MB", "ON", "QC", "NB", "NS", "PE", "NL", "YT", "NT", "NU"];
 const GENDERS = ["Female", "Male", "Non-binary", "Prefer not to say", "Other"];
+const NON_NAME_CHARACTERS = /[^\p{L}\s'’-]/gu;
+const NON_ADDRESS_CHARACTERS = /[^\p{L}\d\s.'’#/-]/gu;
+
+type NearbyPharmacyOption = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  phone: string;
+  distanceLabel: string;
+};
+
+const NEARBY_PHARMACY_OPTIONS: NearbyPharmacyOption[] = [
+  {
+    id: "main-street-pharmacy",
+    name: "Main Street Pharmacy",
+    address: "123 Main St",
+    city: "Vancouver",
+    postalCode: "V6B 1A1",
+    phone: "(604) 555-0123",
+    distanceLabel: "0.8 km",
+  },
+  {
+    id: "west-coast-care-pharmacy",
+    name: "West Coast Care Pharmacy",
+    address: "2450 Burrard St",
+    city: "Vancouver",
+    postalCode: "V6J 3J2",
+    phone: "(604) 555-0188",
+    distanceLabel: "1.2 km",
+  },
+  {
+    id: "oakridge-community-pharmacy",
+    name: "Oakridge Community Pharmacy",
+    address: "650 W 41st Ave",
+    city: "Vancouver",
+    postalCode: "V5Z 2M9",
+    phone: "(604) 555-0144",
+    distanceLabel: "2.1 km",
+  },
+  {
+    id: "burnaby-central-pharmacy",
+    name: "Burnaby Central Pharmacy",
+    address: "4550 Kingsway",
+    city: "Burnaby",
+    postalCode: "V5H 2A9",
+    phone: "(604) 555-0194",
+    distanceLabel: "3.4 km",
+  },
+  {
+    id: "surrey-gateway-pharmacy",
+    name: "Surrey Gateway Pharmacy",
+    address: "10280 120 St",
+    city: "Surrey",
+    postalCode: "V3V 4G1",
+    phone: "(604) 555-0166",
+    distanceLabel: "4.0 km",
+  },
+  {
+    id: "richmond-medical-pharmacy",
+    name: "Richmond Medical Pharmacy",
+    address: "8171 Ackroyd Rd",
+    city: "Richmond",
+    postalCode: "V6X 3K1",
+    phone: "(604) 555-0177",
+    distanceLabel: "4.6 km",
+  },
+];
+
+function normalizeNameInput(value: string) {
+  return value.replace(NON_NAME_CHARACTERS, "");
+}
+
+function normalizeCityInput(value: string) {
+  return value.replace(NON_NAME_CHARACTERS, "");
+}
+
+function normalizeProvinceInput(value: string) {
+  return value.replace(/[^\p{L}\s.'’-]/gu, "");
+}
+
+function isValidName(value: string) {
+  const trimmed = value.trim();
+  return Boolean(trimmed) && /^[\p{L}][\p{L}\s'’-]*$/u.test(trimmed);
+}
+
+function isValidCity(value: string) {
+  const trimmed = value.trim();
+  return Boolean(trimmed) && /^[\p{L}][\p{L}\s'’-]*$/u.test(trimmed);
+}
+
+function isValidAddress(value: string) {
+  const trimmed = value.trim();
+  return (
+    Boolean(trimmed) &&
+    /^[\p{L}\d][\p{L}\d\s.'#/-]*$/u.test(trimmed) &&
+    /\p{L}/u.test(trimmed)
+  );
+}
+
+function normalizePostalPrefix(value: string) {
+  return value.replace(/\s/g, "").toUpperCase().slice(0, 3);
+}
+
+function getNearbyPharmacies(city: string, postalCode: string) {
+  const normalizedCity = city.trim().toLowerCase();
+  const postalPrefix = normalizePostalPrefix(postalCode);
+
+  return [...NEARBY_PHARMACY_OPTIONS].sort((a, b) => {
+    const aMatchesCity = normalizedCity && a.city.toLowerCase() === normalizedCity ? 1 : 0;
+    const bMatchesCity = normalizedCity && b.city.toLowerCase() === normalizedCity ? 1 : 0;
+    if (aMatchesCity !== bMatchesCity) return bMatchesCity - aMatchesCity;
+
+    const aMatchesPostal = postalPrefix && a.postalCode.replace(/\s/g, "").startsWith(postalPrefix) ? 1 : 0;
+    const bMatchesPostal = postalPrefix && b.postalCode.replace(/\s/g, "").startsWith(postalPrefix) ? 1 : 0;
+    if (aMatchesPostal !== bMatchesPostal) return bMatchesPostal - aMatchesPostal;
+
+    return a.distanceLabel.localeCompare(b.distanceLabel, undefined, { numeric: true });
+  });
+}
 
 function maskPhone(phone: string) {
   const d = phone.replace(/\D/g, "");
@@ -213,9 +330,54 @@ export function PatientOnboardingWizard() {
     return { progressOrder: order, stepIndex: i, progressPct: pct };
   }, [step]);
 
+  const nearbyPharmacies = useMemo(
+    () => getNearbyPharmacies(draft.city, draft.postalCode),
+    [draft.city, draft.postalCode],
+  );
+
+  const selectedNearbyPharmacyId = useMemo(() => {
+    const match = nearbyPharmacies.find(
+      (option) =>
+        option.name === draft.preferredPharmacyName &&
+        option.address === draft.preferredPharmacyAddress &&
+        option.city === draft.preferredPharmacyCity &&
+        option.postalCode === draft.preferredPharmacyPostalCode &&
+        option.phone === draft.preferredPharmacyPhone,
+    );
+    return match?.id ?? "";
+  }, [
+    draft.preferredPharmacyAddress,
+    draft.preferredPharmacyCity,
+    draft.preferredPharmacyName,
+    draft.preferredPharmacyPhone,
+    draft.preferredPharmacyPostalCode,
+    nearbyPharmacies,
+  ]);
+
   function setField<K extends keyof PatientOnboardingDraft>(key: K, value: PatientOnboardingDraft[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
     setErrors((e) => ({ ...e, [String(key)]: "" }));
+  }
+
+  function applyNearbyPharmacy(optionId: string) {
+    const option = nearbyPharmacies.find((item) => item.id === optionId);
+    if (!option) return;
+    setDraft((prev) => ({
+      ...prev,
+      preferredPharmacyName: option.name,
+      preferredPharmacyAddress: option.address,
+      preferredPharmacyCity: option.city,
+      preferredPharmacyPostalCode: option.postalCode,
+      preferredPharmacyPhone: option.phone,
+    }));
+    setErrors((current) => ({
+      ...current,
+      preferredPharmacyName: "",
+      preferredPharmacyAddress: "",
+      preferredPharmacyCity: "",
+      preferredPharmacyPostalCode: "",
+      preferredPharmacyPhone: "",
+    }));
   }
 
   useEffect(() => {
@@ -344,10 +506,19 @@ export function PatientOnboardingWizard() {
   function validateDemographics(): boolean {
     const e: Record<string, string> = {};
     if (!draft.firstName.trim()) e.firstName = "First name is required.";
+    else if (!isValidName(draft.firstName)) e.firstName = "Use letters only for the first name.";
     if (!draft.lastName.trim()) e.lastName = "Last name is required.";
+    else if (!isValidName(draft.lastName)) e.lastName = "Use letters only for the last name.";
     if (!draft.addressLine.trim()) e.addressLine = "Street address is required.";
+    else if (!isValidAddress(draft.addressLine)) {
+      e.addressLine = "Use letters only or a mix of letters and numbers for the street address.";
+    }
     if (!draft.city.trim()) e.city = "City is required.";
-    if (!draft.province) e.province = "Province is required.";
+    else if (!isValidCity(draft.city)) e.city = "Use letters only for the city.";
+    if (!draft.province.trim()) e.province = "Province is required.";
+    else if (!/^[\p{L}][\p{L}\s.'’-]*$/u.test(draft.province.trim())) {
+      e.province = "Use letters only for the province.";
+    }
     if (!draft.postalCode.trim()) e.postalCode = "Postal code is required.";
     if (!draft.gender) e.gender = "Please select a gender option.";
     setErrors(e);
@@ -382,11 +553,29 @@ export function PatientOnboardingWizard() {
       pharmacyChoice,
     };
 
+    const preferredPharmacyDetails =
+      pharmacyChoice === "preferred"
+        ? {
+            preferredPharmacyName: draft.preferredPharmacyName,
+            preferredPharmacyAddress: draft.preferredPharmacyAddress,
+            preferredPharmacyCity: draft.preferredPharmacyCity,
+            preferredPharmacyPostalCode: draft.preferredPharmacyPostalCode,
+            preferredPharmacyPhone: draft.preferredPharmacyPhone,
+          }
+        : {
+            preferredPharmacyName: "",
+            preferredPharmacyAddress: "",
+            preferredPharmacyCity: "",
+            preferredPharmacyPostalCode: "",
+            preferredPharmacyPhone: "",
+          };
+
     setSubmitting(true);
     try {
       const response = await completePatientIntake(intakeToken, {
         fulfillment,
         pharmacyChoice,
+        ...preferredPharmacyDetails,
       });
       const completionData: PatientIntakeCompletion = {
         appointmentId: response.appointment_id,
@@ -646,15 +835,17 @@ export function PatientOnboardingWizard() {
             <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               About you
             </h1>
-            <p className="text-sm text-muted-foreground">We use this to personalize your visit and prescriptions.</p>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">First name</label>
             <Input
               value={draft.firstName}
-              onChange={(e) => setField("firstName", e.target.value)}
+              onChange={(e) => setField("firstName", normalizeNameInput(e.target.value))}
               className="h-12 rounded-xl border-border"
               placeholder="Jordan"
+              autoComplete="given-name"
+              autoCapitalize="words"
+              inputMode="text"
             />
             <FieldError message={errors.firstName} />
           </div>
@@ -662,9 +853,12 @@ export function PatientOnboardingWizard() {
             <label className="text-sm font-medium">Last name</label>
             <Input
               value={draft.lastName}
-              onChange={(e) => setField("lastName", e.target.value)}
+              onChange={(e) => setField("lastName", normalizeNameInput(e.target.value))}
               className="h-12 rounded-xl border-border"
               placeholder="Lee"
+              autoComplete="family-name"
+              autoCapitalize="words"
+              inputMode="text"
             />
             <FieldError message={errors.lastName} />
           </div>
@@ -672,38 +866,38 @@ export function PatientOnboardingWizard() {
             <label className="text-sm font-medium">Street address</label>
             <Input
               value={draft.addressLine}
-              onChange={(e) => setField("addressLine", e.target.value)}
+              onChange={(e) => setField("addressLine", e.target.value.replace(NON_ADDRESS_CHARACTERS, ""))}
               className="h-12 rounded-xl border-border"
               placeholder="123 Main St"
+              autoComplete="street-address"
+              inputMode="text"
             />
             <FieldError message={errors.addressLine} />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">City</label>
-              <Input
-                value={draft.city}
-                onChange={(e) => setField("city", e.target.value)}
-                className="h-12 rounded-xl border-border"
-              />
-              <FieldError message={errors.city} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Province</label>
-              <select
-                value={draft.province}
-                onChange={(e) => setField("province", e.target.value)}
-                className="flex h-12 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-              >
-                <option value="">Select</option>
-                {PROVINCES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-              <FieldError message={errors.province} />
-            </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">City</label>
+            <Input
+              value={draft.city}
+              onChange={(e) => setField("city", normalizeCityInput(e.target.value))}
+              className="h-12 rounded-xl border-border"
+              autoComplete="address-level2"
+              autoCapitalize="words"
+              inputMode="text"
+            />
+            <FieldError message={errors.city} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Province</label>
+            <Input
+              value={draft.province}
+              onChange={(e) => setField("province", normalizeProvinceInput(e.target.value))}
+              className="h-12 rounded-xl border-border"
+              placeholder="BC"
+              autoComplete="address-level1"
+              autoCapitalize="words"
+              inputMode="text"
+            />
+            <FieldError message={errors.province} />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Postal code</label>
@@ -752,7 +946,7 @@ export function PatientOnboardingWizard() {
                     lastName: draft.lastName,
                     addressLine: draft.addressLine,
                     city: draft.city,
-                    province: draft.province,
+                    province: draft.province.trim(),
                     postalCode: draft.postalCode,
                     gender: draft.gender,
                   });
@@ -977,7 +1171,7 @@ export function PatientOnboardingWizard() {
         </div>
       )}
 
-      {/* ── Pharmacy (delivery only) ───────────────────────── */}
+      {/* ── Pharmacy ──────────────────────────────────────── */}
       {step === "pharmacy" && (
         <div className="space-y-6">
           <div className="space-y-2">
@@ -992,7 +1186,17 @@ export function PatientOnboardingWizard() {
           <div className="grid gap-4 sm:grid-cols-2">
             <button
               type="button"
-              onClick={() => setField("pharmacyChoice", "bimble")}
+              onClick={() => {
+                setField("pharmacyChoice", "bimble");
+                setErrors((current) => ({
+                  ...current,
+                  preferredPharmacyName: "",
+                  preferredPharmacyAddress: "",
+                  preferredPharmacyCity: "",
+                  preferredPharmacyPostalCode: "",
+                  preferredPharmacyPhone: "",
+                }));
+              }}
               className={cn(
                 "flex flex-col items-start gap-3 rounded-[1.5rem] border p-6 text-left shadow-sm transition-all",
                 draft.pharmacyChoice === "bimble"
@@ -1006,7 +1210,12 @@ export function PatientOnboardingWizard() {
             </button>
             <button
               type="button"
-              onClick={() => setField("pharmacyChoice", "preferred")}
+              onClick={() => {
+                setField("pharmacyChoice", "preferred");
+                if (!selectedNearbyPharmacyId && nearbyPharmacies.length > 0) {
+                  applyNearbyPharmacy(nearbyPharmacies[0]!.id);
+                }
+              }}
               className={cn(
                 "flex flex-col items-start gap-3 rounded-[1.5rem] border p-6 text-left shadow-sm transition-all",
                 draft.pharmacyChoice === "preferred"
@@ -1019,7 +1228,86 @@ export function PatientOnboardingWizard() {
               <p className="text-sm text-muted-foreground">A partner location you already use.</p>
             </button>
           </div>
-          {draft.pharmacyChoice === "bimble" ? (
+          {draft.pharmacyChoice === "preferred" ? (
+            <div className="space-y-6 rounded-[1.5rem] border border-primary/10 bg-gradient-to-br from-primary/5 via-white to-primary/10 p-5 shadow-sm">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nearby pharmacies</label>
+                <select
+                  value={selectedNearbyPharmacyId}
+                  onChange={(e) => applyNearbyPharmacy(e.target.value)}
+                  className="flex h-12 w-full rounded-2xl border border-border bg-white px-4 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/20"
+                >
+                  <option value="">Select a nearby pharmacy</option>
+                  {nearbyPharmacies.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name} · {option.distanceLabel} · {option.city}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Pharmacy name</label>
+                <Input
+                  value={draft.preferredPharmacyName}
+                  onChange={(e) => setField("preferredPharmacyName", e.target.value)}
+                  className="h-12 rounded-xl border-border"
+                  placeholder="Main Street Pharmacy"
+                  autoComplete="organization"
+                />
+                <FieldError message={errors.preferredPharmacyName} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Street address</label>
+                <Input
+                  value={draft.preferredPharmacyAddress}
+                  onChange={(e) => setField("preferredPharmacyAddress", e.target.value.replace(NON_ADDRESS_CHARACTERS, ""))}
+                  className="h-12 rounded-xl border-border"
+                  placeholder="123 Main St"
+                  autoComplete="street-address"
+                  inputMode="text"
+                />
+                <FieldError message={errors.preferredPharmacyAddress} />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">City</label>
+                  <Input
+                    value={draft.preferredPharmacyCity}
+                    onChange={(e) => setField("preferredPharmacyCity", normalizeCityInput(e.target.value))}
+                    className="h-12 rounded-xl border-border"
+                    autoComplete="address-level2"
+                    autoCapitalize="words"
+                    inputMode="text"
+                  />
+                  <FieldError message={errors.preferredPharmacyCity} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Postal code</label>
+                  <Input
+                    value={draft.preferredPharmacyPostalCode}
+                    onChange={(e) => setField("preferredPharmacyPostalCode", e.target.value.toUpperCase().slice(0, 7))}
+                    className="h-12 rounded-xl border-border"
+                    placeholder="V6B 1A1"
+                    autoComplete="postal-code"
+                  />
+                  <FieldError message={errors.preferredPharmacyPostalCode} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Phone number</label>
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="(604) 555-0123"
+                  value={draft.preferredPharmacyPhone}
+                  onChange={(e) => setField("preferredPharmacyPhone", formatPhoneInput(e.target.value))}
+                  className="h-12 rounded-xl border-border"
+                />
+                <FieldError message={errors.preferredPharmacyPhone} />
+              </div>
+            </div>
+          ) : draft.pharmacyChoice === "bimble" ? (
             <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-foreground">
               <Sparkles className="mb-1 inline h-4 w-4 text-primary" />{" "}
               {draft.fulfillment === "delivery" ? (
@@ -1101,7 +1389,7 @@ export function PatientOnboardingWizard() {
               <li className="flex gap-2">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <span>
-                  {completion?.summary.location || draft.careLocation || `${draft.city}, ${draft.province}`}
+                  {completion?.summary.location || draft.careLocation || draft.city}
                 </span>
               </li>
               <li className="flex gap-2">
@@ -1114,10 +1402,10 @@ export function PatientOnboardingWizard() {
                   {(completion?.summary.fulfillment || draft.fulfillment) === "pickup"
                     ? (completion?.summary.pharmacy_choice || draft.pharmacyChoice) === "bimble"
                       ? "Pickup — Bimble pharmacy"
-                      : "Pickup — your preferred pharmacy"
+                      : `Pickup — ${draft.preferredPharmacyName || "your preferred pharmacy"}`
                     : (completion?.summary.pharmacy_choice || draft.pharmacyChoice) === "bimble"
                       ? "Delivery — Bimble pharmacy (~1 hour)"
-                      : "Delivery — your preferred pharmacy (3–5 hours)"}
+                      : `Delivery — ${draft.preferredPharmacyName || "your preferred pharmacy"} (3–5 hours)`}
                 </span>
               </li>
               {completion?.serviceName ? (

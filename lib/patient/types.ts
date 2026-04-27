@@ -37,6 +37,11 @@ export type PatientOnboardingDraft = {
   appointmentTime: string;
   fulfillment: PatientFulfillment | "";
   pharmacyChoice: PatientPharmacyChoice | "";
+  preferredPharmacyName: string;
+  preferredPharmacyAddress: string;
+  preferredPharmacyCity: string;
+  preferredPharmacyPostalCode: string;
+  preferredPharmacyPhone: string;
 };
 
 export type PatientIntakeSummary = {
@@ -78,4 +83,9 @@ export const initialPatientOnboardingDraft: PatientOnboardingDraft = {
   appointmentTime: "",
   fulfillment: "",
   pharmacyChoice: "",
+  preferredPharmacyName: "",
+  preferredPharmacyAddress: "",
+  preferredPharmacyCity: "",
+  preferredPharmacyPostalCode: "",
+  preferredPharmacyPhone: "",
 };

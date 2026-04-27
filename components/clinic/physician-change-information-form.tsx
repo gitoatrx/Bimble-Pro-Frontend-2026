@@ -12,6 +12,7 @@ import {
   type ClinicPhysicianChangeInformationResponse,
   type ClinicPhysicianChangeOfficeHourSlot,
 } from "@/lib/api/clinic-dashboard";
+import { hasExactDigits } from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { digitsOnly } from "@/components/doctor/doctor-form-shared";
 
@@ -396,21 +397,48 @@ function PhysicianChangeDialog({
     addRequired("specialty", "Specialty is required.");
     addRequired("officeContactName", "Office contact name is required.");
     addRequired("officePhone", "Office phone is required.");
+    if (current.officePhone.trim() && !hasExactDigits(current.officePhone, 10)) {
+      nextErrors.officePhone = "Office phone must be a valid 10-digit number.";
+    }
     addRequired("officeFax", "Office fax is required.");
+    if (current.officeFax.trim() && !hasExactDigits(current.officeFax, 10)) {
+      nextErrors.officeFax = "Office fax must be a valid 10-digit number.";
+    }
     addRequired("officePrivatePhone", "Office private phone is required.");
+    if (current.officePrivatePhone.trim() && !hasExactDigits(current.officePrivatePhone, 10)) {
+      nextErrors.officePrivatePhone = "Office private phone must be a valid 10-digit number.";
+    }
     addRequired("officeEmailAddress", "Office email address is required.");
     addRequired("afterHoursPhone", "After hours phone is required.");
+    if (current.afterHoursPhone.trim() && !hasExactDigits(current.afterHoursPhone, 10)) {
+      nextErrors.afterHoursPhone = "After hours phone must be a valid 10-digit number.";
+    }
     addRequired("afterHoursDescription", "After hours description is required.");
     addRequired("afterHoursBeeper", "After hours beeper is required.");
     addRequired("afterHoursCellPhone", "After hours cell phone is required.");
+    if (current.afterHoursCellPhone.trim() && !hasExactDigits(current.afterHoursCellPhone, 10)) {
+      nextErrors.afterHoursCellPhone = "After hours cell phone must be a valid 10-digit number.";
+    }
     addRequired("afterHoursHomePhone", "After hours home phone is required.");
+    if (current.afterHoursHomePhone.trim() && !hasExactDigits(current.afterHoursHomePhone, 10)) {
+      nextErrors.afterHoursHomePhone = "After hours home phone must be a valid 10-digit number.";
+    }
     addRequired("backupPhysicianNumber", "Backup physician number is required.");
     addRequired("backupName", "Backup name is required.");
     addRequired("backupPhone", "Backup phone is required.");
+    if (current.backupPhone.trim() && !hasExactDigits(current.backupPhone, 10)) {
+      nextErrors.backupPhone = "Backup phone must be a valid 10-digit number.";
+    }
     addRequired("hospitalAffiliation", "Hospital affiliation is required.");
     addRequired("hospitalPhone", "Hospital phone is required.");
+    if (current.hospitalPhone.trim() && !hasExactDigits(current.hospitalPhone, 10)) {
+      nextErrors.hospitalPhone = "Hospital phone must be a valid 10-digit number.";
+    }
     addRequired("otherAffiliation", "Other affiliation is required.");
     addRequired("otherPhone", "Other phone is required.");
+    if (current.otherPhone.trim() && !hasExactDigits(current.otherPhone, 10)) {
+      nextErrors.otherPhone = "Other phone must be a valid 10-digit number.";
+    }
     addRequired("specialHandling", "Special handling is required.");
 
     return nextErrors;

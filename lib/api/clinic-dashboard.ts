@@ -124,6 +124,10 @@ export type ClinicFacilityFormResponse = {
   saved_values: Record<string, unknown>;
   missing_fields: string[];
   confirm_declarations: boolean;
+  signature_captured?: boolean;
+  signature_signed_at?: string | null;
+  signature_label?: string | null;
+  signature_data_url?: string | null;
   pdf_name: string | null;
   download_url: string | null;
   ui_content: ClinicFacilityFormUiContent;
@@ -276,6 +280,10 @@ export type ClinicPayment2876Response = {
   field_values: Record<string, unknown>;
   saved_values: ClinicPayment2876SavedValues;
   missing_fields: string[];
+  signature_captured?: boolean;
+  signature_signed_at?: string | null;
+  signature_label?: string | null;
+  signature_data_url?: string | null;
   pdf_name: string | null;
   download_url: string | null;
   ui_content: ClinicPayment2876UiContent;
@@ -426,6 +434,10 @@ export type ClinicExcellerisResponse = {
   saved_values: ClinicExcellerisSavedValues;
   missing_fields: string[];
   confirm_acknowledgement: boolean;
+  signature_captured?: boolean;
+  signature_signed_at?: string | null;
+  signature_label?: string | null;
+  signature_data_url?: string | null;
   pdf_name: string | null;
   download_url: string | null;
   ui_content: ClinicExcellerisUiContent;

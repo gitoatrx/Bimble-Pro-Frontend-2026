@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { hasExactDigits } from "@/lib/form-validation";
 import {
   fetchClinicPayment2876Form,
   submitClinicPayment2876Form,
@@ -162,18 +163,23 @@ function pickString(
   return "";
 }
 
-function parseSignature(source: Record<string, unknown>) {
+function parseSignature(
+  source: Record<string, unknown>,
+  response: ClinicPayment2876Response,
+) {
   const nestedSignature = isRecord(source.signature) ? source.signature : null;
 
   return {
     signatureDataUrl:
       asString(source.signatureDataUrl) ||
       asString(source.signature_data_url) ||
+      asString(response.signature_data_url) ||
       asString(nestedSignature?.signatureDataUrl) ||
       asString(nestedSignature?.signature_data_url),
     signatureLabel:
       asString(source.signatureLabel) ||
       asString(source.signature_label) ||
+      asString(response.signature_label) ||
       asString(nestedSignature?.signatureLabel) ||
       asString(nestedSignature?.signature_label),
   };
@@ -185,7 +191,7 @@ function parseResponseState(response: ClinicPayment2876Response) {
   const source = isRecord(saved) && Object.keys(saved).length > 0 ? saved : fallback;
   const sourceRecord = source as Record<string, unknown>;
   const fallbackRecord = fallback as Record<string, unknown>;
-  const signature = parseSignature(source);
+  const signature = parseSignature(source, response);
   const current = createEmptyState();
   const paymentModalitySource =
     asString(sourceRecord.paymentModality) ||
@@ -471,7 +477,13 @@ function Payment2876Dialog({
     );
     addRequired("responsiblePractitionerName", "Responsible practitioner name is required.");
     addRequired("telephoneNumber", "Telephone number is required.");
+    if (current.telephoneNumber.trim() && !hasExactDigits(current.telephoneNumber, 10)) {
+      nextErrors.telephoneNumber = "Telephone number must be a valid 10-digit number.";
+    }
     addRequired("faxNumber", "Fax number is required.");
+    if (current.faxNumber.trim() && !hasExactDigits(current.faxNumber, 10)) {
+      nextErrors.faxNumber = "Fax number must be a valid 10-digit number.";
+    }
     addRequired("emailAddress", "Email address is required.");
     addRequired("serviceDescription", "Service description is required.");
     addRequired("signatureLabel", "Signature label is required.");

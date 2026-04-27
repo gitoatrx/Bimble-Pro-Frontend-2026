@@ -14,6 +14,7 @@ import {
   type ClinicHl7SetupInstruction,
   type ClinicHl7SupportedContentType,
 } from "@/lib/api/clinic-dashboard";
+import { hasExactDigits } from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { digitsOnly } from "@/components/doctor/doctor-form-shared";
 
@@ -273,14 +274,23 @@ function Hl7SetupDialog({
     addRequired("primaryContact", "Primary contact is required.");
     addRequired("address", "Address is required.");
     addRequired("telephoneNumber", "Telephone number is required.");
+    if (current.telephoneNumber.trim() && !hasExactDigits(current.telephoneNumber, 10)) {
+      nextErrors.telephoneNumber = "Telephone number must be a valid 10-digit number.";
+    }
     addRequired("email", "Email is required.");
     addRequired("implementationDate", "Implementation date is required.");
     addRequired("fallbackFaxNumber", "Fax number is required.");
+    if (current.fallbackFaxNumber.trim() && !hasExactDigits(current.fallbackFaxNumber, 10)) {
+      nextErrors.fallbackFaxNumber = "Fax number must be a valid 10-digit number.";
+    }
     addRequired("providerNamesAndMspNumbers", "Provider names and MSP numbers are required.");
     addRequired("emrName", "EMR name is required.");
     addRequired("emrVersion", "EMR version is required.");
     addRequired("emrContact", "EMR contact is required.");
     addRequired("emrTelephoneNumber", "EMR telephone number is required.");
+    if (current.emrTelephoneNumber.trim() && !hasExactDigits(current.emrTelephoneNumber, 10)) {
+      nextErrors.emrTelephoneNumber = "EMR telephone number must be a valid 10-digit number.";
+    }
     addRequired("emrEmail", "EMR email is required.");
 
     if (current.setupInstruction === "ADD_EXISTING" && !current.existingExcellerisUserId.trim()) {

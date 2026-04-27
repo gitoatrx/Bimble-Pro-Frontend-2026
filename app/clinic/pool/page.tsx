@@ -8,7 +8,6 @@ import {
   MapPin,
   MessageSquareText,
   MonitorSmartphone,
-  Package,
   X,
   Sparkles,
   Truck,
@@ -45,9 +44,6 @@ function appointmentType(appointment: ClinicPoolAppointment): "walkin" | "virtua
 }
 
 function fulfillmentLabel(appointment: ClinicPoolAppointment) {
-  if (appointment.fulfillment === "pickup") {
-    return "Pickup at clinic";
-  }
   if (appointment.fulfillment === "delivery") {
     return appointment.pharmacy_choice === "bimble"
       ? "Delivery · Bimble pharmacy"
@@ -204,11 +200,7 @@ export default function ClinicPoolPage() {
                     ) : null}
                     {fulfillment ? (
                       <span className="inline-flex items-center gap-1">
-                        {appointment.fulfillment === "pickup" ? (
-                          <Package className="h-3 w-3" />
-                        ) : (
-                          <Truck className="h-3 w-3" />
-                        )}
+                        <Truck className="h-3 w-3" />
                         {fulfillment}
                       </span>
                     ) : null}
