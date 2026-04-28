@@ -790,7 +790,11 @@ function ExcellerisDialog({
                   />
                 </DialogField>
 
-                <DialogField label="Signature" required error={fieldErrors.signatureDataUrl}>
+                <div className="space-y-2">
+                  <span className="text-sm font-medium text-foreground">
+                    Signature
+                    <span className="ml-1 text-destructive">*</span>
+                  </span>
                   <SignaturePad
                     value={formState.signatureDataUrl}
                     onChange={(value) => {
@@ -798,7 +802,10 @@ function ExcellerisDialog({
                       setFormState((current) => ({ ...current, signatureDataUrl: value }));
                     }}
                   />
-                </DialogField>
+                  {fieldErrors.signatureDataUrl ? (
+                    <p className="text-xs text-destructive">{fieldErrors.signatureDataUrl}</p>
+                  ) : null}
+                </div>
               </section>
 
               {error ? (
