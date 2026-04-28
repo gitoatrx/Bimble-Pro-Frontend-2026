@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Clock, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Loader2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
 import {
+  assignClinicAppointmentDoctor,
   fetchClinicAppointmentsByDate,
   fetchClinicAppointmentsByRange,
+  fetchClinicDoctors,
 } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 
@@ -17,8 +19,14 @@ type Appointment = {
   service: string;
   status: string;
   doctor: string | null;
+  assignedDoctorId: number | null;
   time: string;
   dateKey: string;
+};
+
+type ClinicDoctorOption = {
+  id: number;
+  name: string;
 };
 
 function todayKey() {
@@ -55,6 +63,12 @@ function normalizeAppointment(record: Record<string, unknown>): Appointment {
       (typeof record.assigned_doctor === "string" && record.assigned_doctor) ||
       (typeof record.doctor_name === "string" && record.doctor_name) ||
       null,
+    assignedDoctorId:
+      typeof record.assigned_doctor_id === "number"
+        ? record.assigned_doctor_id
+        : typeof record.assigned_doctor_id === "string" && record.assigned_doctor_id
+          ? Number(record.assigned_doctor_id)
+          : null,
     time:
       (typeof record.time === "string" && record.time) ||
       (typeof record.start_time === "string" && record.start_time) ||
@@ -195,6 +209,7 @@ export default function AppointmentsCalendarPage() {
   const session = readClinicLoginSession();
   const accessToken = session?.accessToken ?? "";
   const hasSession = Boolean(session?.accessToken);
+  const [doctors, setDoctors] = useState<ClinicDoctorOption[]>([]);
   const [weekStart, setWeekStart] = useState(todayKey());
   const [selectedKey, setSelectedKey] = useState(todayKey());
   const [weekAppointments, setWeekAppointments] = useState<Appointment[]>([]);
@@ -203,6 +218,47 @@ export default function AppointmentsCalendarPage() {
   const [error, setError] = useState(
     hasSession ? "" : "You are not logged in. Please sign in again.",
   );
+  const [assignSelections, setAssignSelections] = useState<Record<number, string>>({});
+  const [assignPendingId, setAssignPendingId] = useState<number | null>(null);
+  const [assignError, setAssignError] = useState("");
+  const [assignSuccess, setAssignSuccess] = useState("");
+
+  useEffect(() => {
+    if (!hasSession) {
+      return;
+    }
+
+    let active = true;
+    fetchClinicDoctors(accessToken)
+      .then((records) => {
+        if (!active) return;
+        const items = Array.isArray(records) ? records : [];
+        setDoctors(
+          items
+            .map((record) => {
+              const idRaw = record.id ?? record.doctor_id;
+              const nameRaw = record.name ?? record.doctor_name;
+              const statusRaw = record.status;
+              const id = typeof idRaw === "number" ? idRaw : Number(idRaw);
+              const name = typeof nameRaw === "string" ? nameRaw : "";
+              const status = typeof statusRaw === "string" ? statusRaw.toUpperCase() : "ACTIVE";
+              if (!Number.isFinite(id) || !name || status !== "ACTIVE") {
+                return null;
+              }
+              return { id, name };
+            })
+            .filter((value): value is ClinicDoctorOption => value !== null),
+        );
+      })
+      .catch(() => {
+        if (!active) return;
+        setDoctors([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [accessToken, hasSession]);
 
   useEffect(() => {
     if (!hasSession) {
@@ -251,6 +307,44 @@ export default function AppointmentsCalendarPage() {
     };
   }, [accessToken, hasSession, selectedKey, weekStart]);
 
+  async function handleAssignDoctor(appointmentId: number) {
+    if (!accessToken) {
+      setAssignError("You are not logged in. Please sign in again.");
+      return;
+    }
+    const selectedDoctorId = Number(assignSelections[appointmentId] || "");
+    if (!selectedDoctorId) {
+      setAssignError("Select a doctor before assigning the appointment.");
+      return;
+    }
+
+    setAssignPendingId(appointmentId);
+    setAssignError("");
+    setAssignSuccess("");
+    try {
+      const updated = normalizeAppointment(
+        await assignClinicAppointmentDoctor(accessToken, appointmentId, selectedDoctorId),
+      );
+      setWeekAppointments((current) =>
+        current.map((appointment) =>
+          appointment.id === appointmentId ? updated : appointment,
+        ),
+      );
+      setDayAppointments((current) =>
+        current.map((appointment) =>
+          appointment.id === appointmentId ? updated : appointment,
+        ),
+      );
+      setAssignSuccess("Appointment assigned successfully.");
+    } catch (err) {
+      setAssignError(
+        err instanceof Error ? err.message : "Could not assign doctor.",
+      );
+    } finally {
+      setAssignPendingId((current) => (current === appointmentId ? null : current));
+    }
+  }
+
   const appointmentsByDate = useMemo(() => {
     const map = new Map<string, Appointment[]>();
 
@@ -282,6 +376,16 @@ export default function AppointmentsCalendarPage() {
       {error && (
         <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/20">
           {error}
+        </div>
+      )}
+      {assignError && (
+        <div className="mb-5 rounded-2xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {assignError}
+        </div>
+      )}
+      {assignSuccess && (
+        <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300">
+          {assignSuccess}
         </div>
       )}
 
@@ -324,36 +428,76 @@ export default function AppointmentsCalendarPage() {
             {dayAppointments.map((appt) => (
               <div
                 key={appt.id}
-                className="flex items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 transition-colors hover:bg-accent/30"
+                className="rounded-2xl border border-border bg-card px-5 py-4 transition-colors hover:bg-accent/30"
               >
-                <div className="flex w-20 flex-shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
-                  {appt.time}
-                </div>
-
-                <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                  <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                    {appt.patientName.charAt(0)}
+                <div className="flex items-center gap-4">
+                  <div className="flex w-20 flex-shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    {appt.time}
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">{appt.patientName}</p>
-                    <p className="truncate text-xs text-muted-foreground">{appt.service}</p>
+
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                      {appt.patientName.charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">{appt.patientName}</p>
+                      <p className="truncate text-xs text-muted-foreground">{appt.service}</p>
+                    </div>
+                    {appt.patientStatus === "inactive" && (
+                      <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                        Inactive
+                      </span>
+                    )}
                   </div>
-                  {appt.patientStatus === "inactive" && (
-                    <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      Inactive
-                    </span>
-                  )}
+
+                  <div className="hidden w-32 flex-shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+                    <User className="h-3.5 w-3.5" />
+                    <span className="truncate">{appt.doctor ?? "Unassigned"}</span>
+                  </div>
+
+                  <div className="flex-shrink-0">
+                    <StatusBadge status={appt.status} />
+                  </div>
                 </div>
 
-                <div className="hidden w-32 flex-shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-                  <User className="h-3.5 w-3.5" />
-                  <span className="truncate">{appt.doctor ?? "Unassigned"}</span>
-                </div>
-
-                <div className="flex-shrink-0">
-                  <StatusBadge status={appt.status} />
-                </div>
+                {!appt.assignedDoctorId && appt.status === "ASSIGNED" ? (
+                  <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center">
+                    <div className="min-w-0 flex-1">
+                      <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Assign doctor
+                      </label>
+                      <select
+                        value={assignSelections[appt.id] ?? ""}
+                        onChange={(event) =>
+                          setAssignSelections((current) => ({
+                            ...current,
+                            [appt.id]: event.target.value,
+                          }))
+                        }
+                        className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      >
+                        <option value="">Select a doctor</option>
+                        {doctors.map((doctor) => (
+                          <option key={doctor.id} value={doctor.id}>
+                            {doctor.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleAssignDoctor(appt.id)}
+                      disabled={assignPendingId === appt.id}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {assignPendingId === appt.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : null}
+                      Assign
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

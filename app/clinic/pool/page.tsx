@@ -61,6 +61,7 @@ export default function ClinicPoolPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [actionSuccess, setActionSuccess] = useState("");
   const [pendingId, setPendingId] = useState<number | null>(null);
 
   async function handlePoolAction(
@@ -75,11 +76,16 @@ export default function ClinicPoolPage() {
 
     setPendingId(appointmentId);
     setActionError("");
+    setActionSuccess("");
     try {
       if (action === "accept") {
         await acceptClinicPoolAppointment(session.accessToken, appointmentId);
+        setActionSuccess(
+          "Appointment accepted. You can now assign it to a doctor from the clinic appointments page.",
+        );
       } else {
         await rejectClinicPoolAppointment(session.accessToken, appointmentId);
+        setActionSuccess("Appointment rejected.");
       }
       setAppointments((current) =>
         current.filter((appointment) => appointment.id !== appointmentId),
@@ -164,6 +170,11 @@ export default function ClinicPoolPage() {
           {actionError ? (
             <div className="rounded-2xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
               {actionError}
+            </div>
+          ) : null}
+          {actionSuccess ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300">
+              {actionSuccess}
             </div>
           ) : null}
           {appointments.map((appointment) => {
