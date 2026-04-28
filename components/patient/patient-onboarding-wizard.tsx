@@ -8,6 +8,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Clock,
   HeartPulse,
   MapPin,
   Package,
@@ -78,26 +79,6 @@ import { storePatientLoginSession } from "@/lib/patient/session";
 import { cn } from "@/lib/utils";
 
 const GENDERS = ["Female", "Male", "Non-binary", "Prefer not to say", "Other"];
-const NON_NAME_CHARACTERS = /[^\p{L}\s'’-]/gu;
-function normalizeNameInput(value: string) {
-  return value.replace(NON_NAME_CHARACTERS, "");
-}
-
-function normalizeCityInput(value: string) {
-  return value.replace(NON_NAME_CHARACTERS, "");
-}
-
-function normalizeProvinceInput(value: string) {
-  return value.replace(/[^\p{L}\s.'’-]/gu, "");
-}
-
-function formatPostalCodeInput(value: string) {
-  const compact = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
-  if (compact.length <= 3) {
-    return compact;
-  }
-  return `${compact.slice(0, 3)} ${compact.slice(3)}`;
-}
 
 function isValidName(value: string) {
   const trimmed = value.trim();
