@@ -14,7 +14,11 @@ import {
   type ClinicHl7SetupInstruction,
   type ClinicHl7SupportedContentType,
 } from "@/lib/api/clinic-dashboard";
-import { hasExactDigits } from "@/lib/form-validation";
+import {
+  hasExactDigits,
+  updateLiveFutureDateField,
+  updateLiveTenDigitField,
+} from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { digitsOnly } from "@/components/doctor/doctor-form-shared";
 
@@ -442,10 +446,13 @@ function Hl7SetupDialog({
                       type="tel"
                       value={formState.telephoneNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          telephoneNumber: digitsOnly(event.target.value),
-                        }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "telephoneNumber",
+                          event.target.value,
+                          "Telephone number",
+                        )
                       }
                     />
                   </DialogField>
@@ -633,10 +640,13 @@ function Hl7SetupDialog({
                       type="tel"
                       value={formState.emrTelephoneNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          emrTelephoneNumber: digitsOnly(event.target.value),
-                        }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "emrTelephoneNumber",
+                          event.target.value,
+                          "EMR telephone number",
+                        )
                       }
                     />
                   </DialogField>
@@ -662,10 +672,13 @@ function Hl7SetupDialog({
                       type="date"
                       value={formState.implementationDate}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          implementationDate: event.target.value,
-                        }))
+                        updateLiveFutureDateField(
+                          setFormState,
+                          setFieldErrors,
+                          "implementationDate",
+                          event.target.value,
+                          "Implementation date",
+                        )
                       }
                     />
                   </DialogField>
@@ -682,10 +695,14 @@ function Hl7SetupDialog({
                       type="tel"
                       value={formState.fallbackFaxNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          fallbackFaxNumber: digitsOnly(event.target.value),
-                        }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "fallbackFaxNumber",
+                          event.target.value,
+                          "Fax number for unsupported lab content",
+                          "fax number",
+                        )
                       }
                     />
                   </DialogField>
@@ -778,36 +795,50 @@ function Hl7SetupDialog({
   );
 }
 
-export function Hl7HealthCareProviderSetupSection() {
+export function Hl7HealthCareProviderSetupSection({
+  autoOpen = false,
+  onRequestClose,
+}: {
+  autoOpen?: boolean;
+  onRequestClose?: () => void;
+}) {
   const session = readClinicLoginSession();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
 
   return (
     <>
-      <section className="overflow-hidden rounded-2xl border border-border bg-white">
-        <div className="px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
-              <FileText className="h-4 w-4 text-primary" />
+      {autoOpen ? null : (
+        <section className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
+              </div>
+              <Button
+                type="button"
+                onClick={() => setOpen(true)}
+                disabled={!session?.accessToken}
+                size="sm"
+                className="gap-2 px-4"
+              >
+                Apply
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
-            </div>
-            <Button
-              type="button"
-              onClick={() => setOpen(true)}
-              disabled={!session?.accessToken}
-              size="sm"
-              className="gap-2 px-4"
-            >
-              Apply
-              <ArrowRight className="h-4 w-4" />
-            </Button>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <Hl7SetupDialog open={open} onClose={() => setOpen(false)} />
+      <Hl7SetupDialog
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          onRequestClose?.();
+        }}
+      />
     </>
   );
 }

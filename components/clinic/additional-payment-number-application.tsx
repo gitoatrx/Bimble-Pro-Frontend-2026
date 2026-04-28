@@ -11,7 +11,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { hasExactDigits } from "@/lib/form-validation";
+import {
+  hasExactDigits,
+  updateLiveFutureDateField,
+  updateLiveTenDigitField,
+} from "@/lib/form-validation";
 import {
   fetchClinicPayment2876Form,
   submitClinicPayment2876Form,
@@ -816,10 +820,13 @@ function Payment2876Dialog({
                       type="date"
                       value={formState.effectiveDate}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          effectiveDate: event.target.value,
-                        }))
+                        updateLiveFutureDateField(
+                          setFormState,
+                          setFieldErrors,
+                          "effectiveDate",
+                          event.target.value,
+                          "Effective date",
+                        )
                       }
                     />
                   </DialogField>
@@ -872,10 +879,13 @@ function Payment2876Dialog({
                       type="tel"
                       value={formState.telephoneNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          telephoneNumber: digitsOnly(event.target.value),
-                        }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "telephoneNumber",
+                          event.target.value,
+                          "Telephone number",
+                        )
                       }
                     />
                   </DialogField>
@@ -888,10 +898,14 @@ function Payment2876Dialog({
                       type="tel"
                       value={formState.faxNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          faxNumber: digitsOnly(event.target.value),
-                        }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "faxNumber",
+                          event.target.value,
+                          "Fax number",
+                          "fax number",
+                        )
                       }
                     />
                   </DialogField>
@@ -1035,38 +1049,53 @@ function Payment2876Dialog({
   );
 }
 
-export function AdditionalPaymentNumberApplicationSection() {
+export function AdditionalPaymentNumberApplicationSection({
+  autoOpen = false,
+  onRequestClose,
+}: {
+  autoOpen?: boolean;
+  onRequestClose?: () => void;
+}) {
   const session = readClinicLoginSession();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
 
   return (
     <>
-      <section className="overflow-hidden rounded-2xl border border-border bg-white">
-        <div className="px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
-              <FileText className="h-4 w-4 text-primary" />
+      {autoOpen ? null : (
+        <section className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
+              </div>
+              <Button
+                type="button"
+                onClick={() => {
+                  setOpen(true);
+                }}
+                disabled={!session?.accessToken}
+                size="sm"
+                className="gap-2 px-4"
+              >
+                Apply
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
-            </div>
-            <Button
-              type="button"
-              onClick={() => {
-                setOpen(true);
-              }}
-              disabled={!session?.accessToken}
-              size="sm"
-              className="gap-2 px-4"
-            >
-              Apply
-              <ArrowRight className="h-4 w-4" />
-            </Button>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <Payment2876Dialog open={open} mode="apply" onClose={() => setOpen(false)} />
+      <Payment2876Dialog
+        open={open}
+        mode="apply"
+        onClose={() => {
+          setOpen(false);
+          onRequestClose?.();
+        }}
+      />
     </>
   );
 }

@@ -19,7 +19,11 @@ import {
   digitsOnly,
   normalizePostalCode,
 } from "@/components/doctor/doctor-form-shared";
-import { hasExactDigits } from "@/lib/form-validation";
+import {
+  hasExactDigits,
+  updateLiveFutureDateField,
+  updateLiveTenDigitField,
+} from "@/lib/form-validation";
 
 const FORM_TITLE = "Application for Teleplan Service";
 const TELEPLAN_SIGNATURE_CACHE_KEY = "bimble.clinic.teleplan2820.signature_data_url";
@@ -702,10 +706,13 @@ function Teleplan2820Dialog({
                     <Input
                       value={formState.phoneNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          phoneNumber: digitsOnly(event.target.value),
-                        }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "phoneNumber",
+                          event.target.value,
+                          "Phone number",
+                        )
                       }
                     />
                   </DialogField>
@@ -990,10 +997,13 @@ function Teleplan2820Dialog({
                       type="date"
                       value={formState.signatureDate}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          signatureDate: event.target.value,
-                        }))
+                        updateLiveFutureDateField(
+                          setFormState,
+                          setFieldErrors,
+                          "signatureDate",
+                          event.target.value,
+                          "Date signed",
+                        )
                       }
                     />
                   </DialogField>
@@ -1068,57 +1078,68 @@ function Teleplan2820Dialog({
   );
 }
 
-export function TeleplanServiceApplicationSection() {
+export function TeleplanServiceApplicationSection({
+  autoOpen = false,
+  onRequestClose,
+}: {
+  autoOpen?: boolean;
+  onRequestClose?: () => void;
+}) {
   const session = readClinicLoginSession();
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<TeleplanDialogMode>("apply");
+  const [open, setOpen] = useState(autoOpen);
+  const [mode, setMode] = useState<TeleplanDialogMode>(autoOpen ? "update" : "apply");
 
   return (
     <>
-      <section className="overflow-hidden rounded-2xl border border-border bg-white">
-        <div className="px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
-              <FileText className="h-4 w-4 text-primary" />
+      {autoOpen ? null : (
+        <section className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setMode("update");
+                  setOpen(true);
+                }}
+                disabled={!session?.accessToken}
+                size="sm"
+                className="gap-2 px-4"
+              >
+                Update
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setMode("apply");
+                  setOpen(true);
+                }}
+                disabled={!session?.accessToken}
+                size="sm"
+                className="gap-2 px-4"
+              >
+                Apply
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setMode("update");
-                setOpen(true);
-              }}
-              disabled={!session?.accessToken}
-              size="sm"
-              className="gap-2 px-4"
-            >
-              Update
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                setMode("apply");
-                setOpen(true);
-              }}
-              disabled={!session?.accessToken}
-              size="sm"
-              className="gap-2 px-4"
-            >
-              Apply
-              <ArrowRight className="h-4 w-4" />
-            </Button>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <Teleplan2820Dialog
         open={open}
         mode={mode}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          onRequestClose?.();
+        }}
       />
     </>
   );

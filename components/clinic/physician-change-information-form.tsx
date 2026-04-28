@@ -12,7 +12,10 @@ import {
   type ClinicPhysicianChangeInformationResponse,
   type ClinicPhysicianChangeOfficeHourSlot,
 } from "@/lib/api/clinic-dashboard";
-import { hasExactDigits } from "@/lib/form-validation";
+import {
+  hasExactDigits,
+  updateLiveTenDigitField,
+} from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { digitsOnly } from "@/components/doctor/doctor-form-shared";
 
@@ -67,6 +70,17 @@ type PhysicianChangeAssets = {
 
 type PhysicianChangeFieldErrors = Partial<Record<keyof PhysicianChangeFormState, string>>;
 type PhysicianChangeDialogMode = "apply" | "update";
+type PhysicianChangePhoneField =
+  | "officePhone"
+  | "officeFax"
+  | "officePrivatePhone"
+  | "afterHoursPhone"
+  | "afterHoursCellPhone"
+  | "afterHoursHomePhone"
+  | "backupPhone"
+  | "hospitalPhone"
+  | "otherPhone";
+
 function createEmptyOfficeHours(): PhysicianChangeOfficeHoursState {
   const empty = { from: "", to: "", lunchFrom: "", lunchTo: "" };
 
@@ -313,6 +327,15 @@ function PhysicianChangeDialog({
   });
   const [formState, setFormState] = useState<PhysicianChangeFormState>(() => createEmptyState());
   const [fieldErrors, setFieldErrors] = useState<PhysicianChangeFieldErrors>({});
+
+  function updatePhoneField(
+    field: PhysicianChangePhoneField,
+    nextValue: string,
+    label: string,
+    kind: "phone number" | "fax number" = "phone number",
+  ) {
+    updateLiveTenDigitField(setFormState, setFieldErrors, field, nextValue, label, kind);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -602,10 +625,7 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.officePhone}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          officePhone: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField("officePhone", digitsOnly(event.target.value), "Office phone")
                       }
                     />
                   </DialogField>
@@ -613,10 +633,12 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.officeFax}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          officeFax: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField(
+                          "officeFax",
+                          digitsOnly(event.target.value),
+                          "Office fax",
+                          "fax number",
+                        )
                       }
                     />
                   </DialogField>
@@ -628,10 +650,11 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.officePrivatePhone}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          officePrivatePhone: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField(
+                          "officePrivatePhone",
+                          digitsOnly(event.target.value),
+                          "Office private phone",
+                        )
                       }
                     />
                   </DialogField>
@@ -686,10 +709,11 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.afterHoursPhone}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          afterHoursPhone: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField(
+                          "afterHoursPhone",
+                          digitsOnly(event.target.value),
+                          "After hours phone",
+                        )
                       }
                     />
                   </DialogField>
@@ -731,10 +755,11 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.afterHoursCellPhone}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          afterHoursCellPhone: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField(
+                          "afterHoursCellPhone",
+                          digitsOnly(event.target.value),
+                          "After hours cell phone",
+                        )
                       }
                     />
                   </DialogField>
@@ -746,10 +771,11 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.afterHoursHomePhone}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          afterHoursHomePhone: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField(
+                          "afterHoursHomePhone",
+                          digitsOnly(event.target.value),
+                          "After hours home phone",
+                        )
                       }
                     />
                   </DialogField>
@@ -778,15 +804,12 @@ function PhysicianChangeDialog({
                       />
                     </DialogField>
                     <DialogField label="Backup phone" required error={fieldErrors.backupPhone}>
-                      <Input
-                        value={formState.backupPhone}
-                        onChange={(event) =>
-                          setFormState((current) => ({
-                            ...current,
-                            backupPhone: digitsOnly(event.target.value),
-                          }))
-                        }
-                      />
+                    <Input
+                      value={formState.backupPhone}
+                      onChange={(event) =>
+                        updatePhoneField("backupPhone", digitsOnly(event.target.value), "Backup phone")
+                      }
+                    />
                     </DialogField>
                     <DialogField
                       label="Hospital affiliation"
@@ -804,15 +827,12 @@ function PhysicianChangeDialog({
                       />
                     </DialogField>
                     <DialogField label="Hospital phone" required error={fieldErrors.hospitalPhone}>
-                      <Input
-                        value={formState.hospitalPhone}
-                        onChange={(event) =>
-                          setFormState((current) => ({
-                            ...current,
-                            hospitalPhone: digitsOnly(event.target.value),
-                          }))
-                        }
-                      />
+                    <Input
+                      value={formState.hospitalPhone}
+                      onChange={(event) =>
+                        updatePhoneField("hospitalPhone", digitsOnly(event.target.value), "Hospital phone")
+                      }
+                    />
                     </DialogField>
                     <DialogField
                       label="Other affiliation"
@@ -830,15 +850,12 @@ function PhysicianChangeDialog({
                       />
                     </DialogField>
                     <DialogField label="Other phone" required error={fieldErrors.otherPhone}>
-                      <Input
-                        value={formState.otherPhone}
-                        onChange={(event) =>
-                          setFormState((current) => ({
-                            ...current,
-                            otherPhone: digitsOnly(event.target.value),
-                          }))
-                        }
-                      />
+                    <Input
+                      value={formState.otherPhone}
+                      onChange={(event) =>
+                        updatePhoneField("otherPhone", digitsOnly(event.target.value), "Other phone")
+                      }
+                    />
                     </DialogField>
                   </div>
                 </div>
@@ -905,38 +922,53 @@ function PhysicianChangeDialog({
   );
 }
 
-export function PhysicianChangeInformationSection() {
+export function PhysicianChangeInformationSection({
+  autoOpen = false,
+  onRequestClose,
+}: {
+  autoOpen?: boolean;
+  onRequestClose?: () => void;
+}) {
   const session = readClinicLoginSession();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
 
   return (
     <>
-      <section className="overflow-hidden rounded-2xl border border-border bg-white">
-        <div className="px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
-              <FileText className="h-4 w-4 text-primary" />
+      {autoOpen ? null : (
+        <section className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
+              </div>
+              <Button
+                type="button"
+                onClick={() => {
+                  setOpen(true);
+                }}
+                disabled={!session?.accessToken}
+                size="sm"
+                className="gap-2 px-4"
+              >
+                Apply
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
-            </div>
-            <Button
-              type="button"
-              onClick={() => {
-                setOpen(true);
-              }}
-              disabled={!session?.accessToken}
-              size="sm"
-              className="gap-2 px-4"
-            >
-              Apply
-              <ArrowRight className="h-4 w-4" />
-            </Button>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <PhysicianChangeDialog open={open} mode="apply" onClose={() => setOpen(false)} />
+      <PhysicianChangeDialog
+        open={open}
+        mode="apply"
+        onClose={() => {
+          setOpen(false);
+          onRequestClose?.();
+        }}
+      />
     </>
   );
 }

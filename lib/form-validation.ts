@@ -1,4 +1,5 @@
 import { getCanadaPacificDateKey } from "@/lib/time-zone";
+import type { Dispatch, SetStateAction } from "react";
 
 export function digitsOnly(value: string | null | undefined) {
   return (value ?? "").replace(/\D/g, "");
@@ -62,4 +63,53 @@ export function getLiveFutureDateError(value: string | null | undefined, label: 
   }
 
   return isFutureDate(normalized) ? `${label} cannot be in the future.` : "";
+}
+
+type StringFieldErrors<TField extends string> = Partial<Record<TField, string>>;
+
+export function updateLiveTenDigitField<
+  TField extends string,
+  TState,
+>(
+  setFormState: Dispatch<SetStateAction<TState>>,
+  setFieldErrors: Dispatch<SetStateAction<StringFieldErrors<TField>>>,
+  field: TField,
+  rawValue: string | null | undefined,
+  label: string,
+  kind: "phone number" | "fax number" = "phone number",
+) {
+  const nextValue = digitsOnly(rawValue);
+
+  setFormState((current) => ({
+    ...(current as TState),
+    [field]: nextValue,
+  } as TState));
+
+  setFieldErrors((current) => ({
+    ...current,
+    [field]: getLiveTenDigitError(nextValue, label, kind),
+  }));
+}
+
+export function updateLiveFutureDateField<
+  TField extends string,
+  TState,
+>(
+  setFormState: Dispatch<SetStateAction<TState>>,
+  setFieldErrors: Dispatch<SetStateAction<StringFieldErrors<TField>>>,
+  field: TField,
+  rawValue: string | null | undefined,
+  label: string,
+) {
+  const nextValue = (rawValue ?? "").trim();
+
+  setFormState((current) => ({
+    ...(current as TState),
+    [field]: nextValue,
+  } as TState));
+
+  setFieldErrors((current) => ({
+    ...current,
+    [field]: getLiveFutureDateError(nextValue, label),
+  }));
 }
