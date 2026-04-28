@@ -1,16 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
+  ChevronRight,
+  Clock,
   FileClock,
   HeartPulse,
   LoaderCircle,
   LogOut,
+  MapPin,
   NotebookPen,
+  Package,
+  Pill,
+  Truck,
   Users,
+  Video,
+  Building2,
 } from "lucide-react";
+import { symptomSuggestions } from "@/components/homepage/content";
 import { CanadianTime } from "@/components/canadian-time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,21 +27,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
   createPatientFamilyMember,
+  createPatientPoolAppointment,
   deletePatientFamilyMember,
   fetchPatientAppointments,
   fetchPatientFamilyMembers,
   fetchPatientProfile,
   fetchPatientRequests,
+  fetchPatientServices,
   updatePatientProfile,
 } from "@/lib/api/patient";
+import { fetchPatientIntakeSlots } from "@/lib/api/patient-intake";
 import { clearPatientLoginSession, readPatientLoginSession } from "@/lib/patient/session";
 import type {
   PatientFamilyMember,
+  PatientFulfillment,
   PatientLoginSession,
+  PatientPharmacyChoice,
   PatientPortalAppointmentsPayload,
   PatientPortalRequest,
+  PatientPortalService,
   PatientProfile,
+  PatientVisitType,
 } from "@/lib/patient/types";
+import {
+  formatCanadaPacificDateKey,
+  getCanadaPacificDateKey,
+  shiftCanadaPacificDateKey,
+} from "@/lib/time-zone";
 
 type ProfileDraft = {
   first_name: string;
@@ -44,6 +65,41 @@ type ProfileDraft = {
   city: string;
   province: string;
   postal_code: string;
+};
+
+type PortalNavItem = {
+  id: "profile" | "appointments" | "history" | "requests" | "family";
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+};
+
+type BookingStep = "problem" | "visit_type" | "slot" | "fulfillment" | "pharmacy";
+
+type BookingDraft = {
+  problem_label: string;
+  service_id: string;
+  chief_complaint_details: string;
+  visit_type: PatientVisitType | "";
+  appointment_date: string;
+  appointment_time: string;
+  fulfillment: PatientFulfillment | "";
+  pharmacy_choice: PatientPharmacyChoice | "";
+  preferred_pharmacy_name: string;
+  preferred_pharmacy_address: string;
+  preferred_pharmacy_city: string;
+  preferred_pharmacy_postal_code: string;
+  preferred_pharmacy_phone: string;
+};
+
+type NearbyPharmacyOption = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  phone: string;
+  distanceLabel: string;
 };
 
 const emptyProfileDraft: ProfileDraft = {
@@ -69,12 +125,130 @@ const emptyFamilyForm = {
   notes: "",
 };
 
-type PortalNavItem = {
-  id: "profile" | "appointments" | "history" | "requests" | "family";
-  label: string;
-  description: string;
-  icon: React.ReactNode;
+const emptyBookingDraft: BookingDraft = {
+  problem_label: "",
+  service_id: "",
+  chief_complaint_details: "",
+  visit_type: "",
+  appointment_date: "",
+  appointment_time: "",
+  fulfillment: "",
+  pharmacy_choice: "",
+  preferred_pharmacy_name: "",
+  preferred_pharmacy_address: "",
+  preferred_pharmacy_city: "",
+  preferred_pharmacy_postal_code: "",
+  preferred_pharmacy_phone: "",
 };
+
+const TIME_SLOTS = [
+  "9:00 AM",
+  "9:30 AM",
+  "10:00 AM",
+  "10:30 AM",
+  "11:00 AM",
+  "11:30 AM",
+  "1:00 PM",
+  "1:30 PM",
+  "2:00 PM",
+  "2:30 PM",
+  "3:00 PM",
+  "3:30 PM",
+  "4:00 PM",
+  "4:30 PM",
+];
+
+const NEARBY_PHARMACY_OPTIONS: NearbyPharmacyOption[] = [
+  {
+    id: "main-street-pharmacy",
+    name: "Main Street Pharmacy",
+    address: "123 Main St",
+    city: "Vancouver",
+    postalCode: "V6B 1A1",
+    phone: "(604) 555-0123",
+    distanceLabel: "0.8 km",
+  },
+  {
+    id: "west-coast-care-pharmacy",
+    name: "West Coast Care Pharmacy",
+    address: "2450 Burrard St",
+    city: "Vancouver",
+    postalCode: "V6J 3J2",
+    phone: "(604) 555-0188",
+    distanceLabel: "1.2 km",
+  },
+  {
+    id: "oakridge-community-pharmacy",
+    name: "Oakridge Community Pharmacy",
+    address: "650 W 41st Ave",
+    city: "Vancouver",
+    postalCode: "V5Z 2M9",
+    phone: "(604) 555-0144",
+    distanceLabel: "2.1 km",
+  },
+  {
+    id: "burnaby-central-pharmacy",
+    name: "Burnaby Central Pharmacy",
+    address: "4550 Kingsway",
+    city: "Burnaby",
+    postalCode: "V5H 2A9",
+    phone: "(604) 555-0194",
+    distanceLabel: "3.4 km",
+  },
+];
+
+function nextDates(count: number): string[] {
+  const base = getCanadaPacificDateKey();
+  return Array.from({ length: count }, (_, index) => shiftCanadaPacificDateKey(base, index));
+}
+
+function formatPhoneInput(raw: string) {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+function normalizeServiceName(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ");
+}
+
+function resolveServiceIdFromProblem(problemLabel: string, services: PatientPortalService[]) {
+  const normalizedProblem = normalizeServiceName(problemLabel);
+  const suggestion = symptomSuggestions.find(
+    (item) => normalizeServiceName(item.label) === normalizedProblem,
+  );
+  const hints = suggestion?.serviceHints ?? [problemLabel];
+  for (const hint of hints) {
+    const normalizedHint = normalizeServiceName(hint);
+    const match = services.find((service) =>
+      normalizeServiceName(service.service_name).includes(normalizedHint),
+    );
+    if (match) return String(match.service_id);
+  }
+  return "";
+}
+
+function normalizePostalPrefix(value: string) {
+  return value.replace(/\s/g, "").toUpperCase().slice(0, 3);
+}
+
+function getNearbyPharmacies(city: string, postalCode: string) {
+  const normalizedCity = city.trim().toLowerCase();
+  const postalPrefix = normalizePostalPrefix(postalCode);
+
+  return [...NEARBY_PHARMACY_OPTIONS].sort((a, b) => {
+    const aMatchesCity = normalizedCity && a.city.toLowerCase() === normalizedCity ? 1 : 0;
+    const bMatchesCity = normalizedCity && b.city.toLowerCase() === normalizedCity ? 1 : 0;
+    if (aMatchesCity !== bMatchesCity) return bMatchesCity - aMatchesCity;
+
+    const aMatchesPostal = postalPrefix && a.postalCode.replace(/\s/g, "").startsWith(postalPrefix) ? 1 : 0;
+    const bMatchesPostal = postalPrefix && b.postalCode.replace(/\s/g, "").startsWith(postalPrefix) ? 1 : 0;
+    if (aMatchesPostal !== bMatchesPostal) return bMatchesPostal - aMatchesPostal;
+
+    return a.distanceLabel.localeCompare(b.distanceLabel, undefined, { numeric: true });
+  });
+}
 
 function SectionCard({
   title,
@@ -134,6 +308,7 @@ export function PatientPortalDashboard() {
   const [appointments, setAppointments] = useState<PatientPortalAppointmentsPayload | null>(null);
   const [requests, setRequests] = useState<PatientPortalRequest[]>([]);
   const [familyMembers, setFamilyMembers] = useState<PatientFamilyMember[]>([]);
+  const [services, setServices] = useState<PatientPortalService[]>([]);
 
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
   const [profileMessage, setProfileMessage] = useState("");
@@ -142,6 +317,14 @@ export function PatientPortalDashboard() {
   const [familyForm, setFamilyForm] = useState(emptyFamilyForm);
   const [familyMessage, setFamilyMessage] = useState("");
   const [isSavingFamily, setIsSavingFamily] = useState(false);
+
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [bookingStep, setBookingStep] = useState<BookingStep>("problem");
+  const [bookingDraft, setBookingDraft] = useState<BookingDraft>(emptyBookingDraft);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [availableTimes, setAvailableTimes] = useState<string[]>(TIME_SLOTS);
+  const [isBooking, setIsBooking] = useState(false);
+  const [bookingMessage, setBookingMessage] = useState("");
 
   const navigation: PortalNavItem[] = [
     {
@@ -176,6 +359,23 @@ export function PatientPortalDashboard() {
     },
   ];
 
+  const nearbyPharmacies = useMemo(
+    () => getNearbyPharmacies(profileDraft.city, profileDraft.postal_code),
+    [profileDraft.city, profileDraft.postal_code],
+  );
+
+  const selectedNearbyPharmacyId = useMemo(() => {
+    const match = nearbyPharmacies.find(
+      (option) =>
+        option.name === bookingDraft.preferred_pharmacy_name &&
+        option.address === bookingDraft.preferred_pharmacy_address &&
+        option.city === bookingDraft.preferred_pharmacy_city &&
+        option.postalCode === bookingDraft.preferred_pharmacy_postal_code &&
+        option.phone === bookingDraft.preferred_pharmacy_phone,
+    );
+    return match?.id ?? "";
+  }, [bookingDraft, nearbyPharmacies]);
+
   useEffect(() => {
     const storedSession = readPatientLoginSession();
     if (!storedSession) {
@@ -195,12 +395,13 @@ export function PatientPortalDashboard() {
     async function loadPortalData() {
       setLoadError("");
       try {
-        const [nextProfile, nextAppointments, nextRequests, nextFamilyMembers] =
+        const [nextProfile, nextAppointments, nextRequests, nextFamilyMembers, nextServices] =
           await Promise.all([
             fetchPatientProfile(accessToken),
             fetchPatientAppointments(accessToken),
             fetchPatientRequests(accessToken),
             fetchPatientFamilyMembers(accessToken),
+            fetchPatientServices(),
           ]);
 
         if (cancelled) return;
@@ -209,6 +410,7 @@ export function PatientPortalDashboard() {
         setAppointments(nextAppointments);
         setRequests(nextRequests);
         setFamilyMembers(nextFamilyMembers);
+        setServices(nextServices);
         setProfileDraft({
           first_name: nextProfile.first_name ?? "",
           last_name: nextProfile.last_name ?? "",
@@ -235,6 +437,30 @@ export function PatientPortalDashboard() {
     };
   }, [session]);
 
+  useEffect(() => {
+    if (!bookingOpen || bookingStep !== "slot" || !bookingDraft.visit_type) return;
+    const visitType = bookingDraft.visit_type;
+    let cancelled = false;
+
+    async function loadSlots() {
+      try {
+        const response = await fetchPatientIntakeSlots(visitType);
+        if (cancelled) return;
+        setAvailableDates(response.dates?.length ? response.dates : nextDates(14));
+        setAvailableTimes(response.time_slots?.length ? response.time_slots : TIME_SLOTS);
+      } catch {
+        if (cancelled) return;
+        setAvailableDates(nextDates(14));
+        setAvailableTimes(TIME_SLOTS);
+      }
+    }
+
+    void loadSlots();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingDraft.visit_type, bookingOpen, bookingStep]);
+
   async function refreshPortalData() {
     if (!session) return;
     const accessToken = session.accessToken;
@@ -248,6 +474,84 @@ export function PatientPortalDashboard() {
     setAppointments(nextAppointments);
     setRequests(nextRequests);
     setFamilyMembers(nextFamilyMembers);
+  }
+
+  function resetBookingFlow() {
+    setBookingDraft(emptyBookingDraft);
+    setBookingStep("problem");
+    setBookingMessage("");
+    setAvailableDates([]);
+    setAvailableTimes(TIME_SLOTS);
+  }
+
+  function applyNearbyPharmacy(optionId: string) {
+    const option = nearbyPharmacies.find((item) => item.id === optionId);
+    if (!option) return;
+    setBookingDraft((current) => ({
+      ...current,
+      preferred_pharmacy_name: option.name,
+      preferred_pharmacy_address: option.address,
+      preferred_pharmacy_city: option.city,
+      preferred_pharmacy_postal_code: option.postalCode,
+      preferred_pharmacy_phone: option.phone,
+    }));
+  }
+
+  function validateBookingStep(step: BookingStep) {
+    if (step === "problem") {
+      if (!bookingDraft.problem_label) return "Please choose the problem or reason for the visit.";
+      return "";
+    }
+    if (step === "visit_type") {
+      if (!bookingDraft.visit_type) return "Please choose virtual or walk-in.";
+      return "";
+    }
+    if (step === "slot") {
+      if (!bookingDraft.appointment_date || !bookingDraft.appointment_time) {
+        return "Please choose the appointment date and time.";
+      }
+      return "";
+    }
+    if (step === "fulfillment") {
+      if (!bookingDraft.fulfillment) return "Please choose pickup or delivery.";
+      return "";
+    }
+    if (step === "pharmacy") {
+      if (!bookingDraft.pharmacy_choice) {
+        return "Please choose Bimble pharmacy or your preferred pharmacy.";
+      }
+      if (
+        bookingDraft.pharmacy_choice === "preferred" &&
+        (!bookingDraft.preferred_pharmacy_name ||
+          !bookingDraft.preferred_pharmacy_address ||
+          !bookingDraft.preferred_pharmacy_city ||
+          !bookingDraft.preferred_pharmacy_postal_code ||
+          !bookingDraft.preferred_pharmacy_phone)
+      ) {
+        return "Please complete the preferred pharmacy details.";
+      }
+      return "";
+    }
+    return "";
+  }
+
+  function goToNextBookingStep() {
+    const error = validateBookingStep(bookingStep);
+    if (error) {
+      setBookingMessage(error);
+      return;
+    }
+    setBookingMessage("");
+    const order: BookingStep[] = ["problem", "visit_type", "slot", "fulfillment", "pharmacy"];
+    const nextStep = order[order.indexOf(bookingStep) + 1];
+    if (nextStep) setBookingStep(nextStep);
+  }
+
+  function goToPreviousBookingStep() {
+    setBookingMessage("");
+    const order: BookingStep[] = ["problem", "visit_type", "slot", "fulfillment", "pharmacy"];
+    const previousStep = order[order.indexOf(bookingStep) - 1];
+    if (previousStep) setBookingStep(previousStep);
   }
 
   async function handleSaveProfile() {
@@ -274,6 +578,63 @@ export function PatientPortalDashboard() {
       setProfileMessage(error instanceof Error ? error.message : "Could not save the profile.");
     } finally {
       setIsSavingProfile(false);
+    }
+  }
+
+  async function handleCompleteBooking() {
+    if (!session) return;
+    const error = validateBookingStep("pharmacy");
+    if (error) {
+      setBookingMessage(error);
+      return;
+    }
+
+    setIsBooking(true);
+    setBookingMessage("");
+
+    try {
+      await createPatientPoolAppointment(session.accessToken, {
+        service_id: bookingDraft.service_id ? Number(bookingDraft.service_id) : undefined,
+        chief_complaint: [bookingDraft.problem_label, bookingDraft.chief_complaint_details.trim()]
+          .filter(Boolean)
+          .join(": "),
+        visit_type: bookingDraft.visit_type || undefined,
+        appointment_date: bookingDraft.appointment_date || undefined,
+        appointment_time: bookingDraft.appointment_time || undefined,
+        fulfillment: bookingDraft.fulfillment || undefined,
+        pharmacy_choice: bookingDraft.pharmacy_choice || undefined,
+        preferred_pharmacy_name:
+          bookingDraft.pharmacy_choice === "preferred"
+            ? bookingDraft.preferred_pharmacy_name.trim() || undefined
+            : undefined,
+        preferred_pharmacy_address:
+          bookingDraft.pharmacy_choice === "preferred"
+            ? bookingDraft.preferred_pharmacy_address.trim() || undefined
+            : undefined,
+        preferred_pharmacy_city:
+          bookingDraft.pharmacy_choice === "preferred"
+            ? bookingDraft.preferred_pharmacy_city.trim() || undefined
+            : undefined,
+        preferred_pharmacy_postal_code:
+          bookingDraft.pharmacy_choice === "preferred"
+            ? bookingDraft.preferred_pharmacy_postal_code.trim() || undefined
+            : undefined,
+        preferred_pharmacy_phone:
+          bookingDraft.pharmacy_choice === "preferred"
+            ? bookingDraft.preferred_pharmacy_phone.trim() || undefined
+            : undefined,
+        care_location: profileDraft.city || undefined,
+      });
+      await refreshPortalData();
+      resetBookingFlow();
+      setBookingOpen(false);
+      setBookingMessage("Appointment request added to the shared pool successfully.");
+    } catch (error) {
+      setBookingMessage(
+        error instanceof Error ? error.message : "Could not complete the appointment booking.",
+      );
+    } finally {
+      setIsBooking(false);
     }
   }
 
@@ -526,7 +887,7 @@ export function PatientPortalDashboard() {
         {activeSection === "appointments" ? (
           <SectionCard
             title="Appointments"
-            subtitle="View your active visits and what's coming next."
+            subtitle="Book a visit into the shared pool so any available clinic can pick it."
             icon={<CalendarDays className="h-5 w-5" />}
           >
             <div className="grid gap-3 md:grid-cols-2">
@@ -542,7 +903,435 @@ export function PatientPortalDashboard() {
               />
             </div>
 
-            <div className="mt-4 space-y-3">
+            {!bookingOpen ? (
+              <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+                <div className="text-sm text-slate-700">
+                  Book another appointment without selecting a clinic. Your request goes into the shared patient pool so an available clinic or doctor can accept it.
+                </div>
+                <div className="mt-4">
+                  <Button
+                    onClick={() => {
+                      setBookingOpen(true);
+                      setBookingStep("problem");
+                      setBookingMessage("");
+                    }}
+                  >
+                    Book appointment
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5 space-y-5 rounded-[24px] border border-slate-200 bg-slate-50/60 p-5">
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: "problem", label: "Problem" },
+                    { id: "visit_type", label: "Visit type" },
+                    { id: "slot", label: "Date & time" },
+                    { id: "fulfillment", label: "Pickup / delivery" },
+                    { id: "pharmacy", label: "Pharmacy" },
+                  ].map((item, index) => {
+                    const order: BookingStep[] = ["problem", "visit_type", "slot", "fulfillment", "pharmacy"];
+                    const activeIndex = order.indexOf(bookingStep);
+                    const itemIndex = order.indexOf(item.id as BookingStep);
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]",
+                          itemIndex <= activeIndex
+                            ? "border-sky-200 bg-sky-50 text-sky-700"
+                            : "border-slate-200 bg-white text-slate-400",
+                        )}
+                      >
+                        {index + 1}. {item.label}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {bookingStep === "problem" ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="grid gap-2 text-sm text-slate-700">
+                      Problem or reason to visit
+                      <select
+                        className="h-12 rounded-2xl border border-border bg-white px-4 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                        value={bookingDraft.problem_label}
+                        onChange={(event) => {
+                          const nextProblem = event.target.value;
+                          setBookingDraft((current) => ({
+                            ...current,
+                            problem_label: nextProblem,
+                            service_id: resolveServiceIdFromProblem(nextProblem, services),
+                          }));
+                        }}
+                      >
+                        <option value="">Select a problem</option>
+                        {symptomSuggestions.map((problem) => (
+                          <option key={problem.label} value={problem.label}>
+                            {problem.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                      The patient no longer chooses a clinic here. This request will be visible in the shared appointment pool for clinics and doctors to pick up.
+                    </div>
+
+                    <label className="grid gap-2 text-sm text-slate-700 sm:col-span-2">
+                      Extra details for the visit
+                      <Textarea
+                        value={bookingDraft.chief_complaint_details}
+                        onChange={(event) =>
+                          setBookingDraft((current) => ({
+                            ...current,
+                            chief_complaint_details: event.target.value,
+                          }))
+                        }
+                        placeholder="Optional details to help the clinic understand the visit."
+                      />
+                    </label>
+                  </div>
+                ) : null}
+
+                {bookingStep === "visit_type" ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {[
+                      {
+                        value: "virtual" as PatientVisitType,
+                        title: "Virtual",
+                        description: "Meet the doctor online from your phone or laptop.",
+                        icon: <Video className="h-6 w-6" />,
+                      },
+                      {
+                        value: "walk_in" as PatientVisitType,
+                        title: "Walk-in",
+                        description: "Visit the clinic in person at your chosen time.",
+                        icon: <Building2 className="h-6 w-6" />,
+                      },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          setBookingDraft((current) => ({ ...current, visit_type: option.value }))
+                        }
+                        className={cn(
+                          "rounded-[24px] border p-5 text-left shadow-sm transition-all",
+                          bookingDraft.visit_type === option.value
+                            ? "border-sky-300 bg-sky-50 ring-2 ring-sky-100"
+                            : "border-slate-200 bg-white hover:border-sky-200",
+                        )}
+                      >
+                        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                          {option.icon}
+                        </div>
+                        <div className="text-base font-semibold text-slate-900">{option.title}</div>
+                        <p className="mt-2 text-sm text-slate-600">{option.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                {bookingStep === "slot" ? (
+                  <div className="space-y-5">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        Choose a date
+                      </p>
+                      <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
+                        {(availableDates.length ? availableDates : nextDates(14)).map((value) => {
+                          const selected = bookingDraft.appointment_date === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() =>
+                                setBookingDraft((current) => ({ ...current, appointment_date: value }))
+                              }
+                              className={cn(
+                                "min-w-[6rem] rounded-2xl border px-3 py-2 text-xs font-semibold transition-all",
+                                selected
+                                  ? "border-sky-300 bg-sky-50 text-sky-700"
+                                  : "border-slate-200 bg-white text-slate-700 hover:border-sky-200",
+                              )}
+                            >
+                              {formatCanadaPacificDateKey(value, {
+                                weekday: "short",
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                        Choose a time
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {availableTimes.map((value) => {
+                          const selected = bookingDraft.appointment_time === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() =>
+                                setBookingDraft((current) => ({ ...current, appointment_time: value }))
+                              }
+                              className={cn(
+                                "rounded-2xl border px-3 py-2 text-sm font-medium transition-all",
+                                selected
+                                  ? "border-sky-300 bg-sky-50 text-sky-700"
+                                  : "border-slate-200 bg-white text-slate-700 hover:border-sky-200",
+                              )}
+                            >
+                              {value}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {bookingStep === "fulfillment" ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {[
+                      {
+                        value: "pickup" as PatientFulfillment,
+                        title: "Pickup",
+                        description: "Pick up the medication from the pharmacy chosen next.",
+                        icon: <Package className="h-6 w-6" />,
+                      },
+                      {
+                        value: "delivery" as PatientFulfillment,
+                        title: "Delivery",
+                        description: "Have the medication delivered once the prescription is ready.",
+                        icon: <Truck className="h-6 w-6" />,
+                      },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          setBookingDraft((current) => ({
+                            ...current,
+                            fulfillment: option.value,
+                            pharmacy_choice: "",
+                          }))
+                        }
+                        className={cn(
+                          "rounded-[24px] border p-5 text-left shadow-sm transition-all",
+                          bookingDraft.fulfillment === option.value
+                            ? "border-sky-300 bg-sky-50 ring-2 ring-sky-100"
+                            : "border-slate-200 bg-white hover:border-sky-200",
+                        )}
+                      >
+                        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                          {option.icon}
+                        </div>
+                        <div className="text-base font-semibold text-slate-900">{option.title}</div>
+                        <p className="mt-2 text-sm text-slate-600">{option.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                {bookingStep === "pharmacy" ? (
+                  <div className="space-y-5">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBookingDraft((current) => ({
+                            ...current,
+                            pharmacy_choice: "bimble",
+                            preferred_pharmacy_name: "",
+                            preferred_pharmacy_address: "",
+                            preferred_pharmacy_city: "",
+                            preferred_pharmacy_postal_code: "",
+                            preferred_pharmacy_phone: "",
+                          }))
+                        }
+                        className={cn(
+                          "rounded-[24px] border p-5 text-left shadow-sm transition-all",
+                          bookingDraft.pharmacy_choice === "bimble"
+                            ? "border-sky-300 bg-sky-50 ring-2 ring-sky-100"
+                            : "border-slate-200 bg-white hover:border-sky-200",
+                        )}
+                      >
+                        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                          <Pill className="h-6 w-6" />
+                        </div>
+                        <div className="text-base font-semibold text-slate-900">Bimble pharmacy</div>
+                        <p className="mt-2 text-sm text-slate-600">
+                          {bookingDraft.fulfillment === "delivery"
+                            ? "Fastest option for delivery."
+                            : "Fastest option for pickup."}
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBookingDraft((current) => ({
+                            ...current,
+                            pharmacy_choice: "preferred",
+                          }));
+                          if (!selectedNearbyPharmacyId && nearbyPharmacies.length > 0) {
+                            applyNearbyPharmacy(nearbyPharmacies[0]!.id);
+                          }
+                        }}
+                        className={cn(
+                          "rounded-[24px] border p-5 text-left shadow-sm transition-all",
+                          bookingDraft.pharmacy_choice === "preferred"
+                            ? "border-sky-300 bg-sky-50 ring-2 ring-sky-100"
+                            : "border-slate-200 bg-white hover:border-sky-200",
+                        )}
+                      >
+                        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+                          <MapPin className="h-6 w-6" />
+                        </div>
+                        <div className="text-base font-semibold text-slate-900">Your preferred pharmacy</div>
+                        <p className="mt-2 text-sm text-slate-600">
+                          Use the patient&apos;s existing pharmacy for pickup or delivery.
+                        </p>
+                      </button>
+                    </div>
+
+                    {bookingDraft.pharmacy_choice === "preferred" ? (
+                      <div className="space-y-4 rounded-[24px] border border-sky-100 bg-sky-50/50 p-5">
+                        <label className="grid gap-2 text-sm text-slate-700">
+                          Nearby pharmacies
+                          <select
+                            className="h-12 rounded-2xl border border-border bg-white px-4 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                            value={selectedNearbyPharmacyId}
+                            onChange={(event) => applyNearbyPharmacy(event.target.value)}
+                          >
+                            <option value="">Select a nearby pharmacy</option>
+                            {nearbyPharmacies.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.name} - {option.distanceLabel} - {option.city}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <label className="grid gap-2 text-sm text-slate-700">
+                            Pharmacy name
+                            <Input
+                              value={bookingDraft.preferred_pharmacy_name}
+                              onChange={(event) =>
+                                setBookingDraft((current) => ({
+                                  ...current,
+                                  preferred_pharmacy_name: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="grid gap-2 text-sm text-slate-700">
+                            Phone number
+                            <Input
+                              value={bookingDraft.preferred_pharmacy_phone}
+                              onChange={(event) =>
+                                setBookingDraft((current) => ({
+                                  ...current,
+                                  preferred_pharmacy_phone: formatPhoneInput(event.target.value),
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                        <label className="grid gap-2 text-sm text-slate-700">
+                          Street address
+                          <Input
+                            value={bookingDraft.preferred_pharmacy_address}
+                            onChange={(event) =>
+                              setBookingDraft((current) => ({
+                                ...current,
+                                preferred_pharmacy_address: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <label className="grid gap-2 text-sm text-slate-700">
+                            City
+                            <Input
+                              value={bookingDraft.preferred_pharmacy_city}
+                              onChange={(event) =>
+                                setBookingDraft((current) => ({
+                                  ...current,
+                                  preferred_pharmacy_city: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <label className="grid gap-2 text-sm text-slate-700">
+                            Postal code
+                            <Input
+                              value={bookingDraft.preferred_pharmacy_postal_code}
+                              onChange={(event) =>
+                                setBookingDraft((current) => ({
+                                  ...current,
+                                  preferred_pharmacy_postal_code: event.target.value.toUpperCase(),
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {bookingDraft.pharmacy_choice === "bimble" ? (
+                      <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-700">
+                        <Clock className="mr-2 inline h-4 w-4 text-sky-700" />
+                        {bookingDraft.fulfillment === "delivery"
+                          ? "Bimble pharmacy is the fastest delivery option."
+                          : "Bimble pharmacy is the fastest pickup option."}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {bookingMessage ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                    {bookingMessage}
+                  </div>
+                ) : null}
+
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (bookingStep === "problem") {
+                        setBookingOpen(false);
+                        resetBookingFlow();
+                      } else {
+                        goToPreviousBookingStep();
+                      }
+                    }}
+                    disabled={isBooking}
+                  >
+                    {bookingStep === "problem" ? "Cancel" : "Back"}
+                  </Button>
+                  {bookingStep !== "pharmacy" ? (
+                    <Button onClick={goToNextBookingStep} disabled={isBooking}>
+                      Continue
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button onClick={handleCompleteBooking} disabled={isBooking}>
+                      {isBooking ? "Completing..." : "Complete booking"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5 space-y-3">
               {activeAppointments.length ? (
                 activeAppointments.map((appointment) => (
                   <div key={appointment.appointment_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -550,9 +1339,16 @@ export function PatientPortalDashboard() {
                       {appointment.service_name || "General appointment"}
                     </div>
                     <div className="mt-1 text-sm text-slate-600">
-                      {appointment.clinic_name || "Clinic pending"} ·{" "}
+                      {(appointment.channel === "POOL" ? "Shared pool" : appointment.clinic_name || "Clinic pending")} ·{" "}
                       <CanadianTime value={appointment.queued_at} fallback="Not available" />
                     </div>
+                    {appointment.visit_type || appointment.appointment_date || appointment.appointment_time ? (
+                      <div className="mt-2 text-sm text-slate-600">
+                        {(appointment.visit_type || "").replace("_", "-") || "visit"} ·{" "}
+                        {appointment.appointment_date || "Date pending"} ·{" "}
+                        {appointment.appointment_time || "Time pending"}
+                      </div>
+                    ) : null}
                   </div>
                 ))
               ) : (
@@ -582,6 +1378,14 @@ export function PatientPortalDashboard() {
                         <div className="mt-1 text-sm text-slate-600">
                           {appointment.clinic_name || "Clinic pending"} · {appointment.status}
                         </div>
+                        {appointment.fulfillment ? (
+                          <div className="mt-2 text-sm text-slate-600">
+                            {appointment.fulfillment === "pickup" ? "Pickup" : "Delivery"} ·{" "}
+                            {appointment.pharmacy_choice === "preferred"
+                              ? appointment.preferred_pharmacy_name || "Preferred pharmacy"
+                              : "Bimble pharmacy"}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="text-sm text-slate-500">
                         <CanadianTime

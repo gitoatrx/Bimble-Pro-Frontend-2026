@@ -169,6 +169,32 @@ export function createPatientDirectAppointment(
   });
 }
 
+export function createPatientPoolAppointment(
+  accessToken: string,
+  payload: {
+    service_id?: number;
+    chief_complaint?: string;
+    visit_type?: PatientVisitType;
+    appointment_date?: string;
+    appointment_time?: string;
+    fulfillment?: PatientFulfillment;
+    pharmacy_choice?: PatientPharmacyChoice;
+    preferred_pharmacy_name?: string;
+    preferred_pharmacy_address?: string;
+    preferred_pharmacy_city?: string;
+    preferred_pharmacy_postal_code?: string;
+    preferred_pharmacy_phone?: string;
+    care_location?: string;
+  },
+) {
+  return apiRequest<PatientPortalAppointment, typeof payload>({
+    endpoint: "/api/v1/appointments/pool",
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: payload,
+  });
+}
+
 export function cancelPatientAppointment(
   accessToken: string,
   appointmentId: number,
