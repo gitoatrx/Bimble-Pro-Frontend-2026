@@ -12,6 +12,7 @@ import {
   faqs,
   marqueeConditions,
   stats,
+  symptomSuggestions,
   testimonials,
 } from "./content";
 import "./homepage.css";
@@ -29,6 +30,44 @@ type BrowserReverseGeocodeResponse = {
   };
   display_name?: string;
 };
+
+type ReverseGeocodeProxyResponse = {
+  location?: string | null;
+  display_name?: string | null;
+};
+
+async function reverseGeocodeViaProxy(
+  lat: number,
+  lng: number,
+): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `/api/v1/location/reverse?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`,
+      {
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as ReverseGeocodeProxyResponse;
+    const compactLocation = payload.location?.trim();
+    if (compactLocation) {
+      return compactLocation;
+    }
+
+    if (payload.display_name?.trim()) {
+      return payload.display_name
+        .split(",")
+        .slice(0, 2)
+        .join(",")
+        .trim();
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 async function reverseGeocodeBrowserLocation(
   lat: number,
@@ -207,7 +246,9 @@ export function Homepage() {
 
       try {
         let detectedLocation =
-          (await reverseGeocodeBrowserLocation(latitude, longitude)) ?? "";
+          (await reverseGeocodeViaProxy(latitude, longitude)) ??
+          (await reverseGeocodeBrowserLocation(latitude, longitude)) ??
+          "";
 
         if (!detectedLocation) {
           detectedLocation = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
@@ -414,10 +455,47 @@ export function Homepage() {
     return service.service_name.toLowerCase().includes(query);
   });
 
+  const resolveServiceIdFromHints = useCallback(
+    (hints: string[]) => {
+      const normalizedHints = hints.map((hint) => hint.trim().toLowerCase()).filter(Boolean);
+      if (!normalizedHints.length) return null;
+
+      const exact = serviceOptions.find((service) =>
+        normalizedHints.includes(service.service_name.trim().toLowerCase()),
+      );
+      if (exact) return exact.service_id;
+
+      const partial = serviceOptions.find((service) => {
+        const normalizedName = service.service_name.trim().toLowerCase();
+        return normalizedHints.some((hint) => normalizedName.includes(hint) || hint.includes(normalizedName));
+      });
+      return partial?.service_id ?? null;
+    },
+    [serviceOptions],
+  );
+
+  const filteredSymptomSuggestions = symptomSuggestions.filter((suggestion) => {
+    if (!careQuery.trim()) return true;
+    const query = careQuery.trim().toLowerCase();
+    return (
+      suggestion.label.toLowerCase().includes(query) ||
+      suggestion.serviceHints.some((hint) => hint.toLowerCase().includes(query))
+    );
+  });
+
   const resolveServiceId = useCallback(
     (query: string) => {
       const normalized = query.trim().toLowerCase();
       if (!normalized) return null;
+      const matchingSuggestion = symptomSuggestions.find(
+        (suggestion) =>
+          suggestion.label.toLowerCase() === normalized ||
+          suggestion.label.toLowerCase().includes(normalized) ||
+          normalized.includes(suggestion.label.toLowerCase()),
+      );
+      if (matchingSuggestion) {
+        return resolveServiceIdFromHints(matchingSuggestion.serviceHints);
+      }
       const exact = serviceOptions.find(
         (service) => service.service_name.toLowerCase() === normalized,
       );
@@ -433,7 +511,7 @@ export function Homepage() {
       });
       return partial?.service_id ?? null;
     },
-    [serviceOptions],
+    [resolveServiceIdFromHints, serviceOptions],
   );
 
   const handleSelectCity = useCallback((city: string) => {
@@ -554,6 +632,13 @@ export function Homepage() {
                     const value = e.target.value;
                     setCareQuery(value);
                     setShowCareSuggestions(true);
+                    const matchingSuggestion = symptomSuggestions.find(
+                      (suggestion) => suggestion.label.toLowerCase() === value.trim().toLowerCase(),
+                    );
+                    if (matchingSuggestion) {
+                      setSelectedServiceId(resolveServiceIdFromHints(matchingSuggestion.serviceHints));
+                      return;
+                    }
                     const selected = serviceOptions.find(
                       (service) => service.service_name.toLowerCase() === value.trim().toLowerCase(),
                     );
@@ -561,12 +646,12 @@ export function Homepage() {
                   }}
                   onFocus={() => setShowCareSuggestions(true)}
                   onBlur={() => setTimeout(() => setShowCareSuggestions(false), 150)}
-                  placeholder="What type of care do you need?"
+                  placeholder="What problem do you need help with?"
                   autoComplete="off"
                 />
                 <ChevronDown size={16} strokeWidth={2} style={{ color: "#22314d", flexShrink: 0 }} />
 
-                {showCareSuggestions && filteredServices.length > 0 ? (
+                {showCareSuggestions && (filteredSymptomSuggestions.length > 0 || filteredServices.length > 0) ? (
                   <div
                     style={{
                       position: "absolute",
@@ -583,13 +668,13 @@ export function Homepage() {
                       overflowY: "auto",
                     }}
                   >
-                    {filteredServices.slice(0, 10).map((service) => (
+                    {filteredSymptomSuggestions.slice(0, 10).map((suggestion) => (
                       <button
-                        key={service.service_id}
+                        key={suggestion.label}
                         type="button"
                         onMouseDown={() => {
-                          setCareQuery(service.service_name);
-                          setSelectedServiceId(service.service_id);
+                          setCareQuery(suggestion.label);
+                          setSelectedServiceId(resolveServiceIdFromHints(suggestion.serviceHints));
                           setShowCareSuggestions(false);
                         }}
                         style={{
@@ -613,9 +698,44 @@ export function Homepage() {
                         }}
                       >
                         <Search size={13} style={{ color: "#8896b4", flexShrink: 0 }} />
-                        {service.service_name}
+                        {suggestion.label}
                       </button>
                     ))}
+                    {filteredSymptomSuggestions.length === 0
+                      ? filteredServices.slice(0, 10).map((service) => (
+                          <button
+                            key={service.service_id}
+                            type="button"
+                            onMouseDown={() => {
+                              setCareQuery(service.service_name);
+                              setSelectedServiceId(service.service_id);
+                              setShowCareSuggestions(false);
+                            }}
+                            style={{
+                              width: "100%",
+                              textAlign: "left",
+                              padding: "10px 16px",
+                              fontSize: "14px",
+                              color: "#0f1f3d",
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                            onMouseEnter={(e) => {
+                              (e.currentTarget as HTMLElement).style.background = "#eef2ff";
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLElement).style.background = "none";
+                            }}
+                          >
+                            <Search size={13} style={{ color: "#8896b4", flexShrink: 0 }} />
+                            {service.service_name}
+                          </button>
+                        ))
+                      : null}
                   </div>
                 ) : null}
               </div>

@@ -159,6 +159,17 @@ export type PatientPortalAppointment = {
   assigned_doctor_id: number | null;
   chief_complaint: string | null;
   notes: string | null;
+  visit_type: PatientVisitType | null;
+  appointment_date: string | null;
+  appointment_time: string | null;
+  fulfillment: PatientFulfillment | null;
+  pharmacy_choice: PatientPharmacyChoice | null;
+  preferred_pharmacy_name: string | null;
+  preferred_pharmacy_address: string | null;
+  preferred_pharmacy_city: string | null;
+  preferred_pharmacy_postal_code: string | null;
+  preferred_pharmacy_phone: string | null;
+  care_location: string | null;
   prescription_notes: string | null;
   cancellation_reason: string | null;
   queued_at: string;

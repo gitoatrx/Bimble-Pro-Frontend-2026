@@ -44,8 +44,31 @@ export type Stat = {
   sub?: string;
 };
 
+export type SymptomSuggestion = {
+  label: string;
+  serviceHints: string[];
+};
+
 export const navItems = [
   { href: "#for-clinics", label: "For Clinics" },
+];
+
+export const symptomSuggestions: SymptomSuggestion[] = [
+  { label: "Headache", serviceHints: ["general consultation"] },
+  { label: "Fever", serviceHints: ["general consultation"] },
+  { label: "Cold and cough", serviceHints: ["general consultation"] },
+  { label: "Flu symptoms", serviceHints: ["general consultation"] },
+  { label: "Sore throat", serviceHints: ["general consultation"] },
+  { label: "Stomach ache", serviceHints: ["general consultation"] },
+  { label: "Body pain", serviceHints: ["general consultation"] },
+  { label: "Back pain", serviceHints: ["general consultation"] },
+  { label: "Skin rash", serviceHints: ["general consultation"] },
+  { label: "Allergy symptoms", serviceHints: ["general consultation"] },
+  { label: "Urinary infection symptoms", serviceHints: ["general consultation"] },
+  { label: "Prescription renewal", serviceHints: ["prescription renewal"] },
+  { label: "Sick note", serviceHints: ["sick note"] },
+  { label: "Mental health support", serviceHints: ["mental health assessment"] },
+  { label: "Vaccination or immunization", serviceHints: ["immunization"] },
 ];
 
 export const specialties: Specialty[] = [

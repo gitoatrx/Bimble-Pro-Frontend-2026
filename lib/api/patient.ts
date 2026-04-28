@@ -1,9 +1,11 @@
 import { apiRequest } from "@/lib/api/request";
 import type {
+  PatientFulfillment,
   PatientFamilyMember,
   PatientOtpStartResponse,
   PatientPhoneOtpVerifyResponse,
   PatientOtpVerifyResponse,
+  PatientPharmacyChoice,
   PatientPortalAppointment,
   PatientPortalAppointmentsPayload,
   PatientPortalClinic,
@@ -11,6 +13,7 @@ import type {
   PatientPortalRequest,
   PatientPortalService,
   PatientProfile,
+  PatientVisitType,
 } from "@/lib/patient/types";
 
 function authHeaders(accessToken: string) {
@@ -145,6 +148,17 @@ export function createPatientDirectAppointment(
     clinic_id: number;
     service_id?: number;
     chief_complaint?: string;
+    visit_type?: PatientVisitType;
+    appointment_date?: string;
+    appointment_time?: string;
+    fulfillment?: PatientFulfillment;
+    pharmacy_choice?: PatientPharmacyChoice;
+    preferred_pharmacy_name?: string;
+    preferred_pharmacy_address?: string;
+    preferred_pharmacy_city?: string;
+    preferred_pharmacy_postal_code?: string;
+    preferred_pharmacy_phone?: string;
+    care_location?: string;
   },
 ) {
   return apiRequest<PatientPortalAppointment, typeof payload>({
