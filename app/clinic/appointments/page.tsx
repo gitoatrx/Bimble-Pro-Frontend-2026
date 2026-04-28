@@ -5,6 +5,11 @@ import { ChevronLeft, ChevronRight, Clock, Loader2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
 import {
+  formatCanadaPacificDateKey,
+  getCanadaPacificDateKey,
+  shiftCanadaPacificDateKey,
+} from "@/lib/time-zone";
+import {
   assignClinicAppointmentDoctor,
   fetchClinicAppointmentsByDate,
   fetchClinicAppointmentsByRange,
@@ -30,13 +35,11 @@ type ClinicDoctorOption = {
 };
 
 function todayKey() {
-  return new Date().toISOString().split("T")[0];
+  return getCanadaPacificDateKey();
 }
 
 function offsetKey(base: string, offset: number): string {
-  const d = new Date(base + "T00:00:00");
-  d.setDate(d.getDate() + offset);
-  return d.toISOString().split("T")[0];
+  return shiftCanadaPacificDateKey(base, offset);
 }
 
 function normalizeAppointment(record: Record<string, unknown>): Appointment {
@@ -108,10 +111,9 @@ function getDayKeys(anchorKey: string, count = 7): string[] {
 }
 
 function formatDayLabel(key: string): { weekday: string; day: string } {
-  const d = new Date(key + "T00:00:00");
   return {
-    weekday: d.toLocaleDateString("en-CA", { weekday: "short" }),
-    day: d.getDate().toString(),
+    weekday: formatCanadaPacificDateKey(key, { weekday: "short" }),
+    day: formatCanadaPacificDateKey(key, { day: "numeric" }),
   };
 }
 
@@ -142,7 +144,7 @@ function CalendarStrip({
           <ChevronLeft className="h-4 w-4" />
         </button>
         <span className="text-sm font-semibold text-foreground">
-          {new Date(weekStart + "T00:00:00").toLocaleDateString("en-CA", {
+          {formatCanadaPacificDateKey(weekStart, {
             month: "long",
             year: "numeric",
           })}
@@ -356,7 +358,7 @@ export default function AppointmentsCalendarPage() {
     return map;
   }, [weekAppointments]);
 
-  const selectedLabel = new Date(selectedKey + "T00:00:00").toLocaleDateString("en-CA", {
+  const selectedLabel = formatCanadaPacificDateKey(selectedKey, {
     weekday: "long",
     month: "long",
     day: "numeric",

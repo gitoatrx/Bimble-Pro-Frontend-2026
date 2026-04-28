@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { readClinicLoginSession } from "@/lib/clinic/session";
+import { formatCanadaPacificDateKey, getCanadaPacificDateKey } from "@/lib/time-zone";
 import {
   createClinicAvailability,
   deleteClinicAvailability,
@@ -65,7 +66,7 @@ function normalizeAvailability(record: Record<string, unknown>): Availability {
     effectiveFrom:
       (typeof record.effectiveFrom === "string" && record.effectiveFrom) ||
       (typeof record.effective_from === "string" && record.effective_from) ||
-      new Date().toISOString().split("T")[0],
+      getCanadaPacificDateKey(),
     effectiveUntil:
       (typeof record.effectiveUntil === "string" && record.effectiveUntil) ||
       (typeof record.effective_until === "string" && record.effective_until) ||
@@ -74,7 +75,7 @@ function normalizeAvailability(record: Record<string, unknown>): Availability {
 }
 
 function displayDate(value: string) {
-  return new Date(value + "T00:00:00").toLocaleDateString("en-CA", {
+  return formatCanadaPacificDateKey(value, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -94,7 +95,7 @@ function AddEntryForm({
   const [specificDate, setSpecificDate] = useState("");
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("17:00");
-  const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().split("T")[0]);
+  const [effectiveFrom, setEffectiveFrom] = useState(getCanadaPacificDateKey());
   const [effectiveUntil, setEffectiveUntil] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");

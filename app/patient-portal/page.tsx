@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ShieldCheck, Smartphone } from "lucide-react";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { PatientLoginCard } from "@/components/patient/patient-login-card";
 import { PatientOtpCard } from "@/components/patient/patient-otp-card";
@@ -160,7 +159,7 @@ export default function PatientPortalLoginPage() {
       backHref="/"
       backLabel="Back to home"
       workspaceLabel="Find care"
-      contentClassName="max-w-5xl"
+      contentClassName="max-w-xl"
     >
       <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
         <div className="rounded-[32px] border border-sky-200/70 bg-[linear-gradient(135deg,#f8fbff_0%,#e0f2fe_54%,#ecfeff_100%)] p-8 shadow-[0_32px_100px_rgba(14,116,144,0.12)]">

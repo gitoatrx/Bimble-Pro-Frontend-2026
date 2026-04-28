@@ -14,6 +14,7 @@ import {
   Pill,
   Users,
 } from "lucide-react";
+import { CanadianTime } from "@/components/canadian-time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -82,19 +83,6 @@ const emptyFamilyForm = {
   phn: "",
   notes: "",
 };
-
-function formatDateTime(value: string | null) {
-  if (!value) return "Not available";
-
-  try {
-    return new Intl.DateTimeFormat("en-CA", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
-  } catch {
-    return value;
-  }
-}
 
 function SectionCard({
   title,
@@ -610,7 +598,8 @@ export function PatientPortalDashboard() {
                     {appointment.service_name || "General appointment"}
                   </div>
                   <div className="mt-1 text-sm text-slate-600">
-                    {appointment.clinic_name || "Clinic pending"} · {appointment.status} · Created {formatDateTime(appointment.queued_at)}
+                    {appointment.clinic_name || "Clinic pending"} · {appointment.status} · Created{" "}
+                    <CanadianTime value={appointment.queued_at} fallback="Not available" />
                   </div>
                   {appointment.chief_complaint ? (
                     <p className="mt-3 text-sm text-slate-700">{appointment.chief_complaint}</p>
@@ -700,7 +689,10 @@ export function PatientPortalDashboard() {
                     </div>
                   </div>
                   <div className="text-sm text-slate-500">
-                    {formatDateTime(appointment.completed_at || appointment.cancelled_at || appointment.queued_at)}
+                    <CanadianTime
+                      value={appointment.completed_at || appointment.cancelled_at || appointment.queued_at}
+                      fallback="Not available"
+                    />
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2 text-sm text-slate-700">
@@ -734,7 +726,9 @@ export function PatientPortalDashboard() {
                       {request.appointment_id ? ` · Appointment #${request.appointment_id}` : ""}
                     </div>
                   </div>
-                  <div className="text-sm text-slate-500">{formatDateTime(request.created_at)}</div>
+                  <div className="text-sm text-slate-500">
+                    <CanadianTime value={request.created_at} fallback="Not available" />
+                  </div>
                 </div>
                 {request.details ? (
                   <p className="mt-3 text-sm text-slate-700">{request.details}</p>

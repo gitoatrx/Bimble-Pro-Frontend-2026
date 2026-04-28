@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
 import { fetchClinicToday } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
+import { formatCanadaPacificDateKey, getCanadaPacificDateKey } from "@/lib/time-zone";
 
 type Appointment = {
   id: number;
@@ -146,7 +147,7 @@ export default function TodayAppointmentsPage() {
     };
   }, [accessToken, hasSession]);
 
-  const today = new Date().toLocaleDateString("en-CA", {
+  const today = formatCanadaPacificDateKey(getCanadaPacificDateKey(), {
     weekday: "long",
     year: "numeric",
     month: "long",
