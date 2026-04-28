@@ -494,8 +494,8 @@ function Teleplan2820Dialog({
     return nextErrors;
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSubmit(actionMode: TeleplanDialogMode) {
+    const actionVerb = actionMode === "apply" ? "applying" : "updating";
 
     if (!session?.accessToken) {
       setError("Please sign in to save the Teleplan form.");
@@ -515,7 +515,7 @@ function Teleplan2820Dialog({
     setFieldErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
-      setError("Please fill in the required fields before saving.");
+      setError(`Please fill in the required fields before ${actionVerb}.`);
       return;
     }
 
@@ -642,7 +642,13 @@ function Teleplan2820Dialog({
               </div>
             </div>
           ) : (
-            <form className="space-y-6" onSubmit={handleSubmit}>
+            <form
+              className="space-y-6"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSubmit(mode);
+              }}
+            >
               <section className="rounded-3xl border border-border p-5">
                 <div className="grid gap-4 md:grid-cols-2">
                   <DialogField
@@ -1020,8 +1026,11 @@ function Teleplan2820Dialog({
                   </DialogField>
                 </div>
 
-                <div className="mt-4">
-                <DialogField label="Signature" required error={fieldErrors.signatureDataUrl}>
+                <div className="mt-4 space-y-2">
+                  <span className="text-sm font-medium text-foreground">
+                    Signature
+                    <span className="ml-1 text-destructive">*</span>
+                  </span>
                   <SignaturePad
                     value={formState.signatureDataUrl}
                     onExportPromiseChange={(promise) => {
@@ -1035,7 +1044,9 @@ function Teleplan2820Dialog({
                       writeTeleplanSignatureCache(value);
                     }}
                   />
-                </DialogField>
+                  {fieldErrors.signatureDataUrl ? (
+                    <p className="text-xs text-destructive">{fieldErrors.signatureDataUrl}</p>
+                  ) : null}
                 </div>
               </section>
 
@@ -1059,14 +1070,39 @@ function Teleplan2820Dialog({
                 <Button type="button" variant="outline" onClick={onClose}>
                   Close
                 </Button>
-                <Button type="submit" disabled={saving} className="gap-2">
+                <Button
+                  type="button"
+                  disabled={saving}
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    void handleSubmit("apply");
+                  }}
+                >
                   {saving ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Saving...
                     </>
                   ) : (
-                    mode === "apply" ? "Apply HLTH 2820" : "Update HLTH 2820"
+                    "Apply HLTH 2820"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={saving}
+                  className="gap-2"
+                  onClick={() => {
+                    void handleSubmit("update");
+                  }}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Update HLTH 2820"
                   )}
                 </Button>
               </div>

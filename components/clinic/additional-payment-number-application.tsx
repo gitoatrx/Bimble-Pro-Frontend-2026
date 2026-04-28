@@ -984,7 +984,11 @@ function Payment2876Dialog({
                   <div className="hidden md:block" />
                 </div>
 
-                <DialogField label="Signature" required error={fieldErrors.signatureDataUrl}>
+                <div className="space-y-2">
+                  <span className="text-sm font-medium text-foreground">
+                    Signature
+                    <span className="ml-1 text-destructive">*</span>
+                  </span>
                   <SignaturePad
                     value={formState.signatureDataUrl}
                     onChange={(value) => {
@@ -992,7 +996,10 @@ function Payment2876Dialog({
                       setFormState((current) => ({ ...current, signatureDataUrl: value }));
                     }}
                   />
-                </DialogField>
+                  {fieldErrors.signatureDataUrl ? (
+                    <p className="text-xs text-destructive">{fieldErrors.signatureDataUrl}</p>
+                  ) : null}
+                </div>
               </section>
 
               {notes.length > 0 ? (
