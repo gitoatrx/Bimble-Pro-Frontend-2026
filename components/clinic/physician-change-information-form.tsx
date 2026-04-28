@@ -12,6 +12,10 @@ import {
   type ClinicPhysicianChangeInformationResponse,
   type ClinicPhysicianChangeOfficeHourSlot,
 } from "@/lib/api/clinic-dashboard";
+import {
+  hasExactDigits,
+  updateLiveTenDigitField,
+} from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { digitsOnly } from "@/components/doctor/doctor-form-shared";
 
@@ -66,6 +70,17 @@ type PhysicianChangeAssets = {
 
 type PhysicianChangeFieldErrors = Partial<Record<keyof PhysicianChangeFormState, string>>;
 type PhysicianChangeDialogMode = "apply" | "update";
+type PhysicianChangePhoneField =
+  | "officePhone"
+  | "officeFax"
+  | "officePrivatePhone"
+  | "afterHoursPhone"
+  | "afterHoursCellPhone"
+  | "afterHoursHomePhone"
+  | "backupPhone"
+  | "hospitalPhone"
+  | "otherPhone";
+
 function createEmptyOfficeHours(): PhysicianChangeOfficeHoursState {
   const empty = { from: "", to: "", lunchFrom: "", lunchTo: "" };
 
@@ -313,6 +328,15 @@ function PhysicianChangeDialog({
   const [formState, setFormState] = useState<PhysicianChangeFormState>(() => createEmptyState());
   const [fieldErrors, setFieldErrors] = useState<PhysicianChangeFieldErrors>({});
 
+  function updatePhoneField(
+    field: PhysicianChangePhoneField,
+    nextValue: string,
+    label: string,
+    kind: "phone number" | "fax number" = "phone number",
+  ) {
+    updateLiveTenDigitField(setFormState, setFieldErrors, field, nextValue, label, kind);
+  }
+
   useEffect(() => {
     if (!open) return;
 
@@ -396,21 +420,48 @@ function PhysicianChangeDialog({
     addRequired("specialty", "Specialty is required.");
     addRequired("officeContactName", "Office contact name is required.");
     addRequired("officePhone", "Office phone is required.");
+    if (current.officePhone.trim() && !hasExactDigits(current.officePhone, 10)) {
+      nextErrors.officePhone = "Office phone must be a valid 10-digit number.";
+    }
     addRequired("officeFax", "Office fax is required.");
+    if (current.officeFax.trim() && !hasExactDigits(current.officeFax, 10)) {
+      nextErrors.officeFax = "Office fax must be a valid 10-digit number.";
+    }
     addRequired("officePrivatePhone", "Office private phone is required.");
+    if (current.officePrivatePhone.trim() && !hasExactDigits(current.officePrivatePhone, 10)) {
+      nextErrors.officePrivatePhone = "Office private phone must be a valid 10-digit number.";
+    }
     addRequired("officeEmailAddress", "Office email address is required.");
     addRequired("afterHoursPhone", "After hours phone is required.");
+    if (current.afterHoursPhone.trim() && !hasExactDigits(current.afterHoursPhone, 10)) {
+      nextErrors.afterHoursPhone = "After hours phone must be a valid 10-digit number.";
+    }
     addRequired("afterHoursDescription", "After hours description is required.");
     addRequired("afterHoursBeeper", "After hours beeper is required.");
     addRequired("afterHoursCellPhone", "After hours cell phone is required.");
+    if (current.afterHoursCellPhone.trim() && !hasExactDigits(current.afterHoursCellPhone, 10)) {
+      nextErrors.afterHoursCellPhone = "After hours cell phone must be a valid 10-digit number.";
+    }
     addRequired("afterHoursHomePhone", "After hours home phone is required.");
+    if (current.afterHoursHomePhone.trim() && !hasExactDigits(current.afterHoursHomePhone, 10)) {
+      nextErrors.afterHoursHomePhone = "After hours home phone must be a valid 10-digit number.";
+    }
     addRequired("backupPhysicianNumber", "Backup physician number is required.");
     addRequired("backupName", "Backup name is required.");
     addRequired("backupPhone", "Backup phone is required.");
+    if (current.backupPhone.trim() && !hasExactDigits(current.backupPhone, 10)) {
+      nextErrors.backupPhone = "Backup phone must be a valid 10-digit number.";
+    }
     addRequired("hospitalAffiliation", "Hospital affiliation is required.");
     addRequired("hospitalPhone", "Hospital phone is required.");
+    if (current.hospitalPhone.trim() && !hasExactDigits(current.hospitalPhone, 10)) {
+      nextErrors.hospitalPhone = "Hospital phone must be a valid 10-digit number.";
+    }
     addRequired("otherAffiliation", "Other affiliation is required.");
     addRequired("otherPhone", "Other phone is required.");
+    if (current.otherPhone.trim() && !hasExactDigits(current.otherPhone, 10)) {
+      nextErrors.otherPhone = "Other phone must be a valid 10-digit number.";
+    }
     addRequired("specialHandling", "Special handling is required.");
 
     return nextErrors;
@@ -574,10 +625,7 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.officePhone}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          officePhone: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField("officePhone", digitsOnly(event.target.value), "Office phone")
                       }
                     />
                   </DialogField>
@@ -585,10 +633,12 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.officeFax}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          officeFax: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField(
+                          "officeFax",
+                          digitsOnly(event.target.value),
+                          "Office fax",
+                          "fax number",
+                        )
                       }
                     />
                   </DialogField>
@@ -600,10 +650,11 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.officePrivatePhone}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          officePrivatePhone: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField(
+                          "officePrivatePhone",
+                          digitsOnly(event.target.value),
+                          "Office private phone",
+                        )
                       }
                     />
                   </DialogField>
@@ -658,10 +709,11 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.afterHoursPhone}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          afterHoursPhone: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField(
+                          "afterHoursPhone",
+                          digitsOnly(event.target.value),
+                          "After hours phone",
+                        )
                       }
                     />
                   </DialogField>
@@ -703,10 +755,11 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.afterHoursCellPhone}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          afterHoursCellPhone: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField(
+                          "afterHoursCellPhone",
+                          digitsOnly(event.target.value),
+                          "After hours cell phone",
+                        )
                       }
                     />
                   </DialogField>
@@ -718,10 +771,11 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.afterHoursHomePhone}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          afterHoursHomePhone: digitsOnly(event.target.value),
-                        }))
+                        updatePhoneField(
+                          "afterHoursHomePhone",
+                          digitsOnly(event.target.value),
+                          "After hours home phone",
+                        )
                       }
                     />
                   </DialogField>
@@ -750,15 +804,12 @@ function PhysicianChangeDialog({
                       />
                     </DialogField>
                     <DialogField label="Backup phone" required error={fieldErrors.backupPhone}>
-                      <Input
-                        value={formState.backupPhone}
-                        onChange={(event) =>
-                          setFormState((current) => ({
-                            ...current,
-                            backupPhone: digitsOnly(event.target.value),
-                          }))
-                        }
-                      />
+                    <Input
+                      value={formState.backupPhone}
+                      onChange={(event) =>
+                        updatePhoneField("backupPhone", digitsOnly(event.target.value), "Backup phone")
+                      }
+                    />
                     </DialogField>
                     <DialogField
                       label="Hospital affiliation"
@@ -776,15 +827,12 @@ function PhysicianChangeDialog({
                       />
                     </DialogField>
                     <DialogField label="Hospital phone" required error={fieldErrors.hospitalPhone}>
-                      <Input
-                        value={formState.hospitalPhone}
-                        onChange={(event) =>
-                          setFormState((current) => ({
-                            ...current,
-                            hospitalPhone: digitsOnly(event.target.value),
-                          }))
-                        }
-                      />
+                    <Input
+                      value={formState.hospitalPhone}
+                      onChange={(event) =>
+                        updatePhoneField("hospitalPhone", digitsOnly(event.target.value), "Hospital phone")
+                      }
+                    />
                     </DialogField>
                     <DialogField
                       label="Other affiliation"
@@ -802,15 +850,12 @@ function PhysicianChangeDialog({
                       />
                     </DialogField>
                     <DialogField label="Other phone" required error={fieldErrors.otherPhone}>
-                      <Input
-                        value={formState.otherPhone}
-                        onChange={(event) =>
-                          setFormState((current) => ({
-                            ...current,
-                            otherPhone: digitsOnly(event.target.value),
-                          }))
-                        }
-                      />
+                    <Input
+                      value={formState.otherPhone}
+                      onChange={(event) =>
+                        updatePhoneField("otherPhone", digitsOnly(event.target.value), "Other phone")
+                      }
+                    />
                     </DialogField>
                   </div>
                 </div>
@@ -877,38 +922,53 @@ function PhysicianChangeDialog({
   );
 }
 
-export function PhysicianChangeInformationSection() {
+export function PhysicianChangeInformationSection({
+  autoOpen = false,
+  onRequestClose,
+}: {
+  autoOpen?: boolean;
+  onRequestClose?: () => void;
+}) {
   const session = readClinicLoginSession();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
 
   return (
     <>
-      <section className="overflow-hidden rounded-2xl border border-border bg-white">
-        <div className="px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
-              <FileText className="h-4 w-4 text-primary" />
+      {autoOpen ? null : (
+        <section className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
+              </div>
+              <Button
+                type="button"
+                onClick={() => {
+                  setOpen(true);
+                }}
+                disabled={!session?.accessToken}
+                size="sm"
+                className="gap-2 px-4"
+              >
+                Apply
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
-            </div>
-            <Button
-              type="button"
-              onClick={() => {
-                setOpen(true);
-              }}
-              disabled={!session?.accessToken}
-              size="sm"
-              className="gap-2 px-4"
-            >
-              Apply
-              <ArrowRight className="h-4 w-4" />
-            </Button>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <PhysicianChangeDialog open={open} mode="apply" onClose={() => setOpen(false)} />
+      <PhysicianChangeDialog
+        open={open}
+        mode="apply"
+        onClose={() => {
+          setOpen(false);
+          onRequestClose?.();
+        }}
+      />
     </>
   );
 }

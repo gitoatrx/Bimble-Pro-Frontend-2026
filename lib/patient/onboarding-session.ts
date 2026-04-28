@@ -60,6 +60,17 @@ function parseDraft(raw: string | null): PatientOnboardingDraft {
       fulfillment: p.fulfillment === "pickup" || p.fulfillment === "delivery" ? p.fulfillment : "",
       pharmacyChoice:
         p.pharmacyChoice === "bimble" || p.pharmacyChoice === "preferred" ? p.pharmacyChoice : "",
+      // Preserve older sessions by folding the removed step back into the pharmacy step.
+      preferredPharmacyName:
+        typeof p.preferredPharmacyName === "string" ? p.preferredPharmacyName : "",
+      preferredPharmacyAddress:
+        typeof p.preferredPharmacyAddress === "string" ? p.preferredPharmacyAddress : "",
+      preferredPharmacyCity:
+        typeof p.preferredPharmacyCity === "string" ? p.preferredPharmacyCity : "",
+      preferredPharmacyPostalCode:
+        typeof p.preferredPharmacyPostalCode === "string" ? p.preferredPharmacyPostalCode : "",
+      preferredPharmacyPhone:
+        typeof p.preferredPharmacyPhone === "string" ? p.preferredPharmacyPhone : "",
     };
   } catch {
     return { ...initialPatientOnboardingDraft };
@@ -135,6 +146,7 @@ export function writePatientOnboardingDraft(draft: PatientOnboardingDraft) {
 export function readPatientOnboardingStep(): PatientOnboardingStep {
   if (typeof window === "undefined") return "phone";
   const raw = sessionStorage.getItem(STEP_KEY);
+  if (raw === "preferred_pharmacy") return "pharmacy";
   return isStep(raw) ? raw : "phone";
 }
 

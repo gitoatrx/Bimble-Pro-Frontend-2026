@@ -58,7 +58,7 @@ export type DoctorAppointment = {
   patient_id: number;
   patient_name: string;
   service: string;
-  service_name: string;
+  service_name: string | null;
   user_friendly_service_name: string;
   status: string;
   channel: string;

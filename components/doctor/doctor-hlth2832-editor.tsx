@@ -11,6 +11,7 @@ import {
   digitsOnly,
   normalizePostalCode,
 } from "@/components/doctor/doctor-form-shared";
+import { getLiveTenDigitError, hasExactDigits } from "@/lib/form-validation";
 import {
   fetchDoctorHlth2832Onboarding,
   submitDoctorHlth2832Onboarding,
@@ -83,11 +84,15 @@ function validateStep3(
   if (!normalizePostalCode(formState.postal_code)) {
     errors.postal_code = "postal_code is required.";
   }
-  if (!digitsOnly(formState.telephone)) {
+  if (!formState.telephone.trim()) {
     errors.telephone = "telephone is required.";
+  } else if (!hasExactDigits(formState.telephone, 10)) {
+    errors.telephone = "Enter a valid 10-digit phone number.";
   }
-  if (!digitsOnly(formState.telephone2)) {
+  if (!formState.telephone2.trim()) {
     errors.telephone2 = "telephone2 is required.";
+  } else if (!hasExactDigits(formState.telephone2, 10)) {
+    errors.telephone2 = "Enter a valid 10-digit phone number.";
   }
   if (!formState.signature_label.trim()) {
     errors.signature_label = "signature.signature_label is required.";
@@ -165,7 +170,16 @@ export function DoctorHlth2832Editor() {
 
   function setField<K extends keyof DoctorHlth2832FormState>(field: K, value: DoctorHlth2832FormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
-    setErrors((current) => ({ ...current, [field]: "" }));
+    setErrors((current) => {
+      const next = { ...current, [field]: "" } as typeof current;
+      if (field === "telephone") {
+        next.telephone = getLiveTenDigitError(value, "telephone number");
+      }
+      if (field === "telephone2") {
+        next.telephone2 = getLiveTenDigitError(value, "telephone number");
+      }
+      return next;
+    });
     setSaveError("");
     setSaved(false);
   }

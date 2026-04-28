@@ -33,7 +33,7 @@ type ClinicFormHubConfig = {
   badge: string;
   title: string;
   subtitle: string;
-  component: React.ComponentType;
+  component: React.ComponentType<{ autoOpen?: boolean; onRequestClose?: () => void }>;
 };
 
 const CLINIC_FORM_HUB: Record<ClinicFormHubKey, ClinicFormHubConfig> = {
@@ -667,7 +667,10 @@ export default function SettingsPage() {
               </Button>
             </div>
             <div className="max-h-[calc(100vh-8rem)] overflow-y-auto px-4 pb-4 pt-2 sm:px-5 sm:pb-5 sm:pt-2">
-              {React.createElement(CLINIC_FORM_HUB[activeClinicForm].component)}
+              {React.createElement(CLINIC_FORM_HUB[activeClinicForm].component, {
+                autoOpen: true,
+                onRequestClose: () => setActiveClinicForm(null),
+              })}
             </div>
           </div>
         </div>

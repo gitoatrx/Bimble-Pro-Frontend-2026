@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,42 @@ import {
   digitsOnly,
   normalizePostalCode,
 } from "@/components/doctor/doctor-form-shared";
+import {
+  hasExactDigits,
+  updateLiveFutureDateField,
+  updateLiveTenDigitField,
+} from "@/lib/form-validation";
 
 const FORM_TITLE = "Application for Teleplan Service";
+const TELEPLAN_SIGNATURE_CACHE_KEY = "bimble.clinic.teleplan2820.signature_data_url";
+
+function readTeleplanSignatureCache() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    return window.localStorage.getItem(TELEPLAN_SIGNATURE_CACHE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeTeleplanSignatureCache(value: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (value.trim()) {
+      window.localStorage.setItem(TELEPLAN_SIGNATURE_CACHE_KEY, value);
+    } else {
+      window.localStorage.removeItem(TELEPLAN_SIGNATURE_CACHE_KEY);
+    }
+  } catch {
+    // Ignore storage failures.
+  }
+}
 
 type Teleplan2820FormState = {
   name: string;
@@ -315,6 +349,7 @@ function Teleplan2820Dialog({
   );
   const [fieldErrors, setFieldErrors] = useState<Teleplan2820FieldErrors>({});
   const signatureDataUrlRef = React.useRef("");
+  const signatureExportPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -336,6 +371,7 @@ function Teleplan2820Dialog({
       });
       setFormState(createEmptyState());
       signatureDataUrlRef.current = "";
+      writeTeleplanSignatureCache("");
       return () => {
         active = false;
       };
@@ -347,12 +383,20 @@ function Teleplan2820Dialog({
       .then((response) => {
         if (!active) return;
 
+        const nextState = parseResponseState(response);
+        const cachedSignature = readTeleplanSignatureCache();
+        if (!nextState.signatureDataUrl && cachedSignature) {
+          nextState.signatureDataUrl = cachedSignature;
+        }
         setAssets({
           savedAt: response.saved_at,
           missingFields: response.missing_fields ?? [],
         });
-        setFormState(parseResponseState(response));
-        signatureDataUrlRef.current = response.saved_values.signature?.signature_data_url ?? response.signature_data_url ?? "";
+        setFormState(nextState);
+        signatureDataUrlRef.current = nextState.signatureDataUrl;
+        if (nextState.signatureDataUrl) {
+          writeTeleplanSignatureCache(nextState.signatureDataUrl);
+        }
       })
       .catch((fetchError) => {
         if (!active) return;
@@ -368,6 +412,7 @@ function Teleplan2820Dialog({
         });
         setFormState(createEmptyState());
         signatureDataUrlRef.current = "";
+        writeTeleplanSignatureCache("");
       })
       .finally(() => {
         if (active) {
@@ -409,6 +454,9 @@ function Teleplan2820Dialog({
     addRequired("city", "City is required.");
     addRequired("postalCode", "Postal code is required.");
     addRequired("phoneNumber", "Phone number is required.");
+    if (current.phoneNumber.trim() && !hasExactDigits(current.phoneNumber, 10)) {
+      nextErrors.phoneNumber = "Phone number must be a valid 10-digit number.";
+    }
     addRequired("organizationName", "Organization name is required.");
     addRequired("contactPerson", "Contact person is required.");
     addRequired("facilityType", "Facility type is required.");
@@ -452,6 +500,10 @@ function Teleplan2820Dialog({
     if (!session?.accessToken) {
       setError("Please sign in to save the Teleplan form.");
       return;
+    }
+
+    if (signatureExportPromiseRef.current) {
+      await signatureExportPromiseRef.current;
     }
 
     const signatureValue = signatureDataUrlRef.current || formState.signatureDataUrl;
@@ -538,7 +590,12 @@ function Teleplan2820Dialog({
         return;
       }
 
-      setFormState(parseResponseState(response));
+      const nextState = parseResponseState(response);
+      setFormState(nextState);
+      signatureDataUrlRef.current = nextState.signatureDataUrl;
+      if (nextState.signatureDataUrl) {
+        writeTeleplanSignatureCache(nextState.signatureDataUrl);
+      }
       onClose();
     } catch (submitError) {
       setError(
@@ -649,10 +706,13 @@ function Teleplan2820Dialog({
                     <Input
                       value={formState.phoneNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          phoneNumber: digitsOnly(event.target.value),
-                        }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "phoneNumber",
+                          event.target.value,
+                          "Phone number",
+                        )
                       }
                     />
                   </DialogField>
@@ -937,10 +997,13 @@ function Teleplan2820Dialog({
                       type="date"
                       value={formState.signatureDate}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          signatureDate: event.target.value,
-                        }))
+                        updateLiveFutureDateField(
+                          setFormState,
+                          setFieldErrors,
+                          "signatureDate",
+                          event.target.value,
+                          "Date signed",
+                        )
                       }
                     />
                   </DialogField>
@@ -958,15 +1021,21 @@ function Teleplan2820Dialog({
                 </div>
 
                 <div className="mt-4">
-                  <DialogField label="Signature" required error={fieldErrors.signatureDataUrl}>
-                    <SignaturePad
-                      value={formState.signatureDataUrl}
-                      onChange={(value) => {
-                        signatureDataUrlRef.current = value;
-                        setFormState((current) => ({ ...current, signatureDataUrl: value }));
-                      }}
-                    />
-                  </DialogField>
+                <DialogField label="Signature" required error={fieldErrors.signatureDataUrl}>
+                  <SignaturePad
+                    value={formState.signatureDataUrl}
+                    onExportPromiseChange={(promise) => {
+                      signatureExportPromiseRef.current = promise;
+                    }}
+                    onChange={(value) => {
+                      signatureDataUrlRef.current = value;
+                      setFormState((current) => ({ ...current, signatureDataUrl: value }));
+                      setFieldErrors((current) => ({ ...current, signatureDataUrl: "" }));
+                      setError("");
+                      writeTeleplanSignatureCache(value);
+                    }}
+                  />
+                </DialogField>
                 </div>
               </section>
 
@@ -1009,57 +1078,68 @@ function Teleplan2820Dialog({
   );
 }
 
-export function TeleplanServiceApplicationSection() {
+export function TeleplanServiceApplicationSection({
+  autoOpen = false,
+  onRequestClose,
+}: {
+  autoOpen?: boolean;
+  onRequestClose?: () => void;
+}) {
   const session = readClinicLoginSession();
-  const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<TeleplanDialogMode>("apply");
+  const [open, setOpen] = useState(autoOpen);
+  const [mode, setMode] = useState<TeleplanDialogMode>(autoOpen ? "update" : "apply");
 
   return (
     <>
-      <section className="overflow-hidden rounded-2xl border border-border bg-white">
-        <div className="px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
-              <FileText className="h-4 w-4 text-primary" />
+      {autoOpen ? null : (
+        <section className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setMode("update");
+                  setOpen(true);
+                }}
+                disabled={!session?.accessToken}
+                size="sm"
+                className="gap-2 px-4"
+              >
+                Update
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setMode("apply");
+                  setOpen(true);
+                }}
+                disabled={!session?.accessToken}
+                size="sm"
+                className="gap-2 px-4"
+              >
+                Apply
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setMode("update");
-                setOpen(true);
-              }}
-              disabled={!session?.accessToken}
-              size="sm"
-              className="gap-2 px-4"
-            >
-              Update
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                setMode("apply");
-                setOpen(true);
-              }}
-              disabled={!session?.accessToken}
-              size="sm"
-              className="gap-2 px-4"
-            >
-              Apply
-              <ArrowRight className="h-4 w-4" />
-            </Button>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <Teleplan2820Dialog
         open={open}
         mode={mode}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          onRequestClose?.();
+        }}
       />
     </>
   );

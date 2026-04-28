@@ -13,6 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
+  hasExactDigits,
+  updateLiveFutureDateField,
+  updateLiveTenDigitField,
+} from "@/lib/form-validation";
+import {
   fetchClinicFacilityForm,
   submitClinicFacilityForm,
   type ClinicFacilityFormDeclaration,
@@ -24,6 +29,35 @@ import { readClinicLoginSession } from "@/lib/clinic/session";
 
 const FORM_CODE = "hlth-2948";
 const FORM_TITLE = "Application for MSP Facility Number";
+const MSP_SIGNATURE_CACHE_KEY = "bimble.clinic.msp2948.signature_data_url";
+
+function readMspSignatureCache() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    return window.localStorage.getItem(MSP_SIGNATURE_CACHE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeMspSignatureCache(value: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (value.trim()) {
+      window.localStorage.setItem(MSP_SIGNATURE_CACHE_KEY, value);
+    } else {
+      window.localStorage.removeItem(MSP_SIGNATURE_CACHE_KEY);
+    }
+  } catch {
+    // Ignore storage failures.
+  }
+}
 
 type FacilityFormState = {
   administratorLastName: string;
@@ -97,17 +131,19 @@ function asBoolean(value: unknown) {
   return typeof value === "boolean" ? value : false;
 }
 
-function parseSignature(source: Record<string, unknown>) {
+function parseSignature(source: Record<string, unknown>, response: ClinicFacilityFormResponse) {
   const directSignature = isRecord(source.signature) ? source.signature : null;
 
   const signatureDataUrl =
     asString(source.signatureDataUrl) ||
     asString(source.signature_data_url) ||
+    asString(response.signature_data_url) ||
     asString(directSignature?.signatureDataUrl) ||
     asString(directSignature?.signature_data_url);
   const signatureLabel =
     asString(source.signatureLabel) ||
     asString(source.signature_label) ||
+    asString(response.signature_label) ||
     asString(directSignature?.signatureLabel) ||
     asString(directSignature?.signature_label);
 
@@ -121,7 +157,7 @@ function parseFormState(response: ClinicFacilityFormResponse) {
   const saved = response.saved_values ?? {};
   const fallback = response.field_values ?? {};
   const source = isRecord(saved) && Object.keys(saved).length > 0 ? saved : fallback;
-  const signature = parseSignature(source);
+  const signature = parseSignature(source, response);
   const current = createEmptyState();
 
   const firstName = asString(source.administratorFirstName);
@@ -252,13 +288,11 @@ function DeclarationList({
 function SignatureField({
   value,
   onChange,
-  onClear,
   signatureDataUrlRef,
   error,
 }: {
   value: FacilityFormState;
   onChange: (next: Partial<FacilityFormState>) => void;
-  onClear: () => void;
   signatureDataUrlRef: React.MutableRefObject<string>;
   error?: string;
 }) {
@@ -372,6 +406,7 @@ function SignatureField({
     const nextSignature = canvas.toDataURL("image/png");
     signatureDataUrlRef.current = nextSignature;
     onChange({ signatureDataUrl: nextSignature });
+    writeMspSignatureCache(nextSignature);
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
@@ -451,8 +486,9 @@ function SignatureField({
       context.fillRect(0, 0, rect.width, 220);
     }
 
-    onClear();
+    onChange({ signatureDataUrl: "" });
     signatureDataUrlRef.current = "";
+    writeMspSignatureCache("");
   }
 
   return (
@@ -586,8 +622,15 @@ function MSPApplicationDialog({
           missingFields: response.missing_fields ?? [],
         });
         const nextState = parseFormState(response);
+        const cachedSignature = readMspSignatureCache();
+        if (!nextState.signatureDataUrl && cachedSignature) {
+          nextState.signatureDataUrl = cachedSignature;
+        }
         setFormState(nextState);
         signatureDataUrlRef.current = nextState.signatureDataUrl;
+        if (nextState.signatureDataUrl) {
+          writeMspSignatureCache(nextState.signatureDataUrl);
+        }
       })
       .catch((err) => {
         if (!active) return;
@@ -599,6 +642,7 @@ function MSPApplicationDialog({
         });
         setFormState(createEmptyState());
         signatureDataUrlRef.current = "";
+        writeMspSignatureCache("");
       })
       .finally(() => {
         if (active) {
@@ -647,6 +691,14 @@ function MSPApplicationDialog({
       if (typeof value === "string" && !value.trim()) {
         nextErrors[field] = "This field is required.";
       }
+    }
+
+    if (current.contactPhoneNumber.trim() && !hasExactDigits(current.contactPhoneNumber, 10)) {
+      nextErrors.contactPhoneNumber = "Contact phone number must be a valid 10-digit number.";
+    }
+
+    if (current.contactFaxNumber.trim() && !hasExactDigits(current.contactFaxNumber, 10)) {
+      nextErrors.contactFaxNumber = "Contact fax number must be a valid 10-digit number.";
     }
 
     if (!current.confirmDeclarations) {
@@ -742,8 +794,18 @@ function MSPApplicationDialog({
         savedAt: response.saved_at,
         missingFields: [],
       });
-      setFormState(parseFormState(response));
-      onClose();
+      const nextState = parseFormState(response);
+      if (!nextState.signatureDataUrl) {
+        nextState.signatureDataUrl = signatureValue;
+      }
+      if (!nextState.signatureLabel) {
+        nextState.signatureLabel = submitState.signatureLabel.trim();
+      }
+      setFormState(nextState);
+      signatureDataUrlRef.current = nextState.signatureDataUrl;
+      if (nextState.signatureDataUrl) {
+        writeMspSignatureCache(nextState.signatureDataUrl);
+      }
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -902,10 +964,13 @@ function MSPApplicationDialog({
                       type="date"
                       value={formState.facilityEffectiveDate}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          facilityEffectiveDate: event.target.value,
-                        }))
+                        updateLiveFutureDateField(
+                          setFormState,
+                          setFieldErrors,
+                          "facilityEffectiveDate",
+                          event.target.value,
+                          "Facility effective date",
+                        )
                       }
                     />
                   </DialogField>
@@ -918,10 +983,13 @@ function MSPApplicationDialog({
                       type="date"
                       value={formState.dateSigned}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          dateSigned: event.target.value,
-                        }))
+                        updateLiveFutureDateField(
+                          setFormState,
+                          setFieldErrors,
+                          "dateSigned",
+                          event.target.value,
+                          "Date signed",
+                        )
                       }
                     />
                   </DialogField>
@@ -955,10 +1023,13 @@ function MSPApplicationDialog({
                       type="tel"
                       value={formState.contactPhoneNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          contactPhoneNumber: event.target.value,
-                        }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "contactPhoneNumber",
+                          event.target.value,
+                          "Contact phone number",
+                        )
                       }
                     />
                   </DialogField>
@@ -972,10 +1043,14 @@ function MSPApplicationDialog({
                       placeholder="Optional"
                       value={formState.contactFaxNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          contactFaxNumber: event.target.value,
-                        }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "contactFaxNumber",
+                          event.target.value,
+                          "Contact fax number",
+                          "fax number",
+                        )
                       }
                     />
                   </DialogField>
@@ -1186,12 +1261,6 @@ function MSPApplicationDialog({
                     error={fieldErrors.signatureDataUrl || fieldErrors.signatureLabel}
                     signatureDataUrlRef={signatureDataUrlRef}
                     onChange={(next) => setFormState((current) => ({ ...current, ...next }))}
-                    onClear={() =>
-                      setFormState((current) => ({
-                        ...current,
-                        signatureDataUrl: "",
-                      }))
-                    }
                   />
                 </div>
               </section>
@@ -1234,38 +1303,52 @@ function MSPApplicationDialog({
   );
 }
 
-export function MspFacilityNumberApplicationSection() {
+export function MspFacilityNumberApplicationSection({
+  autoOpen = false,
+  onRequestClose,
+}: {
+  autoOpen?: boolean;
+  onRequestClose?: () => void;
+}) {
   const session = readClinicLoginSession();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
 
   return (
     <>
-      <section className="overflow-hidden rounded-2xl border border-border bg-white">
-        <div className="px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
-              <FileText className="h-4 w-4 text-primary" />
+      {autoOpen ? null : (
+        <section className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">
+                  {FORM_TITLE}
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={() => setOpen(true)}
+                disabled={!session?.accessToken}
+                size="sm"
+                className="gap-2 px-4"
+              >
+                Apply
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">
-                {FORM_TITLE}
-              </p>
-            </div>
-            <Button
-              type="button"
-              onClick={() => setOpen(true)}
-              disabled={!session?.accessToken}
-              size="sm"
-              className="gap-2 px-4"
-            >
-              Apply
-              <ArrowRight className="h-4 w-4" />
-            </Button>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <MSPApplicationDialog open={open} onClose={() => setOpen(false)} />
+      <MSPApplicationDialog
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          onRequestClose?.();
+        }}
+      />
     </>
   );
 }

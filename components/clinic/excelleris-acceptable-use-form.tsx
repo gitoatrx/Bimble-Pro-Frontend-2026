@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
+  hasExactDigits,
+  updateLiveFutureDateField,
+  updateLiveTenDigitField,
+} from "@/lib/form-validation";
+import {
   fetchClinicExcellerisAcceptableUseForm,
   submitClinicExcellerisAcceptableUseForm,
   type ClinicExcellerisDeliveryMethod,
@@ -169,18 +174,23 @@ function ChoiceCard({
   );
 }
 
-function parseSignature(source: Record<string, unknown>) {
+function parseSignature(
+  source: Record<string, unknown>,
+  response: ClinicExcellerisResponse,
+) {
   const nestedSignature = isRecord(source.signature) ? source.signature : null;
 
   return {
     signatureDataUrl:
       asString(source.signatureDataUrl) ||
       asString(source.signature_data_url) ||
+      asString(response.signature_data_url) ||
       asString(nestedSignature?.signatureDataUrl) ||
       asString(nestedSignature?.signature_data_url),
     signatureLabel:
       asString(source.signatureLabel) ||
       asString(source.signature_label) ||
+      asString(response.signature_label) ||
       asString(nestedSignature?.signatureLabel) ||
       asString(nestedSignature?.signature_label),
   };
@@ -192,7 +202,7 @@ function parseResponseState(response: ClinicExcellerisResponse) {
   const source = isRecord(saved) && Object.keys(saved).length > 0 ? saved : fallback;
   const sourceRecord = source as Record<string, unknown>;
   const fallbackRecord = fallback as Record<string, unknown>;
-  const signature = parseSignature(sourceRecord);
+  const signature = parseSignature(sourceRecord, response);
   const current = createEmptyState();
 
   const deliveryMethod = (() => {
@@ -337,8 +347,14 @@ function ExcellerisDialog({
     addRequired("clinicNameAndAddress", "Clinic name and address is required.");
     addRequired("dateSigned", "Date is required.");
     addRequired("telephoneNumber", "Telephone number is required.");
+    if (current.telephoneNumber.trim() && !hasExactDigits(current.telephoneNumber, 10)) {
+      nextErrors.telephoneNumber = "Telephone number must be a valid 10-digit number.";
+    }
     addRequired("emailAddress", "Email address is required.");
     addRequired("faxNumber", "Fax number is required.");
+    if (current.faxNumber.trim() && !hasExactDigits(current.faxNumber, 10)) {
+      nextErrors.faxNumber = "Fax number must be a valid 10-digit number.";
+    }
     addRequired("signatureLabel", "Signature label is required.");
     addRequired("signatureDataUrl", "Signature is required.");
 
@@ -349,10 +365,16 @@ function ExcellerisDialog({
     if (current.deliveryMethod === "EMR") {
       addRequired("emrName", "EMR name is required.");
       addRequired("emrFaxNumber", "EMR fax number is required.");
+      if (current.emrFaxNumber.trim() && !hasExactDigits(current.emrFaxNumber, 10)) {
+        nextErrors.emrFaxNumber = "EMR fax number must be a valid 10-digit number.";
+      }
     }
 
     if (current.deliveryMethod === "FAX") {
       addRequired("reportFaxNumber", "Report fax number is required.");
+      if (current.reportFaxNumber.trim() && !hasExactDigits(current.reportFaxNumber, 10)) {
+        nextErrors.reportFaxNumber = "Report fax number must be a valid 10-digit number.";
+      }
     }
 
     if (!current.confirmAcknowledgement) {
@@ -531,7 +553,13 @@ function ExcellerisDialog({
                       type="date"
                       value={formState.dateSigned}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, dateSigned: event.target.value }))
+                        updateLiveFutureDateField(
+                          setFormState,
+                          setFieldErrors,
+                          "dateSigned",
+                          event.target.value,
+                          "Date signed",
+                        )
                       }
                     />
                   </DialogField>
@@ -544,10 +572,13 @@ function ExcellerisDialog({
                       type="tel"
                       value={formState.telephoneNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({
-                          ...current,
-                          telephoneNumber: digitsOnly(event.target.value),
-                        }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "telephoneNumber",
+                          event.target.value,
+                          "Telephone number",
+                        )
                       }
                     />
                   </DialogField>
@@ -569,7 +600,14 @@ function ExcellerisDialog({
                       type="tel"
                       value={formState.faxNumber}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, faxNumber: digitsOnly(event.target.value) }))
+                        updateLiveTenDigitField(
+                          setFormState,
+                          setFieldErrors,
+                          "faxNumber",
+                          event.target.value,
+                          "Fax number",
+                          "fax number",
+                        )
                       }
                     />
                   </DialogField>
@@ -666,10 +704,14 @@ function ExcellerisDialog({
                         type="tel"
                         value={formState.emrFaxNumber}
                         onChange={(event) =>
-                          setFormState((current) => ({
-                            ...current,
-                            emrFaxNumber: digitsOnly(event.target.value),
-                          }))
+                          updateLiveTenDigitField(
+                            setFormState,
+                            setFieldErrors,
+                            "emrFaxNumber",
+                            event.target.value,
+                            "EMR fax number",
+                            "fax number",
+                          )
                         }
                       />
                     </DialogField>
@@ -687,10 +729,14 @@ function ExcellerisDialog({
                         type="tel"
                         value={formState.reportFaxNumber}
                         onChange={(event) =>
-                          setFormState((current) => ({
-                            ...current,
-                            reportFaxNumber: digitsOnly(event.target.value),
-                          }))
+                          updateLiveTenDigitField(
+                            setFormState,
+                            setFieldErrors,
+                            "reportFaxNumber",
+                            event.target.value,
+                            "Report fax number",
+                            "fax number",
+                          )
                         }
                       />
                     </DialogField>
@@ -794,36 +840,50 @@ function ExcellerisDialog({
   );
 }
 
-export function ExcellerisAcceptableUseSection() {
+export function ExcellerisAcceptableUseSection({
+  autoOpen = false,
+  onRequestClose,
+}: {
+  autoOpen?: boolean;
+  onRequestClose?: () => void;
+}) {
   const session = readClinicLoginSession();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
 
   return (
     <>
-      <section className="overflow-hidden rounded-2xl border border-border bg-white">
-        <div className="px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
-              <FileText className="h-4 w-4 text-primary" />
+      {autoOpen ? null : (
+        <section className="overflow-hidden rounded-2xl border border-border bg-white">
+          <div className="px-6 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-border/70 bg-white">
+                <FileText className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
+              </div>
+              <Button
+                type="button"
+                onClick={() => setOpen(true)}
+                disabled={!session?.accessToken}
+                size="sm"
+                className="gap-2 px-4"
+              >
+                Apply
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">{FORM_TITLE}</p>
-            </div>
-            <Button
-              type="button"
-              onClick={() => setOpen(true)}
-              disabled={!session?.accessToken}
-              size="sm"
-              className="gap-2 px-4"
-            >
-              Apply
-              <ArrowRight className="h-4 w-4" />
-            </Button>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <ExcellerisDialog open={open} onClose={() => setOpen(false)} />
+      <ExcellerisDialog
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          onRequestClose?.();
+        }}
+      />
     </>
   );
 }

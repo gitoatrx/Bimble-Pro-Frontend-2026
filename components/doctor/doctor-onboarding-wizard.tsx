@@ -14,6 +14,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
+  getLiveFutureDateError,
+  getLiveDigitCountError,
+  getLiveFiveDigitError,
+  getLiveTenDigitError,
+  hasExactDigits,
+  isFutureDate,
+} from "@/lib/form-validation";
+import {
   clearDoctorOnboardingStage,
   isDoctorOnboardingComplete,
   markDoctorOnboardingComplete,
@@ -395,6 +403,8 @@ function validateStep1(
   }
   if (!formState.effective_date.trim()) {
     errors.effective_date = "effective_date is required.";
+  } else if (isFutureDate(formState.effective_date)) {
+    errors.effective_date = "effective_date cannot be in the future.";
   }
   if (!formState.cancel_date.trim()) {
     errors.cancel_date = "cancel_date is required.";
@@ -422,12 +432,16 @@ function validateStep2(
   }
   if (!formState.msp_practitioner_number.trim()) {
     errors.msp_practitioner_number = "msp_practitioner_number is required.";
+  } else if (!hasExactDigits(formState.msp_practitioner_number, 5)) {
+    errors.msp_practitioner_number = "Enter a valid 5-digit number for msp_practitioner_number.";
   }
   if (!formState.facility_or_practice_name.trim()) {
     errors.facility_or_practice_name = "facility_or_practice_name is required.";
   }
   if (!formState.msp_facility_number.trim()) {
     errors.msp_facility_number = "msp_facility_number is required.";
+  } else if (!hasExactDigits(formState.msp_facility_number, 5)) {
+    errors.msp_facility_number = "Enter a valid 5-digit number for msp_facility_number.";
   }
   if (!formState.facility_physical_address.trim()) {
     errors.facility_physical_address = "facility_physical_address is required.";
@@ -443,16 +457,28 @@ function validateStep2(
   }
   if (!formState.contact_phone_number.trim()) {
     errors.contact_phone_number = "contact_phone_number is required.";
+  } else if (!hasExactDigits(formState.contact_phone_number, 10)) {
+    errors.contact_phone_number = "Enter a valid 10-digit phone number.";
   }
   if (!formState.contact_fax_number.trim()) {
     errors.contact_fax_number = "contact_fax_number is required.";
+  } else if (!hasExactDigits(formState.contact_fax_number, 10)) {
+    errors.contact_fax_number = "Enter a valid 10-digit fax number.";
   }
   if (formState.attachment_action === "ADD") {
     if (!formState.new_attachment_effective_date.trim()) {
       errors.new_attachment_effective_date = "new_attachment_effective_date is required.";
+    } else if (isFutureDate(formState.new_attachment_effective_date)) {
+      errors.new_attachment_effective_date = "new_attachment_effective_date cannot be in the future.";
     }
     if (!formState.new_attachment_cancellation_date.trim()) {
       errors.new_attachment_cancellation_date = "new_attachment_cancellation_date is required.";
+    } else if (
+      formState.new_attachment_effective_date &&
+      formState.new_attachment_cancellation_date < formState.new_attachment_effective_date
+    ) {
+      errors.new_attachment_cancellation_date =
+        "new_attachment_cancellation_date cannot be earlier than new_attachment_effective_date.";
     }
   }
   if (formState.attachment_action === "CANCEL") {
@@ -463,9 +489,17 @@ function validateStep2(
   if (formState.attachment_action === "CHANGE") {
     if (!formState.change_attachment_effective_date.trim()) {
       errors.change_attachment_effective_date = "change_attachment_effective_date is required.";
+    } else if (isFutureDate(formState.change_attachment_effective_date)) {
+      errors.change_attachment_effective_date = "change_attachment_effective_date cannot be in the future.";
     }
     if (!formState.change_attachment_cancellation_date.trim()) {
       errors.change_attachment_cancellation_date = "change_attachment_cancellation_date is required.";
+    } else if (
+      formState.change_attachment_effective_date &&
+      formState.change_attachment_cancellation_date < formState.change_attachment_effective_date
+    ) {
+      errors.change_attachment_cancellation_date =
+        "change_attachment_cancellation_date cannot be earlier than change_attachment_effective_date.";
     }
   }
   if (!formState.confirm_declarations) {
@@ -489,18 +523,26 @@ function validateStep3(
 
   if (!formState.msp_billing_number.trim()) {
     errors.msp_billing_number = "msp_billing_number is required.";
+  } else if (!hasExactDigits(formState.msp_billing_number, 10)) {
+    errors.msp_billing_number = "Enter a valid 10-digit number for msp_billing_number.";
   }
   if (!formState.payment_number.trim()) {
     errors.payment_number = "payment_number is required.";
+  } else if (!hasExactDigits(formState.payment_number, 5)) {
+    errors.payment_number = "Enter a valid 5-digit number for payment_number.";
   }
   if (!formState.payee_name.trim()) {
     errors.payee_name = "payee_name is required.";
   }
   if (!formState.institution_number.trim()) {
     errors.institution_number = "institution_number is required.";
+  } else if (!hasExactDigits(formState.institution_number, 3)) {
+    errors.institution_number = "Enter a valid 3-digit number for institution_number.";
   }
   if (!formState.branch_number.trim()) {
     errors.branch_number = "branch_number is required.";
+  } else if (!hasExactDigits(formState.branch_number, 5)) {
+    errors.branch_number = "Enter a valid 5-digit number for branch_number.";
   }
   if (!formState.account_number.trim()) {
     errors.account_number = "account_number is required.";
@@ -525,9 +567,13 @@ function validateStep3(
   }
   if (!formState.telephone.trim()) {
     errors.telephone = "telephone is required.";
+  } else if (!hasExactDigits(formState.telephone, 10)) {
+    errors.telephone = "Enter a valid 10-digit phone number.";
   }
   if (!formState.telephone2.trim()) {
     errors.telephone2 = "telephone2 is required.";
+  } else if (!hasExactDigits(formState.telephone2, 10)) {
+    errors.telephone2 = "Enter a valid 10-digit phone number.";
   }
   if (!formState.signature_label.trim()) {
     errors.signature_label = "signature.signature_label is required.";
@@ -552,6 +598,9 @@ function validateStep4(
   if (!formState.surname.trim()) errors.surname = "surname is required.";
   if (!formState.given_name.trim()) errors.given_name = "given_name is required.";
   if (!formState.date_of_birth.trim()) errors.date_of_birth = "date_of_birth is required.";
+  else if (isFutureDate(formState.date_of_birth)) {
+    errors.date_of_birth = "date_of_birth cannot be in the future.";
+  }
   if (!formState.gender) errors.gender = "gender is required.";
   if (!citizenshipValue) errors.citizenship = "citizenship is required.";
   if (citizenshipValue && citizenshipValue.toLowerCase() !== "canadian" && !formState.status_in_canada.trim()) {
@@ -561,32 +610,69 @@ function validateStep4(
   if (!formState.home_city.trim()) errors.home_city = "home_city is required.";
   if (!formState.home_postal_code.trim()) errors.home_postal_code = "home_postal_code is required.";
   if (!formState.home_phone_number.trim()) errors.home_phone_number = "home_phone_number is required.";
+  else if (!hasExactDigits(formState.home_phone_number, 10)) {
+    errors.home_phone_number = "Enter a valid 10-digit phone number.";
+  }
   if (!formState.home_fax_number.trim()) errors.home_fax_number = "home_fax_number is required.";
+  else if (!hasExactDigits(formState.home_fax_number, 10)) {
+    errors.home_fax_number = "Enter a valid 10-digit fax number.";
+  }
   if (!formState.home_email_address.trim()) errors.home_email_address = "home_email_address is required.";
   if (!formState.business_mailing_address.trim()) errors.business_mailing_address = "business_mailing_address is required.";
   if (!formState.business_city.trim()) errors.business_city = "business_city is required.";
   if (!formState.business_postal_code.trim()) errors.business_postal_code = "business_postal_code is required.";
   if (!formState.business_phone_number.trim()) errors.business_phone_number = "business_phone_number is required.";
+  else if (!hasExactDigits(formState.business_phone_number, 10)) {
+    errors.business_phone_number = "Enter a valid 10-digit phone number.";
+  }
   if (!formState.business_fax_number.trim()) errors.business_fax_number = "business_fax_number is required.";
+  else if (!hasExactDigits(formState.business_fax_number, 10)) {
+    errors.business_fax_number = "Enter a valid 10-digit fax number.";
+  }
   if (!formState.business_email_address.trim()) errors.business_email_address = "business_email_address is required.";
   if (!formState.medical_school.trim()) errors.medical_school = "medical_school is required.";
   if (!formState.date_of_graduation.trim()) errors.date_of_graduation = "date_of_graduation is required.";
+  else if (isFutureDate(formState.date_of_graduation)) {
+    errors.date_of_graduation = "date_of_graduation cannot be in the future.";
+  }
   if (!formState.royal_college_specialty.trim()) errors.royal_college_specialty = "royal_college_specialty is required.";
   if (!formState.royal_college_subspecialty.trim()) errors.royal_college_subspecialty = "royal_college_subspecialty is required.";
   if (!formState.non_royal_college_specialty.trim()) errors.non_royal_college_specialty = "non_royal_college_specialty is required.";
   if (!formState.non_royal_college_subspecialty.trim()) errors.non_royal_college_subspecialty = "non_royal_college_subspecialty is required.";
   if (!formState.certification_date_1.trim()) errors.certification_date_1 = "certification_date_1 is required.";
+  else if (isFutureDate(formState.certification_date_1)) {
+    errors.certification_date_1 = "certification_date_1 cannot be in the future.";
+  }
+  if (formState.certification_date_2.trim() && isFutureDate(formState.certification_date_2)) {
+    errors.certification_date_2 = "certification_date_2 cannot be in the future.";
+  }
+  if (formState.certification_date_3.trim() && isFutureDate(formState.certification_date_3)) {
+    errors.certification_date_3 = "certification_date_3 cannot be in the future.";
+  }
+  if (formState.certification_date_4.trim() && isFutureDate(formState.certification_date_4)) {
+    errors.certification_date_4 = "certification_date_4 cannot be in the future.";
+  }
   if (!formState.date_of_registration.trim()) errors.date_of_registration = "date_of_registration is required.";
+  else if (isFutureDate(formState.date_of_registration)) {
+    errors.date_of_registration = "date_of_registration cannot be in the future.";
+  }
   if (!formState.college_id.trim()) errors.college_id = "college_id is required.";
   if (!formState.registrations.trim()) errors.registrations = "registrations is required.";
   if (!formState.license_type) errors.license_type = "license_type is required.";
   if (formState.license_type === "FULL" && !licenseEffectiveDateValue) {
     errors.license_effective_date = "license_effective_date is required for FULL licenses.";
+  } else if (licenseEffectiveDateValue && isFutureDate(licenseEffectiveDateValue)) {
+    errors.license_effective_date = "license_effective_date cannot be in the future.";
   }
   if (!cancellationDateValue) {
     errors.cancellation_date = "cancellation_date is required.";
+  } else if (mspEffectiveDateValue && cancellationDateValue < mspEffectiveDateValue) {
+    errors.cancellation_date = "cancellation_date cannot be earlier than msp_effective_date.";
   }
   if (!mspEffectiveDateValue) errors.msp_effective_date = "msp_effective_date is required.";
+  else if (isFutureDate(mspEffectiveDateValue)) {
+    errors.msp_effective_date = "msp_effective_date cannot be in the future.";
+  }
   if (!formState.confirm_declarations) {
     errors.confirm_declarations = "confirm_declarations must be checked.";
   }
@@ -930,7 +1016,26 @@ export function DoctorOnboardingWizard() {
     value: DoctorHlth2870FormState[K],
   ) {
     setStep1Form((current) => ({ ...current, [field]: value }));
-    setStep1Errors((current) => ({ ...current, [field]: "" }));
+    setStep1Errors((current) => {
+      const next = { ...current, [field]: "" } as typeof current;
+      if (typeof value === "string" && field === "effective_date") {
+        if (isFutureDate(value)) {
+          next.effective_date = "effective_date cannot be in the future.";
+        } else if (step1Form.cancel_date && step1Form.cancel_date < value) {
+          next.cancel_date = "cancel_date cannot be earlier than effective_date.";
+        } else {
+          next.cancel_date = "";
+        }
+      }
+      if (typeof value === "string" && field === "cancel_date") {
+        if (step1Form.effective_date && value < step1Form.effective_date) {
+          next.cancel_date = "cancel_date cannot be earlier than effective_date.";
+        } else {
+          next.cancel_date = "";
+        }
+      }
+      return next;
+    });
     setStep1SubmitError("");
   }
 
@@ -939,7 +1044,69 @@ export function DoctorOnboardingWizard() {
     value: DoctorHlth2950FormState[K],
   ) {
     setStep2Form((current) => ({ ...current, [field]: value }));
-    setStep2Errors((current) => ({ ...current, [field]: "" }));
+    setStep2Errors((current) => {
+      const next = { ...current, [field]: "" } as typeof current;
+      if (field === "msp_practitioner_number" && typeof value === "string") {
+        next.msp_practitioner_number = getLiveFiveDigitError(value, "msp practitioner number");
+      }
+      if (field === "msp_facility_number" && typeof value === "string") {
+        next.msp_facility_number = getLiveFiveDigitError(value, "msp facility number");
+      }
+      if (field === "contact_phone_number" && typeof value === "string") {
+        next.contact_phone_number = getLiveTenDigitError(value, "contact phone number");
+      }
+      if (field === "contact_fax_number" && typeof value === "string") {
+        next.contact_fax_number = getLiveTenDigitError(value, "contact fax number", "fax number");
+      }
+      if (field === "new_attachment_cancellation_date" && typeof value === "string") {
+        if (step2Form.new_attachment_effective_date && value < step2Form.new_attachment_effective_date) {
+          next.new_attachment_cancellation_date =
+            "new_attachment_cancellation_date cannot be earlier than new_attachment_effective_date.";
+        } else {
+          next.new_attachment_cancellation_date = "";
+        }
+      }
+      if (field === "new_attachment_effective_date" && typeof value === "string") {
+        if (isFutureDate(value)) {
+          next.new_attachment_effective_date = "new_attachment_effective_date cannot be in the future.";
+        }
+        if (
+          step2Form.new_attachment_cancellation_date &&
+          step2Form.new_attachment_cancellation_date < value
+        ) {
+          next.new_attachment_cancellation_date =
+            "new_attachment_cancellation_date cannot be earlier than new_attachment_effective_date.";
+        }
+      }
+      if (field === "attachment_cancellation_date" && typeof value === "string") {
+        next.attachment_cancellation_date = "";
+      }
+      if (field === "change_attachment_effective_date" && typeof value === "string") {
+        if (isFutureDate(value)) {
+          next.change_attachment_effective_date =
+            "change_attachment_effective_date cannot be in the future.";
+        }
+        if (
+          step2Form.change_attachment_cancellation_date &&
+          step2Form.change_attachment_cancellation_date < value
+        ) {
+          next.change_attachment_cancellation_date =
+            "change_attachment_cancellation_date cannot be earlier than change_attachment_effective_date.";
+        }
+      }
+      if (field === "change_attachment_cancellation_date" && typeof value === "string") {
+        if (
+          step2Form.change_attachment_effective_date &&
+          value < step2Form.change_attachment_effective_date
+        ) {
+          next.change_attachment_cancellation_date =
+            "change_attachment_cancellation_date cannot be earlier than change_attachment_effective_date.";
+        } else {
+          next.change_attachment_cancellation_date = "";
+        }
+      }
+      return next;
+    });
     setStep2SubmitError("");
   }
 
@@ -949,12 +1116,84 @@ export function DoctorOnboardingWizard() {
     setStep2SubmitError("");
   }
 
+  useEffect(() => {
+    setStep2Errors((current) => {
+      const next = { ...current };
+
+      const practitionerValue = step2Form.msp_practitioner_number.trim();
+      next.msp_practitioner_number = practitionerValue
+        ? getLiveFiveDigitError(step2Form.msp_practitioner_number, "msp practitioner number")
+        : "";
+
+      const facilityValue = step2Form.msp_facility_number.trim();
+      next.msp_facility_number = facilityValue
+        ? getLiveFiveDigitError(step2Form.msp_facility_number, "msp facility number")
+        : "";
+
+      return next;
+    });
+  }, [step2Form.msp_practitioner_number, step2Form.msp_facility_number]);
+
+  useEffect(() => {
+    setStep3Errors((current) => {
+      const next = { ...current };
+
+      const billingValue = step3Form.msp_billing_number.trim();
+      next.msp_billing_number = billingValue
+        ? getLiveDigitCountError(step3Form.msp_billing_number, "MSP billing number", 10)
+        : "";
+
+      const paymentValue = step3Form.payment_number.trim();
+      next.payment_number = paymentValue
+        ? getLiveDigitCountError(step3Form.payment_number, "payment number", 5)
+        : "";
+
+      const institutionValue = step3Form.institution_number.trim();
+      next.institution_number = institutionValue
+        ? getLiveDigitCountError(step3Form.institution_number, "institution number", 3)
+        : "";
+
+      const branchValue = step3Form.branch_number.trim();
+      next.branch_number = branchValue
+        ? getLiveDigitCountError(step3Form.branch_number, "branch number", 5)
+        : "";
+
+      return next;
+    });
+  }, [
+    step3Form.branch_number,
+    step3Form.institution_number,
+    step3Form.msp_billing_number,
+    step3Form.payment_number,
+  ]);
+
   function setStep3Field<K extends keyof DoctorHlth2832FormState>(
     field: K,
     value: DoctorHlth2832FormState[K],
   ) {
     setStep3Form((current) => ({ ...current, [field]: value }));
-    setStep3Errors((current) => ({ ...current, [field]: "" }));
+    setStep3Errors((current) => {
+      const next = { ...current, [field]: "" } as typeof current;
+      if (field === "msp_billing_number" && typeof value === "string") {
+        next.msp_billing_number = getLiveDigitCountError(value, "MSP billing number", 10);
+      }
+      if (field === "payment_number" && typeof value === "string") {
+        next.payment_number = getLiveDigitCountError(value, "payment number", 5);
+      }
+      if (field === "institution_number" && typeof value === "string") {
+        next.institution_number = getLiveDigitCountError(value, "institution number", 3);
+      }
+      if (field === "branch_number" && typeof value === "string") {
+        next.branch_number = getLiveDigitCountError(value, "branch number", 5);
+      }
+      if (field === "telephone" && typeof value === "string") {
+        next.telephone = getLiveTenDigitError(value, "telephone number");
+      }
+      if (field === "telephone2" && typeof value === "string") {
+        next.telephone2 = getLiveTenDigitError(value, "telephone number");
+      }
+      return next;
+    });
     setStep3SubmitError("");
   }
 
@@ -963,7 +1202,58 @@ export function DoctorOnboardingWizard() {
     value: DoctorHlth2991FormState[K],
   ) {
     setStep4Form((current) => ({ ...current, [field]: value }));
-    setStep4Errors((current) => ({ ...current, [field]: "" }));
+    setStep4Errors((current) => {
+      const next = { ...current, [field]: "" } as typeof current;
+      if (field === "date_of_birth" && typeof value === "string") {
+        next.date_of_birth = getLiveFutureDateError(value, "Date of birth");
+      }
+      if (field === "date_of_graduation" && typeof value === "string") {
+        next.date_of_graduation = getLiveFutureDateError(value, "Date of graduation");
+      }
+      if (field === "date_of_registration" && typeof value === "string") {
+        next.date_of_registration = getLiveFutureDateError(value, "Date of registration");
+      }
+      if (field === "certification_date_1" && typeof value === "string") {
+        next.certification_date_1 = getLiveFutureDateError(value, "Certification date 1");
+      }
+      if (field === "certification_date_2" && typeof value === "string") {
+        next.certification_date_2 = getLiveFutureDateError(value, "Certification date 2");
+      }
+      if (field === "certification_date_3" && typeof value === "string") {
+        next.certification_date_3 = getLiveFutureDateError(value, "Certification date 3");
+      }
+      if (field === "certification_date_4" && typeof value === "string") {
+        next.certification_date_4 = getLiveFutureDateError(value, "Certification date 4");
+      }
+      if (field === "msp_effective_date" && typeof value === "string") {
+        if (isFutureDate(value)) {
+          next.msp_effective_date = "msp_effective_date cannot be in the future.";
+        }
+        if (step4Form.cancellation_date && step4Form.cancellation_date < value) {
+          next.cancellation_date = "cancellation_date cannot be earlier than msp_effective_date.";
+        }
+      }
+      if (field === "cancellation_date" && typeof value === "string") {
+        if (step4Form.msp_effective_date && value < step4Form.msp_effective_date) {
+          next.cancellation_date = "cancellation_date cannot be earlier than msp_effective_date.";
+        } else {
+          next.cancellation_date = "";
+        }
+      }
+      if (field === "home_phone_number" && typeof value === "string") {
+        next.home_phone_number = getLiveTenDigitError(value, "home phone number");
+      }
+      if (field === "home_fax_number" && typeof value === "string") {
+        next.home_fax_number = getLiveTenDigitError(value, "home fax number", "fax number");
+      }
+      if (field === "business_phone_number" && typeof value === "string") {
+        next.business_phone_number = getLiveTenDigitError(value, "business phone number");
+      }
+      if (field === "business_fax_number" && typeof value === "string") {
+        next.business_fax_number = getLiveTenDigitError(value, "business fax number", "fax number");
+      }
+      return next;
+    });
     setStep4SubmitError("");
   }
 
@@ -1546,7 +1836,9 @@ export function DoctorOnboardingWizard() {
                       onChange={(event) =>
                         setStep2Field("msp_practitioner_number", digitsOnly(event.target.value))
                       }
-                      placeholder="1234567"
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="12345"
                     />
                     {step2Errors.msp_practitioner_number ? (
                       <p className="text-xs text-destructive">{step2Errors.msp_practitioner_number}</p>
@@ -1575,8 +1867,12 @@ export function DoctorOnboardingWizard() {
                     <Input
                       id="msp_facility_number"
                       value={step2Form.msp_facility_number}
-                      onChange={(event) => setStep2Field("msp_facility_number", event.target.value)}
-                      placeholder="FAC999"
+                      onChange={(event) =>
+                        setStep2Field("msp_facility_number", digitsOnly(event.target.value))
+                      }
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="12345"
                     />
                     {step2Errors.msp_facility_number ? (
                       <p className="text-xs text-destructive">{step2Errors.msp_facility_number}</p>
@@ -1928,7 +2224,9 @@ export function DoctorOnboardingWizard() {
                       onChange={(event) =>
                         setStep3Field("msp_billing_number", digitsOnly(event.target.value))
                       }
-                      placeholder="1234567"
+                      inputMode="numeric"
+                      maxLength={10}
+                      placeholder="1234567890"
                     />
                     {step3Errors.msp_billing_number ? (
                       <p className="text-xs text-destructive">{step3Errors.msp_billing_number}</p>
@@ -1941,7 +2239,9 @@ export function DoctorOnboardingWizard() {
                       id="payment_number"
                       value={step3Form.payment_number}
                       onChange={(event) => setStep3Field("payment_number", digitsOnly(event.target.value))}
-                      placeholder="1234567"
+                      inputMode="numeric"
+                      maxLength={5}
+                      placeholder="12345"
                     />
                     {step3Errors.payment_number ? (
                       <p className="text-xs text-destructive">{step3Errors.payment_number}</p>
@@ -1966,7 +2266,11 @@ export function DoctorOnboardingWizard() {
                     <Input
                       id="institution_number"
                       value={step3Form.institution_number}
-                      onChange={(event) => setStep3Field("institution_number", event.target.value)}
+                      onChange={(event) =>
+                        setStep3Field("institution_number", digitsOnly(event.target.value))
+                      }
+                      inputMode="numeric"
+                      maxLength={3}
                       placeholder="001"
                     />
                     {step3Errors.institution_number ? (
@@ -1979,7 +2283,9 @@ export function DoctorOnboardingWizard() {
                     <Input
                       id="branch_number"
                       value={step3Form.branch_number}
-                      onChange={(event) => setStep3Field("branch_number", event.target.value)}
+                      onChange={(event) => setStep3Field("branch_number", digitsOnly(event.target.value))}
+                      inputMode="numeric"
+                      maxLength={5}
                       placeholder="12345"
                     />
                     {step3Errors.branch_number ? (

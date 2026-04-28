@@ -76,6 +76,11 @@ export type PatientIntakeSlotsResponse = {
 export type PatientIntakeCompleteRequest = {
   fulfillment: PatientFulfillment;
   pharmacyChoice: PatientPharmacyChoice;
+  preferredPharmacyName?: string;
+  preferredPharmacyAddress?: string;
+  preferredPharmacyCity?: string;
+  preferredPharmacyPostalCode?: string;
+  preferredPharmacyPhone?: string;
 };
 
 export type PatientIntakeCompletionResponse = {
