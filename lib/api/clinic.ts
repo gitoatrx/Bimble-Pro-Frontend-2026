@@ -155,11 +155,17 @@ export type DoctorInviteRecord = {
 };
 
 export type ClinicDoctorInvite2870Draft = {
+  locum_name?: string;
+  locum_practitioner_number?: string;
   msp_billing_number?: string;
   principal_practitioner_name?: string;
   principal_practitioner_number?: string;
+  principal_practitioner_payment_number?: string;
   effective_date?: string;
   cancel_date?: string;
+  date_signed?: string;
+  pay_signature_data_url?: string;
+  pay_signature_label?: string;
 };
 
 export type ClinicDoctorInvite2950Draft = {

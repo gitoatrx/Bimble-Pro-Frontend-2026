@@ -38,6 +38,9 @@ export type PatientBimblePharmacy = {
   longitude: number | null;
   distance_km: number | null;
   distance_label: string | null;
+  drive_minutes: number | null;
+  delivery_eta_minutes: number | null;
+  delivery_eta_label: string | null;
 };
 
 export type PatientBimblePharmacyListResponse = {
@@ -138,12 +141,15 @@ export async function reverseGeocodePatientLocation(lat: number, lng: number) {
   });
 }
 
-export async function fetchBimblePharmacies(lat: number, lng: number) {
+export async function fetchBimblePharmacies(lat?: number | null, lng?: number | null) {
   return apiRequest<PatientBimblePharmacyListResponse>({
-    endpoint: withQuery(API_ENDPOINTS.patientIntakeBimblePharmacies, {
-      lat: String(lat),
-      lng: String(lng),
-    }),
+    endpoint:
+      lat == null || lng == null
+        ? API_ENDPOINTS.patientIntakeBimblePharmacies
+        : withQuery(API_ENDPOINTS.patientIntakeBimblePharmacies, {
+            lat: String(lat),
+            lng: String(lng),
+          }),
   });
 }
 

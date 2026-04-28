@@ -17,10 +17,12 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { doctorStatusLabel } from "@/lib/doctor/types";
 import { readClinicLoginSession } from "@/lib/clinic/session";
+import { SignaturePad } from "@/components/doctor/doctor-form-shared";
 import { formatCanadaPacificDateKey, formatCanadaPacificDateTime } from "@/lib/time-zone";
 import {
   deleteClinicDoctorInvite,
   fetchClinicDoctor,
+  fetchClinicDoctorInvitePrefill,
   fetchClinicDoctors,
   fetchClinicDoctorInvites,
   inviteClinicDoctor,
@@ -183,11 +185,17 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
   const [showClinicPaidDraft, setShowClinicPaidDraft] = useState(false);
   const [showFacilityAttachmentDraft, setShowFacilityAttachmentDraft] = useState(false);
   const [clinicPaidDraft, setClinicPaidDraft] = useState({
+    locum_name: "",
+    locum_practitioner_number: "",
     msp_billing_number: "",
     principal_practitioner_name: "",
     principal_practitioner_number: "",
+    principal_practitioner_payment_number: "",
     effective_date: "",
     cancel_date: "",
+    date_signed: "",
+    pay_signature_data_url: "",
+    pay_signature_label: "",
   });
   const [facilityDraft, setFacilityDraft] = useState({
     attachment_action: "ADD",
@@ -208,15 +216,70 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
     confirm_declarations: false,
   });
   const [sending, setSending] = useState(false);
+  const [prefillLoading, setPrefillLoading] = useState(false);
+  const [prefillLoadedFor, setPrefillLoadedFor] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  async function handlePrefillLookup(nextEmail?: string) {
+    const trimmed = (nextEmail ?? email).trim().toLowerCase();
+    if (!trimmed.includes("@")) return;
+
+    const session = readClinicLoginSession();
+    if (!session?.accessToken) return;
+    if (prefillLoadedFor === trimmed) return;
+
+    setPrefillLoading(true);
+    setError("");
+    try {
+      const prefill = await fetchClinicDoctorInvitePrefill(session.accessToken, trimmed);
+      if (prefill.form_drafts?.HLTH_2870) {
+        setClinicPaidDraft((current) => ({
+          ...current,
+          ...prefill.form_drafts.HLTH_2870,
+          pay_signature_label:
+            prefill.form_drafts.HLTH_2870.pay_signature_label ||
+            current.pay_signature_label,
+          pay_signature_data_url:
+            prefill.form_drafts.HLTH_2870.pay_signature_data_url ||
+            current.pay_signature_data_url,
+        }));
+      }
+      if (prefill.form_drafts?.HLTH_2950) {
+        setFacilityDraft((current) => ({
+          ...current,
+          ...prefill.form_drafts.HLTH_2950,
+          attachment_action:
+            prefill.form_drafts.HLTH_2950.attachment_action || current.attachment_action,
+          confirm_declarations:
+            typeof prefill.form_drafts.HLTH_2950.confirm_declarations === "boolean"
+              ? prefill.form_drafts.HLTH_2950.confirm_declarations
+              : current.confirm_declarations,
+        }));
+      }
+      if (prefill.existing_doctor) {
+        setShowClinicPaidDraft(true);
+        setShowFacilityAttachmentDraft(true);
+      }
+      setPrefillLoadedFor(trimmed);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to prefill doctor draft.");
+    } finally {
+      setPrefillLoading(false);
+    }
+  }
 
   function buildFormDrafts() {
     const drafts: Record<string, Record<string, unknown>> = {};
 
     if (
       showClinicPaidDraft &&
-      Object.values(clinicPaidDraft).some((value) => String(value).trim() !== "")
+      Object.entries(clinicPaidDraft).some(([key, value]) => {
+        if (key === "pay_signature_data_url" || key === "pay_signature_label") {
+          return String(value).trim() !== "";
+        }
+        return String(value).trim() !== "";
+      })
     ) {
       drafts.HLTH_2870 = Object.fromEntries(
         Object.entries(clinicPaidDraft).filter(([, value]) => String(value).trim() !== ""),
@@ -271,11 +334,17 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
       setShowClinicPaidDraft(false);
       setShowFacilityAttachmentDraft(false);
       setClinicPaidDraft({
+        locum_name: "",
+        locum_practitioner_number: "",
         msp_billing_number: "",
         principal_practitioner_name: "",
         principal_practitioner_number: "",
+        principal_practitioner_payment_number: "",
         effective_date: "",
         cancel_date: "",
+        date_signed: "",
+        pay_signature_data_url: "",
+        pay_signature_label: "",
       });
       setFacilityDraft({
         attachment_action: "ADD",
@@ -295,6 +364,7 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
         change_attachment_cancellation_date: "",
         confirm_declarations: false,
       });
+      setPrefillLoadedFor("");
       setSuccess(`Invite sent to ${trimmed}`);
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
@@ -320,8 +390,10 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
           value={email}
           onChange={(e) => {
             setEmail(e.target.value);
+            setPrefillLoadedFor("");
             setError("");
           }}
+          onBlur={() => void handlePrefillLookup()}
           onKeyDown={(e) => e.key === "Enter" && handleInvite()}
           className={cn("max-w-xs", error && "!border-destructive")}
         />
@@ -329,6 +401,9 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
           {sending ? "Sending…" : "Send invite"}
         </Button>
       </div>
+      {prefillLoading ? (
+        <p className="mt-2 text-xs text-muted-foreground">Checking for existing doctor details…</p>
+      ) : null}
 
       <div className="mt-4 space-y-3 rounded-2xl border border-border/70 bg-background/60 p-4">
         <div>
@@ -351,7 +426,20 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
             {showClinicPaidDraft ? <X className="h-4 w-4 text-muted-foreground" /> : <Plus className="h-4 w-4 text-muted-foreground" />}
           </button>
           {showClinicPaidDraft ? (
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <Input
+                  placeholder="Locum name"
+                  value={clinicPaidDraft.locum_name}
+                  onChange={(e) => setClinicPaidDraft((current) => ({ ...current, locum_name: e.target.value }))}
+                />
+                <Input
+                  placeholder="Locum practitioner number"
+                  value={clinicPaidDraft.locum_practitioner_number}
+                  onChange={(e) => setClinicPaidDraft((current) => ({ ...current, locum_practitioner_number: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
               <Input
                 placeholder="MSP billing number"
                 value={clinicPaidDraft.msp_billing_number}
@@ -368,6 +456,11 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
                 onChange={(e) => setClinicPaidDraft((current) => ({ ...current, principal_practitioner_number: e.target.value }))}
               />
               <Input
+                placeholder="Principal practitioner payment number"
+                value={clinicPaidDraft.principal_practitioner_payment_number}
+                onChange={(e) => setClinicPaidDraft((current) => ({ ...current, principal_practitioner_payment_number: e.target.value }))}
+              />
+              <Input
                 type="date"
                 placeholder="Effective date"
                 value={clinicPaidDraft.effective_date}
@@ -379,6 +472,32 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
                 value={clinicPaidDraft.cancel_date}
                 onChange={(e) => setClinicPaidDraft((current) => ({ ...current, cancel_date: e.target.value }))}
               />
+              <Input
+                type="date"
+                placeholder="Date signed"
+                value={clinicPaidDraft.date_signed}
+                onChange={(e) => setClinicPaidDraft((current) => ({ ...current, date_signed: e.target.value }))}
+              />
+              </div>
+              <div className="space-y-2">
+                <Input
+                  placeholder="Clinic signatory name"
+                  value={clinicPaidDraft.pay_signature_label}
+                  onChange={(e) => setClinicPaidDraft((current) => ({ ...current, pay_signature_label: e.target.value }))}
+                />
+                <SignaturePad
+                  value={clinicPaidDraft.pay_signature_data_url}
+                  onChange={(value) =>
+                    setClinicPaidDraft((current) => ({
+                      ...current,
+                      pay_signature_data_url: value,
+                    }))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Clinic completes the form and signs as pay/signatory here. The doctor will later add only locum and witness signatures on their side.
+                </p>
+              </div>
             </div>
           ) : null}
         </div>

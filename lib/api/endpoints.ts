@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
   clinicMeRequests: "/api/v1/clinics/me/requests",
   clinicMeDoctors: "/api/v1/clinics/me/doctors",
   clinicMeDoctorInvite: "/api/v1/clinics/me/doctors/invite",
+  clinicMeDoctorInvitePrefill: "/api/v1/clinics/doctors/invite-prefill",
   clinicMeDoctorInvites: "/api/v1/clinics/me/doctors/invites",
   clinicMeServices: "/api/v1/clinics/me/services",
   clinicMeAvailability: "/api/v1/clinics/me/availability",

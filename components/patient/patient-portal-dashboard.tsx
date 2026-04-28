@@ -160,13 +160,6 @@ function nextDates(count: number): string[] {
   return Array.from({ length: count }, (_, index) => shiftCanadaPacificDateKey(base, index));
 }
 
-function formatPhoneInput(raw: string) {
-  const digits = raw.replace(/\D/g, "").slice(0, 10);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-}
-
 function normalizeServiceName(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ");
 }
@@ -185,21 +178,6 @@ function resolveServiceIdFromProblem(problemLabel: string, services: PatientPort
     if (match) return String(match.service_id);
   }
   return "";
-}
-
-async function requestBrowserCoordinates(): Promise<{ lat: number; lng: number } | null> {
-  if (typeof window === "undefined" || !navigator.geolocation) return null;
-  return new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        resolve({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        }),
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
-    );
-  });
 }
 
 function SectionCard({
@@ -348,6 +326,10 @@ export function PatientPortalDashboard() {
     );
     return match?.id ?? "";
   }, [bimblePharmacies, bookingDraft]);
+  const selectedBimblePharmacy = useMemo(
+    () => bimblePharmacies.find((option) => option.id === selectedNearbyPharmacyId) ?? null,
+    [bimblePharmacies, selectedNearbyPharmacyId],
+  );
 
   const requestableAppointments = useMemo(() => {
     const seen = new Set<number>();
@@ -454,25 +436,17 @@ export function PatientPortalDashboard() {
     let cancelled = false;
 
     async function loadBimbleList() {
-      if (!bookingOpen || bookingStep !== "pharmacy" || bookingDraft.pharmacy_choice !== "bimble") return;
+      if (!bookingOpen || bookingStep !== "pharmacy" || bookingDraft.pharmacy_choice !== "preferred") return;
       setBimblePharmacyError("");
       setIsLoadingBimblePharmacies(true);
-      const coords = await requestBrowserCoordinates();
-      if (!coords) {
-        if (!cancelled) {
-          setBimblePharmacies([]);
-          setBimblePharmacyError("Allow location access to view nearby Bimble pharmacies.");
-          setIsLoadingBimblePharmacies(false);
-        }
-        return;
-      }
 
       try {
-        const response = await fetchBimblePharmacies(coords.lat, coords.lng);
+        const response = await fetchBimblePharmacies();
         if (cancelled) return;
-        setBimblePharmacies(response.pharmacies ?? []);
-        if (!response.pharmacies?.length) {
-          setBimblePharmacyError("No active Bimble pharmacies are available for your location right now.");
+        const pharmacies = response.pharmacies ?? [];
+        setBimblePharmacies(pharmacies);
+        if (!pharmacies.length) {
+          setBimblePharmacyError("No active pharmacies are available right now.");
         }
       } catch (error) {
         if (cancelled) return;
@@ -540,6 +514,10 @@ export function PatientPortalDashboard() {
   function applyNearbyPharmacy(optionId: string) {
     const option = bimblePharmacies.find((item) => item.id === optionId);
     if (!option) return;
+    applyPharmacyOption(option);
+  }
+
+  function applyPharmacyOption(option: PatientBimblePharmacy) {
     setBookingDraft((current) => ({
       ...current,
       preferred_pharmacy_name: option.name,
@@ -575,8 +553,8 @@ export function PatientPortalDashboard() {
       }
       if (!bookingDraft.preferred_pharmacy_name) {
         return bookingDraft.pharmacy_choice === "bimble"
-          ? "Please choose one of the Bimble pharmacies."
-          : "Please complete the preferred pharmacy details.";
+          ? "Please choose your preferred pharmacy for this test flow."
+          : "Please choose a pharmacy from the list.";
       }
       if (
         bookingDraft.pharmacy_choice === "preferred" &&
@@ -1565,11 +1543,6 @@ export function PatientPortalDashboard() {
                           setBookingDraft((current) => ({
                             ...current,
                             pharmacy_choice: "bimble",
-                            preferred_pharmacy_name: "",
-                            preferred_pharmacy_address: "",
-                            preferred_pharmacy_city: "",
-                            preferred_pharmacy_postal_code: "",
-                            preferred_pharmacy_phone: "",
                           }))
                         }
                         className={cn(
@@ -1622,84 +1595,9 @@ export function PatientPortalDashboard() {
 
                     {bookingDraft.pharmacy_choice === "preferred" ? (
                       <div className="space-y-4 rounded-[24px] border border-sky-100 bg-sky-50/50 p-5">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <label className="grid gap-2 text-sm text-slate-700">
-                            Pharmacy name
-                            <Input
-                              value={bookingDraft.preferred_pharmacy_name}
-                              onChange={(event) =>
-                                setBookingDraft((current) => ({
-                                  ...current,
-                                  preferred_pharmacy_name: event.target.value,
-                                }))
-                              }
-                            />
-                          </label>
-                          <label className="grid gap-2 text-sm text-slate-700">
-                            Phone number
-                            <Input
-                              value={bookingDraft.preferred_pharmacy_phone}
-                              onChange={(event) =>
-                                setBookingDraft((current) => ({
-                                  ...current,
-                                  preferred_pharmacy_phone: formatPhoneInput(event.target.value),
-                                }))
-                              }
-                            />
-                          </label>
-                        </div>
-                        <label className="grid gap-2 text-sm text-slate-700">
-                          Street address
-                          <Input
-                            value={bookingDraft.preferred_pharmacy_address}
-                            onChange={(event) =>
-                              setBookingDraft((current) => ({
-                                ...current,
-                                preferred_pharmacy_address: event.target.value,
-                              }))
-                            }
-                          />
-                        </label>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <label className="grid gap-2 text-sm text-slate-700">
-                            City
-                            <Input
-                              value={bookingDraft.preferred_pharmacy_city}
-                              onChange={(event) =>
-                                setBookingDraft((current) => ({
-                                  ...current,
-                                  preferred_pharmacy_city: event.target.value,
-                                }))
-                              }
-                            />
-                          </label>
-                          <label className="grid gap-2 text-sm text-slate-700">
-                            Postal code
-                            <Input
-                              value={bookingDraft.preferred_pharmacy_postal_code}
-                              onChange={(event) =>
-                                setBookingDraft((current) => ({
-                                  ...current,
-                                  preferred_pharmacy_postal_code: event.target.value.toUpperCase(),
-                                }))
-                              }
-                            />
-                          </label>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {bookingDraft.pharmacy_choice === "bimble" ? (
-                      <div className="space-y-4 rounded-[24px] border border-sky-100 bg-sky-50/50 p-5">
-                        <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-700">
-                          <Clock className="mr-2 inline h-4 w-4 text-sky-700" />
-                          {bookingDraft.fulfillment === "delivery"
-                            ? "Bimble pharmacy is the fastest delivery option."
-                            : "Bimble pharmacy is the fastest pickup option."}
-                        </div>
                         {isLoadingBimblePharmacies ? (
                           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                            Loading nearby Bimble pharmacies...
+                            Loading nearby pharmacies...
                           </div>
                         ) : null}
                         {bimblePharmacyError ? (
@@ -1709,9 +1607,7 @@ export function PatientPortalDashboard() {
                         ) : null}
                         {bimblePharmacies.length ? (
                           <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">
-                              Available Bimble pharmacies
-                            </label>
+                            <label className="text-sm font-medium text-slate-700">Choose a pharmacy</label>
                             <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                               {bimblePharmacies.map((option) => {
                                 const selected = selectedNearbyPharmacyId === option.id;
@@ -1746,6 +1642,35 @@ export function PatientPortalDashboard() {
                                   </button>
                                 );
                               })}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {bookingDraft.pharmacy_choice === "bimble" ? (
+                      <div className="space-y-4 rounded-[24px] border border-sky-100 bg-sky-50/50 p-5">
+                        <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-700">
+                          <Clock className="mr-2 inline h-4 w-4 text-sky-700" />
+                          {bookingDraft.fulfillment === "delivery"
+                            ? selectedBimblePharmacy?.delivery_eta_label
+                              ? `We will deliver your order in ${selectedBimblePharmacy.delivery_eta_label}.`
+                              : "We will deliver your order as quickly as possible."
+                            : "Bimble pharmacy is the fastest pickup option."}
+                        </div>
+                        {bookingDraft.preferred_pharmacy_name ? (
+                          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
+                            <div className="font-semibold text-slate-900">
+                              {bookingDraft.preferred_pharmacy_name}
+                            </div>
+                            <div className="mt-1 text-slate-600">
+                              {[
+                                bookingDraft.preferred_pharmacy_address,
+                                bookingDraft.preferred_pharmacy_city,
+                                bookingDraft.preferred_pharmacy_postal_code,
+                              ]
+                                .filter(Boolean)
+                                .join(", ")}
                             </div>
                           </div>
                         ) : null}

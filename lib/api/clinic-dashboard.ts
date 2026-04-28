@@ -96,6 +96,51 @@ export type ClinicRequestsResponse = {
   requests: ClinicPortalRequest[];
 };
 
+export type ClinicDoctorInvite2870Draft = {
+  locum_name?: string;
+  locum_practitioner_number?: string;
+  msp_billing_number?: string;
+  principal_practitioner_name?: string;
+  principal_practitioner_number?: string;
+  principal_practitioner_payment_number?: string;
+  effective_date?: string;
+  cancel_date?: string;
+  date_signed?: string;
+  pay_signature_data_url?: string;
+  pay_signature_label?: string;
+};
+
+export type ClinicDoctorInvite2950Draft = {
+  attachment_action?: "ADD" | "CANCEL" | "CHANGE";
+  msp_practitioner_number?: string;
+  facility_or_practice_name?: string;
+  msp_facility_number?: string;
+  facility_physical_address?: string;
+  facility_physical_city?: string;
+  facility_physical_postal_code?: string;
+  contact_email?: string;
+  contact_phone_number?: string;
+  contact_fax_number?: string;
+  new_attachment_effective_date?: string;
+  new_attachment_cancellation_date?: string;
+  attachment_cancellation_date?: string;
+  change_attachment_effective_date?: string;
+  change_attachment_cancellation_date?: string;
+  confirm_declarations?: boolean;
+};
+
+export type ClinicDoctorInvitePrefillResponse = {
+  email: string;
+  existing_doctor: boolean;
+  doctor_id?: number | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  form_drafts: {
+    HLTH_2870?: ClinicDoctorInvite2870Draft;
+    HLTH_2950?: ClinicDoctorInvite2950Draft;
+  };
+};
+
 export type ClinicFacilityFormDeclaration = {
   id: string;
   summary_text: string;
@@ -1033,6 +1078,16 @@ export async function inviteClinicDoctor(
     endpoint: API_ENDPOINTS.clinicMeDoctorInvite,
     method: "POST",
     body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicDoctorInvitePrefill(
+  accessToken: string,
+  email: string,
+) {
+  return apiRequest<ClinicDoctorInvitePrefillResponse>({
+    endpoint: withQuery(API_ENDPOINTS.clinicMeDoctorInvitePrefill, { email }),
     headers: authHeaders(accessToken),
   });
 }

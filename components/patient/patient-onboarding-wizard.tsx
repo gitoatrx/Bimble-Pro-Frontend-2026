@@ -68,8 +68,6 @@ import { cn } from "@/lib/utils";
 
 const GENDERS = ["Female", "Male", "Non-binary", "Prefer not to say", "Other"];
 const NON_NAME_CHARACTERS = /[^\p{L}\s'’-]/gu;
-const NON_ADDRESS_CHARACTERS = /[^\p{L}\d\s.'’#/-]/gu;
-
 function normalizeNameInput(value: string) {
   return value.replace(NON_NAME_CHARACTERS, "");
 }
@@ -107,21 +105,6 @@ function isValidAddress(value: string) {
     /^[\p{L}\d][\p{L}\d\s.'#/-]*$/u.test(trimmed) &&
     /\p{L}/u.test(trimmed)
   );
-}
-
-async function requestBrowserCoordinates(): Promise<{ lat: number; lng: number } | null> {
-  if (typeof window === "undefined" || !navigator.geolocation) return null;
-  return new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        resolve({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        }),
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
-    );
-  });
 }
 
 function maskPhone(phone: string) {
@@ -290,6 +273,10 @@ export function PatientOnboardingWizard() {
     draft.preferredPharmacyPostalCode,
     bimblePharmacies,
   ]);
+  const selectedBimblePharmacy = useMemo(
+    () => bimblePharmacies.find((option) => option.id === selectedNearbyPharmacyId) ?? null,
+    [bimblePharmacies, selectedNearbyPharmacyId],
+  );
 
   function setField<K extends keyof PatientOnboardingDraft>(key: K, value: PatientOnboardingDraft[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -320,6 +307,10 @@ export function PatientOnboardingWizard() {
   function applyNearbyPharmacy(optionId: string) {
     const option = bimblePharmacies.find((item) => item.id === optionId);
     if (!option) return;
+    applyPharmacyOption(option);
+  }
+
+  function applyPharmacyOption(option: PatientBimblePharmacy) {
     setDraft((prev) => ({
       ...prev,
       preferredPharmacyName: option.name,
@@ -368,41 +359,17 @@ export function PatientOnboardingWizard() {
     let cancelled = false;
 
     async function loadBimblePharmacies() {
-      if (step !== "pharmacy" || draft.pharmacyChoice !== "bimble") return;
+      if (step !== "pharmacy" || draft.pharmacyChoice !== "preferred") return;
       setBimblePharmacyError("");
       setIsLoadingBimblePharmacies(true);
-      let lat = draft.careLatitude;
-      let lng = draft.careLongitude;
-      if (lat == null || lng == null) {
-        const coords = await requestBrowserCoordinates();
-        if (coords) {
-          lat = coords.lat;
-          lng = coords.lng;
-          if (!cancelled) {
-            setDraft((current) => ({
-              ...current,
-              careLatitude: coords.lat,
-              careLongitude: coords.lng,
-            }));
-          }
-        }
-      }
-
-      if (lat == null || lng == null) {
-        if (!cancelled) {
-          setBimblePharmacies([]);
-          setBimblePharmacyError("Allow location access to see nearby Bimble pharmacies.");
-          setIsLoadingBimblePharmacies(false);
-        }
-        return;
-      }
 
       try {
-        const response = await fetchBimblePharmacies(lat, lng);
+        const response = await fetchBimblePharmacies();
         if (cancelled) return;
-        setBimblePharmacies(response.pharmacies ?? []);
-        if (!response.pharmacies?.length) {
-          setBimblePharmacyError("No active Bimble pharmacies are available for this location right now.");
+        const pharmacies = response.pharmacies ?? [];
+        setBimblePharmacies(pharmacies);
+        if (!pharmacies.length) {
+          setBimblePharmacyError("No active pharmacies are available right now.");
         }
       } catch (error) {
         if (cancelled) return;
@@ -421,7 +388,7 @@ export function PatientOnboardingWizard() {
     return () => {
       cancelled = true;
     };
-  }, [draft.careLatitude, draft.careLongitude, draft.pharmacyChoice, step]);
+  }, [draft.pharmacyChoice, step]);
 
   useEffect(() => {
     const dob = splitDateOfBirth(draft.dateOfBirth);
@@ -1212,11 +1179,6 @@ export function PatientOnboardingWizard() {
                 setDraft((current) => ({
                   ...current,
                   pharmacyChoice: "bimble",
-                  preferredPharmacyName: "",
-                  preferredPharmacyAddress: "",
-                  preferredPharmacyCity: "",
-                  preferredPharmacyPostalCode: "",
-                  preferredPharmacyPhone: "",
                 }));
                 setBimblePharmacyError("");
               }}
@@ -1243,6 +1205,7 @@ export function PatientOnboardingWizard() {
                   preferredPharmacyPostalCode: "",
                   preferredPharmacyPhone: "",
                 }));
+                setBimblePharmacyError("");
               }}
               className={cn(
                 "flex flex-col items-start gap-3 rounded-[1.5rem] border p-6 text-left shadow-sm transition-all",
@@ -1257,86 +1220,10 @@ export function PatientOnboardingWizard() {
             </button>
           </div>
           {draft.pharmacyChoice === "preferred" ? (
-            <div className="space-y-6 rounded-[1.5rem] border border-primary/10 bg-gradient-to-br from-primary/5 via-white to-primary/10 p-5 shadow-sm">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Pharmacy name</label>
-                <Input
-                  value={draft.preferredPharmacyName}
-                  onChange={(e) => setField("preferredPharmacyName", e.target.value)}
-                  className="h-12 rounded-xl border-border"
-                  placeholder="Main Street Pharmacy"
-                  autoComplete="organization"
-                />
-                <FieldError message={errors.preferredPharmacyName} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Street address</label>
-                <Input
-                  value={draft.preferredPharmacyAddress}
-                  onChange={(e) => setField("preferredPharmacyAddress", e.target.value.replace(NON_ADDRESS_CHARACTERS, ""))}
-                  className="h-12 rounded-xl border-border"
-                  placeholder="123 Main St"
-                  autoComplete="street-address"
-                  inputMode="text"
-                />
-                <FieldError message={errors.preferredPharmacyAddress} />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">City</label>
-                  <Input
-                    value={draft.preferredPharmacyCity}
-                    onChange={(e) => setField("preferredPharmacyCity", normalizeCityInput(e.target.value))}
-                    className="h-12 rounded-xl border-border"
-                    autoComplete="address-level2"
-                    autoCapitalize="words"
-                    inputMode="text"
-                  />
-                  <FieldError message={errors.preferredPharmacyCity} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Postal code</label>
-                  <Input
-                    value={draft.preferredPharmacyPostalCode}
-                    onChange={(e) => setField("preferredPharmacyPostalCode", e.target.value.toUpperCase().slice(0, 7))}
-                    className="h-12 rounded-xl border-border"
-                    placeholder="V6B 1A1"
-                    autoComplete="postal-code"
-                  />
-                  <FieldError message={errors.preferredPharmacyPostalCode} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Phone number</label>
-                <Input
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="(604) 555-0123"
-                  value={draft.preferredPharmacyPhone}
-                  onChange={(e) => setField("preferredPharmacyPhone", formatPhoneInput(e.target.value))}
-                  className="h-12 rounded-xl border-border"
-                />
-                <FieldError message={errors.preferredPharmacyPhone} />
-              </div>
-            </div>
-          ) : draft.pharmacyChoice === "bimble" ? (
             <div className="space-y-4 rounded-[1.5rem] border border-primary/10 bg-gradient-to-br from-primary/5 via-white to-primary/10 p-5 shadow-sm">
-              <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-foreground">
-                <Sparkles className="mb-1 inline h-4 w-4 text-primary" />{" "}
-                {draft.fulfillment === "delivery" ? (
-                  <>
-                    <strong>Our pharmacist will deliver in about 1 hour</strong> after your prescription is ready.
-                  </>
-                ) : (
-                  <>
-                    <strong>Bimble pharmacy will prepare your prescription quickly</strong> for pharmacy pickup.
-                  </>
-                )}
-              </div>
               {isLoadingBimblePharmacies ? (
                 <div className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-muted-foreground">
-                  Loading nearby Bimble pharmacies...
+                  Loading nearby pharmacies...
                 </div>
               ) : null}
               {bimblePharmacyError ? (
@@ -1346,7 +1233,7 @@ export function PatientOnboardingWizard() {
               ) : null}
               {bimblePharmacies.length ? (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Available Bimble pharmacies</label>
+                  <label className="text-sm font-medium">Choose a pharmacy</label>
                   <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
                     {bimblePharmacies.map((option) => {
                       const selected = selectedNearbyPharmacyId === option.id;
@@ -1384,6 +1271,36 @@ export function PatientOnboardingWizard() {
                 </div>
               ) : null}
             </div>
+          ) : draft.pharmacyChoice === "bimble" ? (
+            <div className="space-y-4 rounded-[1.5rem] border border-primary/10 bg-gradient-to-br from-primary/5 via-white to-primary/10 p-5 shadow-sm">
+              <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-foreground">
+                <Sparkles className="mb-1 inline h-4 w-4 text-primary" />{" "}
+                {draft.fulfillment === "delivery" ? (
+                  <>
+                    <strong>
+                      {selectedBimblePharmacy?.delivery_eta_label
+                        ? `We will deliver your order in ${selectedBimblePharmacy.delivery_eta_label}`
+                        : "We will deliver your order as quickly as possible"}
+                    </strong>
+                    .
+                  </>
+                ) : (
+                  <>
+                    <strong>Bimble pharmacy will prepare your prescription quickly</strong> for pharmacy pickup.
+                  </>
+                )}
+              </div>
+              {draft.preferredPharmacyName ? (
+                <div className="rounded-2xl border border-border bg-white px-4 py-3 text-sm">
+                  <div className="font-semibold text-foreground">{draft.preferredPharmacyName}</div>
+                  <div className="mt-1 text-muted-foreground">
+                    {[draft.preferredPharmacyAddress, draft.preferredPharmacyCity, draft.preferredPharmacyPostalCode]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           ) : null}
           {draft.pharmacyChoice === "preferred" ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
@@ -1409,7 +1326,7 @@ export function PatientOnboardingWizard() {
               disabled={
                 !draft.pharmacyChoice ||
                 submitting ||
-                (draft.pharmacyChoice === "bimble" && !draft.preferredPharmacyName.trim())
+                !draft.preferredPharmacyName.trim()
               }
               onClick={() => {
                 if (!draft.pharmacyChoice) return;
