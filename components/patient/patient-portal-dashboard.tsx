@@ -13,6 +13,7 @@ import {
   NotebookPen,
   Package,
   Pill,
+  X,
   Truck,
   Users,
   Video,
@@ -120,7 +121,6 @@ const emptyFamilyForm = {
   last_name: "",
   relationship_label: "",
   date_of_birth: "",
-  phone: "",
   email: "",
   phn: "",
   notes: "",
@@ -255,23 +255,28 @@ function SectionCard({
   title,
   subtitle,
   icon,
+  action,
   children,
 }: {
   title: string;
   subtitle?: string;
   icon: React.ReactNode;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-[22px] border border-border/70 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-start gap-3.5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
-          {icon}
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+            {icon}
+          </div>
+          <div>
+            <h2 className="text-[17px] font-semibold text-slate-900">{title}</h2>
+            {subtitle ? <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p> : null}
+          </div>
         </div>
-        <div>
-          <h2 className="text-[17px] font-semibold text-slate-900">{title}</h2>
-          {subtitle ? <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p> : null}
-        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
       {children}
     </section>
@@ -318,6 +323,7 @@ export function PatientPortalDashboard() {
   const [familyForm, setFamilyForm] = useState(emptyFamilyForm);
   const [familyMessage, setFamilyMessage] = useState("");
   const [isSavingFamily, setIsSavingFamily] = useState(false);
+  const [isFamilyFormOpen, setIsFamilyFormOpen] = useState(false);
 
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingStep, setBookingStep] = useState<BookingStep>("problem");
@@ -668,13 +674,13 @@ export function PatientPortalDashboard() {
         last_name: familyForm.last_name,
         relationship_label: familyForm.relationship_label,
         date_of_birth: familyForm.date_of_birth || undefined,
-        phone: familyForm.phone || undefined,
         email: familyForm.email || undefined,
         phn: familyForm.phn || undefined,
         notes: familyForm.notes || undefined,
       });
       setFamilyForm(emptyFamilyForm);
       setFamilyMessage("Family member added successfully.");
+      setIsFamilyFormOpen(false);
       await refreshPortalData();
     } catch (error) {
       setFamilyMessage(error instanceof Error ? error.message : "Could not add the family member.");
@@ -1543,56 +1549,56 @@ export function PatientPortalDashboard() {
         {activeSection === "family" ? (
           <SectionCard
             title="Family members"
-            subtitle="Add family members so their details stay with your patient profile."
             icon={<Users className="h-5 w-5" />}
-          >
-            <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-              <div className="space-y-3">
-                {familyMembers.length ? (
-                  familyMembers.slice(0, 5).map((member) => (
-                    <div key={member.family_member_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-slate-900">
-                            {member.first_name} {member.last_name}
-                          </div>
-                          <div className="mt-1 text-sm text-slate-600">{member.relationship_label}</div>
-                        </div>
-                        <Button variant="ghost" onClick={() => void handleDeleteFamilyMember(member.family_member_id)}>
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-                    No family members added yet.
-                  </div>
+            action={
+              <Button
+                variant="outline"
+                size={isFamilyFormOpen ? "icon" : "default"}
+                className={cn(
+                  "rounded-full",
+                  isFamilyFormOpen
+                    ? "border-slate-300 bg-slate-50 text-slate-900 shadow-sm hover:bg-slate-100"
+                    : "",
                 )}
-              </div>
+                aria-label={isFamilyFormOpen ? "Cancel family member form" : "Add family member"}
+                onClick={() => setIsFamilyFormOpen((current) => !current)}
+              >
+                {isFamilyFormOpen ? (
+                  <X className="h-4 w-4 stroke-[3]" />
+                ) : (
+                  <span>Add family member</span>
+                )}
+              </Button>
+            }
+          >
+            {isFamilyFormOpen ? (
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900">Add a family member</h3>
+                  </div>
+                </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <h3 className="text-sm font-semibold text-slate-900">Add a family member</h3>
-                <div className="mt-4 grid gap-4">
-                  <label className="grid gap-2 text-sm text-slate-700">
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1.5 text-sm text-slate-700">
                     First name
                     <Input
                       value={familyForm.first_name}
                       onChange={(event) =>
                         setFamilyForm((current) => ({ ...current, first_name: event.target.value }))
                       }
-                    />
+                      />
                   </label>
-                  <label className="grid gap-2 text-sm text-slate-700">
+                  <label className="grid gap-1.5 text-sm text-slate-700">
                     Last name
                     <Input
                       value={familyForm.last_name}
                       onChange={(event) =>
                         setFamilyForm((current) => ({ ...current, last_name: event.target.value }))
                       }
-                    />
+                      />
                   </label>
-                  <label className="grid gap-2 text-sm text-slate-700">
+                  <label className="grid gap-1.5 text-sm text-slate-700">
                     Relationship
                     <Input
                       value={familyForm.relationship_label}
@@ -1602,18 +1608,32 @@ export function PatientPortalDashboard() {
                           relationship_label: event.target.value,
                         }))
                       }
-                    />
+                      />
                   </label>
-                  <label className="grid gap-2 text-sm text-slate-700">
-                    Phone
+                  <label className="grid gap-1.5 text-sm text-slate-700">
+                    Date of birth
                     <Input
-                      value={familyForm.phone}
+                      type="date"
+                      value={familyForm.date_of_birth}
                       onChange={(event) =>
-                        setFamilyForm((current) => ({ ...current, phone: event.target.value }))
+                        setFamilyForm((current) => ({ ...current, date_of_birth: event.target.value }))
                       }
+                      />
+                  </label>
+                  <label className="grid gap-1.5 text-sm text-slate-700 sm:col-span-2">
+                    PHN
+                    <Input
+                      value={familyForm.phn}
+                      onChange={(event) =>
+                        setFamilyForm((current) => ({
+                          ...current,
+                          phn: event.target.value.replace(/\D/g, "").slice(0, 20),
+                        }))
+                      }
+                      inputMode="numeric"
                     />
                   </label>
-                  <label className="grid gap-2 text-sm text-slate-700">
+                  <label className="grid gap-1.5 text-sm text-slate-700 sm:col-span-2">
                     Notes
                     <Textarea
                       value={familyForm.notes}
@@ -1621,23 +1641,57 @@ export function PatientPortalDashboard() {
                         setFamilyForm((current) => ({ ...current, notes: event.target.value }))
                       }
                       placeholder="Optional notes"
+                      className="min-h-[92px]"
                     />
                   </label>
                 </div>
 
                 {familyMessage ? (
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                  <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
                     {familyMessage}
                   </div>
                 ) : null}
 
-                <div className="mt-4">
+                <div className="mt-3 flex items-center gap-3">
                   <Button onClick={handleAddFamilyMember} disabled={isSavingFamily}>
                     {isSavingFamily ? "Saving..." : "Add family member"}
                   </Button>
+                  <Button variant="outline" onClick={() => setIsFamilyFormOpen(false)}>
+                    Cancel
+                  </Button>
                 </div>
               </div>
-            </div>
+            ) : null}
+
+            {familyMembers.length ? (
+              <div className="mt-5 space-y-3">
+                {familyMembers.slice(0, 5).map((member) => (
+                  <div
+                    key={member.family_member_id}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {member.first_name} {member.last_name}
+                        </div>
+                        <div className="mt-1 text-sm text-slate-600">{member.relationship_label}</div>
+                        <div className="mt-2 grid gap-1 text-xs text-slate-500">
+                          <div>DOB: {member.date_of_birth || "Not available"}</div>
+                          <div>PHN: {member.phn || "Not available"}</div>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        onClick={() => void handleDeleteFamilyMember(member.family_member_id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </SectionCard>
         ) : null}
       </main>
