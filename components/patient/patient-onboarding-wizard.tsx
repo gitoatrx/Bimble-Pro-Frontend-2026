@@ -40,6 +40,9 @@ import type {
 } from "@/lib/patient/types";
 import {
   clearDemoPatientOtp,
+  clearPatientIntakeAccessToken,
+  clearPatientIntakeCompletion,
+  clearPatientIntakeSessionId,
   clearPatientPreviewCode,
   clearPatientOnboardingSession,
   readPatientIntakeAccessToken,
@@ -55,6 +58,7 @@ import {
   writePatientOnboardingDraft,
   writePatientOnboardingStep,
 } from "@/lib/patient/onboarding-session";
+import { storePatientLoginSession } from "@/lib/patient/session";
 import { cn } from "@/lib/utils";
 
 const GENDERS = ["Female", "Male", "Non-binary", "Prefer not to say", "Other"];
@@ -547,12 +551,6 @@ export function PatientOnboardingWizard() {
       return;
     }
 
-    const nextDraft: PatientOnboardingDraft = {
-      ...draft,
-      fulfillment,
-      pharmacyChoice,
-    };
-
     const preferredPharmacyDetails =
       pharmacyChoice === "preferred"
         ? {
@@ -585,8 +583,23 @@ export function PatientOnboardingWizard() {
         summary: response.summary,
       };
       storePatientIntakeCompletion(completionData);
+      storePatientLoginSession({
+        patientId: response.patient_id,
+        accessToken: response.patient_access_token,
+      });
       setCompletion(completionData);
-      persist(nextDraft, "complete");
+      writePatientOnboardingDraft({
+        ...draft,
+        fulfillment,
+        pharmacyChoice,
+      });
+      writePatientOnboardingStep("complete");
+      clearPatientIntakeAccessToken();
+      clearPatientIntakeSessionId();
+      clearPatientPreviewCode();
+      clearDemoPatientOtp();
+      clearPatientIntakeCompletion();
+      router.push("/patient-portal/profile");
     } catch (error) {
       setErrors({
         slot: error instanceof Error ? error.message : "Could not complete booking.",

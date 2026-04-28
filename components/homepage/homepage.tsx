@@ -480,6 +480,19 @@ export function Homepage() {
               {loginMenuOpen && (
                 <div className="hp-login-menu">
                   <Link
+                    href="/patient-portal"
+                    className="hp-login-menu-item"
+                    onClick={() => setLoginMenuOpen(false)}
+                  >
+                    <span className="hp-login-menu-icon">
+                      <Users size={16} />
+                    </span>
+                    <span>
+                      <strong>Login as Patient</strong>
+                      <em>Book care, manage visits, and view records</em>
+                    </span>
+                  </Link>
+                  <Link
                     href="/login"
                     className="hp-login-menu-item"
                     onClick={() => setLoginMenuOpen(false)}
@@ -975,6 +988,7 @@ export function Homepage() {
               <ul>
                 <li><a href="#find-care">Find a Doctor</a></li>
                 <li><a href="#find-care">Book Appointment</a></li>
+                <li><Link href="/patient-portal">Patient Login</Link></li>
                 <li><a href="#specialties">Virtual Care</a></li>
                 <li><a href="#specialties">All Specialties</a></li>
                 <li><a href="#reviews">Patient Reviews</a></li>

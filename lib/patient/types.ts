@@ -89,3 +89,115 @@ export const initialPatientOnboardingDraft: PatientOnboardingDraft = {
   preferredPharmacyPostalCode: "",
   preferredPharmacyPhone: "",
 };
+
+export type PatientLoginSession = {
+  patientId: number;
+  accessToken: string;
+  expiresAt?: string;
+};
+
+export type PatientOtpStartResponse = {
+  patient_id: number;
+  channel: string;
+  message: string;
+};
+
+export type PatientOtpVerifyResponse = {
+  access_token: string;
+  token_type: "bearer";
+  patient_id: number;
+};
+
+export type PatientProfile = {
+  patient_id: number;
+  phn: string | null;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  address_line_1: string | null;
+  address_line_2: string | null;
+  city: string | null;
+  province: string | null;
+  postal_code: string | null;
+  status: string;
+};
+
+export type PatientPortalClinic = {
+  clinic_id: number;
+  slug: string;
+  clinic_display_name: string;
+  city: string | null;
+  province: string | null;
+};
+
+export type PatientPortalService = {
+  service_id: number;
+  service_code: string;
+  service_name: string;
+  description: string | null;
+  requires_phn_billing: boolean;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type PatientPortalAppointment = {
+  appointment_id: number;
+  clinic_id: number | null;
+  clinic_name: string | null;
+  service_id: number | null;
+  service_name: string | null;
+  channel: string;
+  status: string;
+  assigned_doctor_id: number | null;
+  chief_complaint: string | null;
+  notes: string | null;
+  prescription_notes: string | null;
+  cancellation_reason: string | null;
+  queued_at: string;
+  assigned_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+};
+
+export type PatientPortalAppointmentsPayload = {
+  current: PatientPortalAppointment[];
+  past: PatientPortalAppointment[];
+};
+
+export type PatientPortalRequest = {
+  request_id: number;
+  patient_id: number;
+  appointment_id: number | null;
+  clinic_id: number | null;
+  request_type: "RESCHEDULE" | "PRESCRIPTION" | "LAB_REPORT" | string;
+  status: string;
+  details: string | null;
+  created_at: string;
+};
+
+export type PatientPortalDashboard = {
+  patient_id: number;
+  total_appointments: number;
+  active_appointments: number;
+  completed_appointments: number;
+  cancelled_appointments: number;
+  family_members_count: number;
+  open_requests_count: number;
+  recent_appointments: PatientPortalAppointment[];
+  recent_requests: PatientPortalRequest[];
+};
+
+export type PatientFamilyMember = {
+  family_member_id: number;
+  patient_id: number;
+  first_name: string;
+  last_name: string;
+  relationship_label: string;
+  date_of_birth: string | null;
+  phn: string | null;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+};

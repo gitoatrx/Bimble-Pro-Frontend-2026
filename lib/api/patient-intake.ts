@@ -87,6 +87,7 @@ export type PatientIntakeCompletionResponse = {
   appointment_id: number;
   status: string;
   patient_id: number;
+  patient_access_token: string;
   service_name: string | null;
   summary: {
     visit_type: PatientVisitType;
