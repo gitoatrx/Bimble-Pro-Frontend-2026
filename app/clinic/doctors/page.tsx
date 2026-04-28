@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { doctorStatusLabel } from "@/lib/doctor/types";
 import { readClinicLoginSession } from "@/lib/clinic/session";
+import { formatCanadaPacificDateKey, formatCanadaPacificDateTime } from "@/lib/time-zone";
 import {
   deleteClinicDoctorInvite,
   fetchClinicDoctor,
@@ -109,18 +110,7 @@ function formatDateTime(value: unknown) {
     return "—";
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString("en-CA", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatCanadaPacificDateTime(value);
 }
 
 function formatDateOnly(value: unknown) {
@@ -128,12 +118,7 @@ function formatDateOnly(value: unknown) {
     return "—";
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleDateString("en-CA", {
+  return formatCanadaPacificDateKey(value, {
     year: "numeric",
     month: "short",
     day: "numeric",

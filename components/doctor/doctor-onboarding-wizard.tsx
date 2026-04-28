@@ -13,6 +13,7 @@ import { DoctorHlth2820Editor } from "@/components/doctor/doctor-hlth2820-editor
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { formatCanadaPacificDateKey } from "@/lib/time-zone";
 import {
   getLiveFutureDateError,
   getLiveDigitCountError,
@@ -212,7 +213,7 @@ const initialStep4FormState: DoctorHlth2991FormState = {
 
 function isoDateLabel(value: string) {
   if (!value) return "";
-  return new Date(`${value}T00:00:00`).toLocaleDateString("en-CA", {
+  return formatCanadaPacificDateKey(value, {
     year: "numeric",
     month: "short",
     day: "numeric",

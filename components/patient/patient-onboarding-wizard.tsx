@@ -22,6 +22,7 @@ import { FieldError } from "@/components/clinic-access/field-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ClinicOtpCard } from "@/components/clinic-access/clinic-otp-card";
+import { formatCanadaPacificDateKey, getCanadaPacificDateKey, shiftCanadaPacificDateKey } from "@/lib/time-zone";
 import {
   completePatientIntake,
   fetchPatientIntakeSlots,
@@ -221,27 +222,14 @@ function composeDateOfBirth(month: string, day: string, year: string) {
 
 function isFutureDateOfBirth(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const today = new Date();
-  const todayUtc = Date.UTC(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
   const [year, month, day] = value.split("-").map(Number);
-  const dobUtc = Date.UTC(year, month - 1, day);
-  return dobUtc > todayUtc;
+  const dobKey = `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+  return dobKey > getCanadaPacificDateKey();
 }
 
 function nextDates(count: number): string[] {
-  const out: string[] = [];
-  const base = new Date();
-  base.setHours(0, 0, 0, 0);
-  for (let i = 0; i < count; i++) {
-    const d = new Date(base);
-    d.setDate(d.getDate() + i);
-    out.push(d.toISOString().split("T")[0]!);
-  }
-  return out;
+  const base = getCanadaPacificDateKey();
+  return Array.from({ length: count }, (_, index) => shiftCanadaPacificDateKey(base, index));
 }
 
 const TIME_SLOTS = [
@@ -1048,8 +1036,7 @@ export function PatientOnboardingWizard() {
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</p>
             <div className="flex gap-2 overflow-x-auto pb-2">
               {(availableDates.length ? availableDates : nextDates(14)).map((key) => {
-                const d = new Date(key + "T12:00:00");
-                const label = d.toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" });
+                const label = formatCanadaPacificDateKey(key, { weekday: "short", month: "short", day: "numeric" });
                 const sel = draft.appointmentDate === key;
                 return (
                   <button

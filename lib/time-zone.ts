@@ -6,6 +6,23 @@ function toDate(value: CanadaPacificDateInput) {
   return value instanceof Date ? value : new Date(value);
 }
 
+function parseIsoDateKey(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+
+  return { year, month, day };
+}
+
 function partsToIsoDate(parts: Intl.DateTimeFormatPart[]) {
   const year = parts.find((part) => part.type === "year")?.value ?? "0000";
   const month = parts.find((part) => part.type === "month")?.value ?? "01";
@@ -22,8 +39,8 @@ export function formatCanadaPacificTime(
   options: Intl.DateTimeFormatOptions = {},
 ) {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: CANADA_PACIFIC_TIME_ZONE,
     ...options,
+    timeZone: CANADA_PACIFIC_TIME_ZONE,
   }).format(toDate(value));
 }
 
@@ -40,6 +57,32 @@ export function getCanadaPacificDateKey(value: CanadaPacificDateInput = new Date
   }).formatToParts(date);
 
   return partsToIsoDate(parts);
+}
+
+/**
+ * Shifts a YYYY-MM-DD key by a number of days without using the browser's local time zone.
+ */
+export function shiftCanadaPacificDateKey(value: string, days: number) {
+  const parsed = parseIsoDateKey(value);
+  if (!parsed) {
+    return value;
+  }
+
+  const shifted = new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day + days));
+  return shifted.toISOString().slice(0, 10);
+}
+
+/**
+ * Formats a YYYY-MM-DD date key in Canada Pacific time.
+ */
+export function formatCanadaPacificDateKey(
+  value: string,
+  options: Intl.DateTimeFormatOptions = {},
+) {
+  const parsed = parseIsoDateKey(value);
+  const date = parsed ? new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day, 12)) : new Date(value);
+
+  return formatCanadaPacificTime(date, options);
 }
 
 /**

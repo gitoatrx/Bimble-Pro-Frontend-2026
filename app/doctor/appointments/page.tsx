@@ -6,16 +6,19 @@ import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
+import {
+  formatCanadaPacificDateKey,
+  getCanadaPacificDateKey,
+  shiftCanadaPacificDateKey,
+} from "@/lib/time-zone";
 import { fetchDoctorAppointments, type DoctorAppointment } from "@/lib/api/doctor-dashboard";
 
 function todayKey() {
-  return new Date().toISOString().split("T")[0];
+  return getCanadaPacificDateKey();
 }
 
 function offsetKey(base: string, n: number) {
-  const d = new Date(`${base}T00:00:00`);
-  d.setDate(d.getDate() + n);
-  return d.toISOString().split("T")[0];
+  return shiftCanadaPacificDateKey(base, n);
 }
 
 const TODAY = todayKey();
@@ -99,7 +102,7 @@ export default function DoctorAppointmentsPage() {
               <ChevronLeft className="h-4 w-4" />
             </button>
             <p className="font-display text-lg font-semibold text-foreground">
-              {new Date(`${weekStart}T00:00:00`).toLocaleDateString("en-CA", {
+              {formatCanadaPacificDateKey(weekStart, {
                 month: "long",
                 year: "numeric",
               })}
@@ -114,7 +117,8 @@ export default function DoctorAppointmentsPage() {
 
           <div className="grid grid-cols-7 gap-1.5">
             {days.map((key) => {
-              const day = new Date(`${key}T00:00:00`);
+              const weekday = formatCanadaPacificDateKey(key, { weekday: "short" });
+              const day = formatCanadaPacificDateKey(key, { day: "numeric" });
               const count = byDate.get(key)?.length ?? 0;
               const isSelected = key === selectedKey;
               const isToday = key === TODAY;
@@ -136,7 +140,7 @@ export default function DoctorAppointmentsPage() {
                       isSelected ? "text-primary-foreground/70" : "text-muted-foreground",
                     )}
                   >
-                    {day.toLocaleDateString("en-CA", { weekday: "short" })}
+                    {weekday}
                   </span>
                   <span
                     className={cn(
@@ -144,7 +148,7 @@ export default function DoctorAppointmentsPage() {
                       isSelected ? "text-primary-foreground" : isToday ? "text-primary" : "text-foreground",
                     )}
                   >
-                    {day.getDate()}
+                    {day}
                   </span>
                   {count > 0 ? (
                     <span

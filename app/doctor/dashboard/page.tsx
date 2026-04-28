@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
+import { formatCanadaPacificDateKey } from "@/lib/time-zone";
 import { fetchDoctorSummary, fetchDoctorToday, type DoctorAppointment, type DoctorSummary, type DoctorTodayResponse } from "@/lib/api/doctor-dashboard";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -20,7 +21,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 function formatTodayLabel(value?: string) {
   if (!value) return "Today";
-  return new Date(`${value}T00:00:00`).toLocaleDateString("en-CA", {
+  return formatCanadaPacificDateKey(value, {
     weekday: "long",
     month: "long",
     day: "numeric",
