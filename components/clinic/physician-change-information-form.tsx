@@ -17,7 +17,12 @@ import {
   updateLiveTenDigitField,
 } from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
-import { digitsOnly } from "@/components/doctor/doctor-form-shared";
+import {
+  capitalizeLeadingLetter,
+  digitsOnly,
+  normalizeNameInput,
+  validateEmail,
+} from "@/components/doctor/doctor-form-shared";
 
 const FORM_TITLE = "Physician Change Information Form";
 const FIXED_FORM_TYPE = "CHANGE";
@@ -432,6 +437,9 @@ function PhysicianChangeDialog({
       nextErrors.officePrivatePhone = "Office private phone must be a valid 10-digit number.";
     }
     addRequired("officeEmailAddress", "Office email address is required.");
+    if (current.officeEmailAddress.trim() && !validateEmail(current.officeEmailAddress)) {
+      nextErrors.officeEmailAddress = "Enter a valid email address.";
+    }
     addRequired("afterHoursPhone", "After hours phone is required.");
     if (current.afterHoursPhone.trim() && !hasExactDigits(current.afterHoursPhone, 10)) {
       nextErrors.afterHoursPhone = "After hours phone must be a valid 10-digit number.";
@@ -575,7 +583,10 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.name}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, name: event.target.value }))
+                        setFormState((current) => ({
+                          ...current,
+                          name: normalizeNameInput(event.target.value),
+                        }))
                       }
                     />
                   </DialogField>
@@ -594,7 +605,10 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.address}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, address: event.target.value }))
+                        setFormState((current) => ({
+                          ...current,
+                          address: capitalizeLeadingLetter(event.target.value),
+                        }))
                       }
                     />
                   </DialogField>
@@ -602,7 +616,10 @@ function PhysicianChangeDialog({
                     <Input
                       value={formState.specialty}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, specialty: event.target.value }))
+                        setFormState((current) => ({
+                          ...current,
+                          specialty: capitalizeLeadingLetter(event.target.value),
+                        }))
                       }
                     />
                   </DialogField>
@@ -616,7 +633,7 @@ function PhysicianChangeDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          officeContactName: event.target.value,
+                          officeContactName: normalizeNameInput(event.target.value),
                         }))
                       }
                     />
@@ -670,7 +687,7 @@ function PhysicianChangeDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          officeEmailAddress: event.target.value,
+                          officeEmailAddress: event.target.value.trim(),
                         }))
                       }
                     />
@@ -727,7 +744,7 @@ function PhysicianChangeDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          afterHoursDescription: event.target.value,
+                          afterHoursDescription: capitalizeLeadingLetter(event.target.value),
                         }))
                       }
                     />
@@ -797,11 +814,14 @@ function PhysicianChangeDialog({
                     </DialogField>
                     <DialogField label="Backup name" required error={fieldErrors.backupName}>
                       <Input
-                        value={formState.backupName}
-                        onChange={(event) =>
-                          setFormState((current) => ({ ...current, backupName: event.target.value }))
-                        }
-                      />
+                      value={formState.backupName}
+                      onChange={(event) =>
+                        setFormState((current) => ({
+                          ...current,
+                          backupName: normalizeNameInput(event.target.value),
+                        }))
+                      }
+                    />
                     </DialogField>
                     <DialogField label="Backup phone" required error={fieldErrors.backupPhone}>
                     <Input
@@ -817,14 +837,14 @@ function PhysicianChangeDialog({
                       error={fieldErrors.hospitalAffiliation}
                     >
                       <Input
-                        value={formState.hospitalAffiliation}
-                        onChange={(event) =>
-                          setFormState((current) => ({
-                            ...current,
-                            hospitalAffiliation: event.target.value,
-                          }))
-                        }
-                      />
+                      value={formState.hospitalAffiliation}
+                      onChange={(event) =>
+                        setFormState((current) => ({
+                          ...current,
+                          hospitalAffiliation: capitalizeLeadingLetter(event.target.value),
+                        }))
+                      }
+                    />
                     </DialogField>
                     <DialogField label="Hospital phone" required error={fieldErrors.hospitalPhone}>
                     <Input
@@ -840,14 +860,14 @@ function PhysicianChangeDialog({
                       error={fieldErrors.otherAffiliation}
                     >
                       <Input
-                        value={formState.otherAffiliation}
-                        onChange={(event) =>
-                          setFormState((current) => ({
-                            ...current,
-                            otherAffiliation: event.target.value,
-                          }))
-                        }
-                      />
+                      value={formState.otherAffiliation}
+                      onChange={(event) =>
+                        setFormState((current) => ({
+                          ...current,
+                          otherAffiliation: capitalizeLeadingLetter(event.target.value),
+                        }))
+                      }
+                    />
                     </DialogField>
                     <DialogField label="Other phone" required error={fieldErrors.otherPhone}>
                     <Input
@@ -872,7 +892,7 @@ function PhysicianChangeDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          specialHandling: event.target.value,
+                          specialHandling: capitalizeLeadingLetter(event.target.value),
                         }))
                       }
                       className="min-h-[120px] w-full rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"

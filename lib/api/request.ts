@@ -2,6 +2,7 @@ export class ApiRequestError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    public readonly responseData: unknown = null,
   ) {
     super(message);
     this.name = "ApiRequestError";
@@ -41,7 +42,7 @@ export async function apiRequest<TResponse, TBody = undefined>({
         ? responseData.message
         : "Request failed.";
 
-    throw new ApiRequestError(message, response.status);
+    throw new ApiRequestError(message, response.status, responseData);
   }
 
   return responseData as TResponse;

@@ -8,7 +8,6 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Clock,
   HeartPulse,
   MapPin,
   Package,
@@ -25,6 +24,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ClinicOtpCard } from "@/components/clinic-access/clinic-otp-card";
 import { formatCanadaPacificDateKey, getCanadaPacificDateKey, shiftCanadaPacificDateKey } from "@/lib/time-zone";
+import {
+  capitalizeLeadingLetter,
+  digitsOnly,
+  formatPostalCodeInput,
+  getLiveEmailError,
+  getLiveFutureDateError,
+  normalizeCityInput,
+  normalizeNameInput,
+  normalizeProvinceInput,
+  normalizeProvinceCodeInput,
+  validateEmail,
+} from "@/lib/form-validation";
 import {
   completePatientIntake,
   fetchBimblePharmacies,
@@ -102,7 +113,7 @@ function isValidAddress(value: string) {
   const trimmed = value.trim();
   return (
     Boolean(trimmed) &&
-    /^[\p{L}\d][\p{L}\d\s.'#/-]*$/u.test(trimmed) &&
+    /^[\p{L}\d][\p{L}\d\s.'#,\-\/]*$/u.test(trimmed) &&
     /\p{L}/u.test(trimmed)
   );
 }
@@ -111,13 +122,6 @@ function maskPhone(phone: string) {
   const d = phone.replace(/\D/g, "");
   if (d.length < 4) return "***";
   return `***-***-${d.slice(-4)}`;
-}
-
-function formatPhoneInput(raw: string) {
-  const d = raw.replace(/\D/g, "").slice(0, 10);
-  if (d.length <= 3) return d;
-  if (d.length <= 6) return `(${d.slice(0, 3)}) ${d.slice(3)}`;
-  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
 }
 
 function splitDateOfBirth(value: string) {
@@ -398,9 +402,9 @@ export function PatientOnboardingWizard() {
   }, [draft.dateOfBirth]);
 
   function validatePhone(): boolean {
-    const d = draft.phone.replace(/\D/g, "");
-    if (d.length < 10) {
-      setErrors({ phone: "Enter a valid 10-digit Canadian phone number." });
+    const d = digitsOnly(draft.phone);
+    if (d.length !== 10) {
+      setErrors({ phone: "Enter exactly 10 digits for your phone number." });
       return false;
     }
     return true;
@@ -410,8 +414,9 @@ export function PatientOnboardingWizard() {
     if (!validatePhone()) return;
     setSubmitting(true);
     try {
+      const phone = digitsOnly(draft.phone);
       const response = await startPatientIntakePhone({
-        phone: draft.phone,
+        phone,
         careReason: draft.careReason || "General consultation",
         careLocation: draft.careLocation || undefined,
         careLatitude: draft.careLatitude,
@@ -479,9 +484,9 @@ export function PatientOnboardingWizard() {
     }
     if (!draft.noPhn) {
       const phn = draft.phn.replace(/\D/g, "");
-      if (phn.length < 10) e.phn = "Enter a valid PHN (10 digits), or check “I don’t have a PHN”.";
+      if (phn.length !== 10) e.phn = "Enter a valid PHN (10 digits), or check “I don’t have a PHN”.";
     } else {
-      if (!draft.emailIfNoPhn.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.emailIfNoPhn)) {
+      if (!draft.emailIfNoPhn.trim() || !validateEmail(draft.emailIfNoPhn)) {
         e.emailIfNoPhn = "A valid email is required when you don’t have a PHN.";
       }
     }
@@ -497,7 +502,7 @@ export function PatientOnboardingWizard() {
     else if (!isValidName(draft.lastName)) e.lastName = "Use letters only for the last name.";
     if (!draft.addressLine.trim()) e.addressLine = "Street address is required.";
     else if (!isValidAddress(draft.addressLine)) {
-      e.addressLine = "Use letters only or a mix of letters and numbers for the street address.";
+      e.addressLine = "Use a valid street address, including commas if needed.";
     }
     if (!draft.city.trim()) e.city = "City is required.";
     else if (!isValidCity(draft.city)) e.city = "Use letters only for the city.";
@@ -533,25 +538,11 @@ export function PatientOnboardingWizard() {
       return;
     }
 
-    if (!draft.preferredPharmacyName.trim()) {
-      setErrors({ preferredPharmacyName: "Please choose a pharmacy before confirming the booking." });
-      return;
-    }
-
-    const preferredPharmacyDetails = {
-      preferredPharmacyName: draft.preferredPharmacyName,
-      preferredPharmacyAddress: draft.preferredPharmacyAddress,
-      preferredPharmacyCity: draft.preferredPharmacyCity,
-      preferredPharmacyPostalCode: draft.preferredPharmacyPostalCode,
-      preferredPharmacyPhone: draft.preferredPharmacyPhone,
-    };
-
     setSubmitting(true);
     try {
       const response = await completePatientIntake(intakeToken, {
         fulfillment,
         pharmacyChoice,
-        ...preferredPharmacyDetails,
       });
       const completionData: PatientIntakeCompletion = {
         appointmentId: response.appointment_id,
@@ -599,7 +590,6 @@ export function PatientOnboardingWizard() {
     <ClinicFlowShell
       backHref="/"
       backLabel="Back to home"
-      workspaceLabel="Find care"
       contentClassName="max-w-2xl"
     >
       {(draft.careReason || draft.careLocation) && step !== "complete" ? (
@@ -648,9 +638,17 @@ export function PatientOnboardingWizard() {
               type="tel"
               inputMode="numeric"
               autoComplete="tel"
-              placeholder="(604) 555-0123"
+              placeholder="6045550123"
+              maxLength={10}
               value={draft.phone}
-              onChange={(e) => setField("phone", formatPhoneInput(e.target.value))}
+              onChange={(e) => {
+                const nextPhone = digitsOnly(e.target.value).slice(0, 10);
+                setField("phone", nextPhone);
+                setErrors((current) => ({
+                  ...current,
+                  phone: nextPhone.length === 0 || nextPhone.length === 10 ? "" : "Enter exactly 10 digits for your phone number.",
+                }));
+              }}
               className="h-12 rounded-xl border-border"
             />
             <FieldError message={errors.phone} />
@@ -719,27 +717,37 @@ export function PatientOnboardingWizard() {
                 className="h-12 rounded-xl border-border"
               />
               <Input
-                inputMode="numeric"
-                placeholder="DD"
-                value={dobDay}
-                onChange={(e) => {
-                  const day = e.target.value.replace(/\D/g, "").slice(0, 2);
-                  setDobDay(day);
-                  setField("dateOfBirth", composeDateOfBirth(dobMonth, day, dobYear));
-                }}
-                className="h-12 rounded-xl border-border"
-              />
+              inputMode="numeric"
+              placeholder="DD"
+              value={dobDay}
+              onChange={(e) => {
+                const day = e.target.value.replace(/\D/g, "").slice(0, 2);
+                setDobDay(day);
+                const nextDate = composeDateOfBirth(dobMonth, day, dobYear);
+                setField("dateOfBirth", nextDate);
+                setErrors((current) => ({
+                  ...current,
+                  dateOfBirth: getLiveFutureDateError(nextDate, "Date of birth"),
+                }));
+              }}
+              className="h-12 rounded-xl border-border"
+            />
               <Input
-                inputMode="numeric"
-                placeholder="YYYY"
-                value={dobYear}
-                onChange={(e) => {
-                  const year = e.target.value.replace(/\D/g, "").slice(0, 4);
-                  setDobYear(year);
-                  setField("dateOfBirth", composeDateOfBirth(dobMonth, dobDay, year));
-                }}
-                className="h-12 rounded-xl border-border"
-              />
+              inputMode="numeric"
+              placeholder="YYYY"
+              value={dobYear}
+              onChange={(e) => {
+                const year = e.target.value.replace(/\D/g, "").slice(0, 4);
+                setDobYear(year);
+                const nextDate = composeDateOfBirth(dobMonth, dobDay, year);
+                setField("dateOfBirth", nextDate);
+                setErrors((current) => ({
+                  ...current,
+                  dateOfBirth: getLiveFutureDateError(nextDate, "Date of birth"),
+                }));
+              }}
+              className="h-12 rounded-xl border-border"
+            />
             </div>
             <FieldError message={errors.dateOfBirth} />
           </div>
@@ -762,7 +770,14 @@ export function PatientOnboardingWizard() {
                 inputMode="numeric"
                 placeholder="1234 567 890"
                 value={draft.phn}
-                onChange={(e) => setField("phn", e.target.value.replace(/\D/g, "").slice(0, 10))}
+                onChange={(e) => {
+                  const nextPhn = digitsOnly(e.target.value).slice(0, 10);
+                  setField("phn", nextPhn);
+                  setErrors((current) => ({
+                    ...current,
+                    phn: nextPhn.length === 0 || nextPhn.length === 10 ? "" : "Enter exactly 10 digits for your PHN.",
+                  }));
+                }}
                 className="h-12 rounded-xl border-border"
               />
               <FieldError message={errors.phn} />
@@ -774,7 +789,14 @@ export function PatientOnboardingWizard() {
                 type="email"
                 placeholder="you@example.com"
                 value={draft.emailIfNoPhn}
-                onChange={(e) => setField("emailIfNoPhn", e.target.value)}
+                onChange={(e) => {
+                  const nextEmail = e.target.value;
+                  setField("emailIfNoPhn", nextEmail);
+                  setErrors((current) => ({
+                    ...current,
+                    emailIfNoPhn: nextEmail.trim() ? getLiveEmailError(nextEmail, "email") : "",
+                  }));
+                }}
                 className="h-12 rounded-xl border-border"
               />
               <FieldError message={errors.emailIfNoPhn} />
@@ -858,7 +880,7 @@ export function PatientOnboardingWizard() {
             <GooglePlacesAddressInput
               id="patient-street-address"
               value={draft.addressLine}
-              onChange={(value) => setField("addressLine", value)}
+              onChange={(value) => setField("addressLine", capitalizeLeadingLetter(value))}
               onAddressSelected={handleAddressSelected}
               placeholder="Start typing your address"
             />
@@ -936,12 +958,34 @@ export function PatientOnboardingWizard() {
                     lastName: draft.lastName,
                     addressLine: draft.addressLine,
                     city: draft.city,
-                    province: draft.province.trim(),
+                    province: normalizeProvinceCodeInput(draft.province),
                     postalCode: draft.postalCode,
                     gender: draft.gender,
                   });
                   persist(draft, "visit_type");
                 } catch (error) {
+                  if (error && typeof error === "object" && "responseData" in error) {
+                    const responseData = (error as { responseData?: unknown }).responseData;
+                    const detail =
+                      responseData &&
+                      typeof responseData === "object" &&
+                      "detail" in responseData
+                        ? (responseData as { detail?: unknown }).detail
+                        : null;
+                    const details = Array.isArray(detail) ? detail : [];
+                    const provinceError = details.find((entry) => {
+                      if (!entry || typeof entry !== "object") return false;
+                      const loc = (entry as { loc?: unknown }).loc;
+                      return Array.isArray(loc) && loc.includes("province");
+                    });
+                    if (provinceError && typeof provinceError === "object") {
+                      const msg = (provinceError as { msg?: unknown }).msg;
+                      setErrors({
+                        province: typeof msg === "string" ? msg : "Province is invalid.",
+                      });
+                      return;
+                    }
+                  }
                   setErrors({
                     firstName: error instanceof Error ? error.message : "Could not save profile.",
                   });
@@ -1267,7 +1311,6 @@ export function PatientOnboardingWizard() {
                       );
                     })}
                   </div>
-                  <FieldError message={errors.preferredPharmacyName} />
                 </div>
               ) : null}
             </div>

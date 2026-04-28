@@ -8,6 +8,8 @@ import {
   FieldErrorState,
   SignaturePad,
   digitsOnly,
+  capitalizeLeadingLetter,
+  normalizeNameInput,
 } from "@/components/doctor/doctor-form-shared";
 import {
   fetchDoctorDuplicatePrescriptionPadOrder,
@@ -370,10 +372,10 @@ export function DoctorDuplicatePrescriptionPadOrderEditor({
         <section className="rounded-3xl border border-border p-5">
           <div className="grid gap-4 md:grid-cols-2">
             <FieldBlock label="Surname" required error={errors.surname}>
-              <Input value={form.surname} onChange={(event) => setField("surname", event.target.value)} placeholder="Sharma" />
+              <Input value={form.surname} onChange={(event) => setField("surname", normalizeNameInput(event.target.value))} placeholder="Sharma" />
             </FieldBlock>
             <FieldBlock label="Given names" required error={errors.given_names}>
-              <Input value={form.given_names} onChange={(event) => setField("given_names", event.target.value)} placeholder="Greg Sharma" />
+              <Input value={form.given_names} onChange={(event) => setField("given_names", normalizeNameInput(event.target.value))} placeholder="Greg Sharma" />
             </FieldBlock>
             <FieldBlock label="College ID number" required error={errors.college_id_number}>
               <Input
@@ -386,14 +388,14 @@ export function DoctorDuplicatePrescriptionPadOrderEditor({
               <Input
                 type="tel"
                 value={form.primary_phone}
-                onChange={(event) => setField("primary_phone", digitsOnly(event.target.value))}
+                onChange={(event) => setField("primary_phone", digitsOnly(event.target.value).slice(0, 10))}
                 placeholder="6045551212"
               />
             </FieldBlock>
             <FieldBlock label="Primary address" required error={errors.primary_address} className="md:col-span-2">
               <Input
                 value={form.primary_address}
-                onChange={(event) => setField("primary_address", event.target.value)}
+                onChange={(event) => setField("primary_address", capitalizeLeadingLetter(event.target.value))}
                 placeholder="123 Main Street, Mohali, BC V1V1V1"
               />
             </FieldBlock>
@@ -420,7 +422,7 @@ export function DoctorDuplicatePrescriptionPadOrderEditor({
             <FieldBlock label="Alternate address" required error={errors.alternate_address} className="md:col-span-2">
               <Input
                 value={form.alternate_address}
-                onChange={(event) => setField("alternate_address", event.target.value)}
+                onChange={(event) => setField("alternate_address", capitalizeLeadingLetter(event.target.value))}
                 placeholder="456 Clinic Ave, Vancouver, BC V5H0A1"
               />
             </FieldBlock>
@@ -428,7 +430,7 @@ export function DoctorDuplicatePrescriptionPadOrderEditor({
               <Input
                 type="tel"
                 value={form.alternate_phone}
-                onChange={(event) => setField("alternate_phone", digitsOnly(event.target.value))}
+                onChange={(event) => setField("alternate_phone", digitsOnly(event.target.value).slice(0, 10))}
                 placeholder="6045553434"
               />
             </FieldBlock>
@@ -460,7 +462,7 @@ export function DoctorDuplicatePrescriptionPadOrderEditor({
             <FieldBlock label="Delivery address" required error={errors.delivery_address} className="md:col-span-2">
               <Input
                 value={form.delivery_address}
-                onChange={(event) => setField("delivery_address", event.target.value)}
+                onChange={(event) => setField("delivery_address", capitalizeLeadingLetter(event.target.value))}
                 placeholder="456 Clinic Ave, Vancouver, BC V5H0A1"
               />
             </FieldBlock>
@@ -468,7 +470,7 @@ export function DoctorDuplicatePrescriptionPadOrderEditor({
               <Input
                 type="tel"
                 value={form.delivery_phone}
-                onChange={(event) => setField("delivery_phone", digitsOnly(event.target.value))}
+                onChange={(event) => setField("delivery_phone", digitsOnly(event.target.value).slice(0, 10))}
                 placeholder="6045553434"
               />
             </FieldBlock>
@@ -476,13 +478,13 @@ export function DoctorDuplicatePrescriptionPadOrderEditor({
         </section>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <FieldBlock label="Signature label" required error={errors.signature_label} className="md:col-span-2">
-            <Input
-              value={form.signature_label}
-              onChange={(event) => setField("signature_label", event.target.value)}
-              placeholder="Dr Greg Sharma"
-            />
-          </FieldBlock>
+            <FieldBlock label="Signature label" required error={errors.signature_label} className="md:col-span-2">
+              <Input
+                value={form.signature_label}
+                onChange={(event) => setField("signature_label", capitalizeLeadingLetter(event.target.value))}
+                placeholder="Dr Greg Sharma"
+              />
+            </FieldBlock>
           <FieldBlock label="Signature" required error={errors.signature} className="md:col-span-2">
             <SignaturePad
               showHelperText={false}

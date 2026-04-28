@@ -13,9 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
+  capitalizeLeadingLetter,
   hasExactDigits,
   updateLiveFutureDateField,
   updateLiveTenDigitField,
+  normalizeCityInput,
+  normalizeNameInput,
+  validateEmail,
 } from "@/lib/form-validation";
 import {
   fetchClinicFacilityForm,
@@ -701,6 +705,10 @@ function MSPApplicationDialog({
       nextErrors.contactFaxNumber = "Contact fax number must be a valid 10-digit number.";
     }
 
+    if (current.contactEmail.trim() && !validateEmail(current.contactEmail)) {
+      nextErrors.contactEmail = "Enter a valid email address.";
+    }
+
     if (!current.confirmDeclarations) {
       nextErrors.confirmDeclarations = "You must confirm the declarations to continue.";
     }
@@ -887,7 +895,7 @@ function MSPApplicationDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          administratorFirstName: event.target.value,
+                          administratorFirstName: normalizeNameInput(event.target.value),
                         }))
                       }
                     />
@@ -906,7 +914,7 @@ function MSPApplicationDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          administratorLastName: event.target.value,
+                          administratorLastName: normalizeNameInput(event.target.value),
                         }))
                       }
                     />
@@ -945,7 +953,7 @@ function MSPApplicationDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          facilityOrPracticeName: event.target.value,
+                          facilityOrPracticeName: capitalizeLeadingLetter(event.target.value),
                         }))
                       }
                     />
@@ -1005,7 +1013,7 @@ function MSPApplicationDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          contactEmail: event.target.value,
+                          contactEmail: event.target.value.trim(),
                         }))
                       }
                     />
@@ -1068,7 +1076,7 @@ function MSPApplicationDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          facilityPhysicalAddress: event.target.value,
+                          facilityPhysicalAddress: capitalizeLeadingLetter(event.target.value),
                         }))
                       }
                     />
@@ -1088,7 +1096,7 @@ function MSPApplicationDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          facilityPhysicalCity: event.target.value,
+                          facilityPhysicalCity: normalizeCityInput(event.target.value),
                         }))
                       }
                     />
@@ -1144,7 +1152,7 @@ function MSPApplicationDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          facilityMailingCity: event.target.value,
+                          facilityMailingCity: normalizeCityInput(event.target.value),
                         }))
                       }
                     />

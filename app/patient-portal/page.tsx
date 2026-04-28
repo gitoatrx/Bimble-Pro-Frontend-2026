@@ -158,7 +158,6 @@ export default function PatientPortalLoginPage() {
     <ClinicFlowShell
       backHref="/"
       backLabel="Back to home"
-      workspaceLabel="Find care"
       contentClassName="max-w-xl"
     >
       <div>
