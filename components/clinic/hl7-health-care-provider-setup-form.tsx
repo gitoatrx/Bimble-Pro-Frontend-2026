@@ -15,9 +15,11 @@ import {
   type ClinicHl7SupportedContentType,
 } from "@/lib/api/clinic-dashboard";
 import {
+  capitalizeLeadingLetter,
   hasExactDigits,
   updateLiveFutureDateField,
   updateLiveTenDigitField,
+  validateEmail,
 } from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { digitsOnly } from "@/components/doctor/doctor-form-shared";
@@ -282,6 +284,9 @@ function Hl7SetupDialog({
       nextErrors.telephoneNumber = "Telephone number must be a valid 10-digit number.";
     }
     addRequired("email", "Email is required.");
+    if (current.email.trim() && !validateEmail(current.email)) {
+      nextErrors.email = "Enter a valid email address.";
+    }
     addRequired("implementationDate", "Implementation date is required.");
     addRequired("fallbackFaxNumber", "Fax number is required.");
     if (current.fallbackFaxNumber.trim() && !hasExactDigits(current.fallbackFaxNumber, 10)) {
@@ -296,6 +301,9 @@ function Hl7SetupDialog({
       nextErrors.emrTelephoneNumber = "EMR telephone number must be a valid 10-digit number.";
     }
     addRequired("emrEmail", "EMR email is required.");
+    if (current.emrEmail.trim() && !validateEmail(current.emrEmail)) {
+      nextErrors.emrEmail = "Enter a valid email address.";
+    }
 
     if (current.setupInstruction === "ADD_EXISTING" && !current.existingExcellerisUserId.trim()) {
       nextErrors.existingExcellerisUserId = "Existing Excelleris user ID is required.";
@@ -418,7 +426,10 @@ function Hl7SetupDialog({
                     <Input
                       value={formState.clinicName}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, clinicName: event.target.value }))
+                        setFormState((current) => ({
+                          ...current,
+                          clinicName: capitalizeLeadingLetter(event.target.value),
+                        }))
                       }
                     />
                   </DialogField>
@@ -432,7 +443,7 @@ function Hl7SetupDialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          primaryContact: event.target.value,
+                          primaryContact: capitalizeLeadingLetter(event.target.value),
                         }))
                       }
                     />
@@ -465,7 +476,7 @@ function Hl7SetupDialog({
                       type="email"
                       value={formState.email}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, email: event.target.value }))
+                        setFormState((current) => ({ ...current, email: event.target.value.trim() }))
                       }
                     />
                   </DialogField>
@@ -478,7 +489,10 @@ function Hl7SetupDialog({
                       rows={2}
                       value={formState.address}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, address: event.target.value }))
+                        setFormState((current) => ({
+                          ...current,
+                          address: capitalizeLeadingLetter(event.target.value),
+                        }))
                       }
                       className="min-h-[84px] w-full rounded-2xl border border-border bg-white px-4 py-3 text-sm text-foreground shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                     />
@@ -603,7 +617,10 @@ function Hl7SetupDialog({
                     <Input
                       value={formState.emrName}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, emrName: event.target.value }))
+                        setFormState((current) => ({
+                          ...current,
+                          emrName: capitalizeLeadingLetter(event.target.value),
+                        }))
                       }
                     />
                   </DialogField>
@@ -627,7 +644,10 @@ function Hl7SetupDialog({
                     <Input
                       value={formState.emrContact}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, emrContact: event.target.value }))
+                        setFormState((current) => ({
+                          ...current,
+                          emrContact: capitalizeLeadingLetter(event.target.value),
+                        }))
                       }
                     />
                   </DialogField>
@@ -659,7 +679,7 @@ function Hl7SetupDialog({
                       type="email"
                       value={formState.emrEmail}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, emrEmail: event.target.value }))
+                        setFormState((current) => ({ ...current, emrEmail: event.target.value.trim() }))
                       }
                     />
                   </DialogField>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
@@ -62,6 +62,19 @@ import {
   getCanadaPacificDateKey,
   shiftCanadaPacificDateKey,
 } from "@/lib/time-zone";
+import {
+  getLiveAlphabeticError,
+  getLiveFutureDateError,
+  getLiveEmailError,
+  getLivePostalCodeError,
+  getLiveProvinceCodeError,
+  getLiveTenDigitError,
+  limitDigits,
+  normalizeNameInput,
+  normalizeCityInput,
+  normalizePostalCode,
+  normalizeProvinceCodeInput,
+} from "@/lib/form-validation";
 
 type ProfileDraft = {
   first_name: string;
@@ -74,6 +87,10 @@ type ProfileDraft = {
   province: string;
   postal_code: string;
 };
+
+type ProfileFormErrors = Partial<
+  Record<"first_name" | "last_name" | "phone" | "email" | "city" | "province" | "postal_code", string>
+>;
 
 type PortalNavItem = {
   id: "profile" | "appointments" | "history" | "requests" | "family";
@@ -100,6 +117,18 @@ type BookingDraft = {
   preferred_pharmacy_phone: string;
 };
 
+type FamilyForm = {
+  first_name: string;
+  last_name: string;
+  relationship_label: string;
+  date_of_birth: string;
+  email: string;
+  phn: string;
+  notes: string;
+};
+
+type FamilyFormErrors = Partial<Record<keyof Omit<FamilyForm, "email" | "notes">, string>>;
+
 const emptyProfileDraft: ProfileDraft = {
   first_name: "",
   last_name: "",
@@ -112,7 +141,7 @@ const emptyProfileDraft: ProfileDraft = {
   postal_code: "",
 };
 
-const emptyFamilyForm = {
+const emptyFamilyForm: FamilyForm = {
   first_name: "",
   last_name: "",
   relationship_label: "",
@@ -158,6 +187,12 @@ const TIME_SLOTS = [
 function nextDates(count: number): string[] {
   const base = getCanadaPacificDateKey();
   return Array.from({ length: count }, (_, index) => shiftCanadaPacificDateKey(base, index));
+}
+
+function formatCalendarDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  return `${match[2]}/${match[3]}/${match[1]}`;
 }
 
 function formatPhoneInput(raw: string) {
@@ -256,6 +291,7 @@ function SmallPill({
 
 export function PatientPortalDashboard() {
   const router = useRouter();
+  const rescheduleDateInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [session, setSession] = useState<PatientLoginSession | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -268,10 +304,12 @@ export function PatientPortalDashboard() {
   const [services, setServices] = useState<PatientPortalService[]>([]);
 
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
+  const [profileFormErrors, setProfileFormErrors] = useState<ProfileFormErrors>({});
   const [profileMessage, setProfileMessage] = useState("");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const [familyForm, setFamilyForm] = useState(emptyFamilyForm);
+  const [familyFormErrors, setFamilyFormErrors] = useState<FamilyFormErrors>({});
   const [familyMessage, setFamilyMessage] = useState("");
   const [isSavingFamily, setIsSavingFamily] = useState(false);
   const [isFamilyFormOpen, setIsFamilyFormOpen] = useState(false);
@@ -400,17 +438,17 @@ export function PatientPortalDashboard() {
         setRequests(nextRequests);
         setFamilyMembers(nextFamilyMembers);
         setServices(nextServices);
-        setProfileDraft({
-          first_name: nextProfile.first_name ?? "",
-          last_name: nextProfile.last_name ?? "",
-          phone: nextProfile.phone ?? "",
-          email: nextProfile.email ?? "",
-          address_line_1: nextProfile.address_line_1 ?? "",
-          address_line_2: nextProfile.address_line_2 ?? "",
-          city: nextProfile.city ?? "",
-          province: nextProfile.province ?? "",
-          postal_code: nextProfile.postal_code ?? "",
-        });
+      setProfileDraft({
+        first_name: normalizeNameInput(nextProfile.first_name ?? ""),
+        last_name: normalizeNameInput(nextProfile.last_name ?? ""),
+        phone: limitDigits(nextProfile.phone ?? "", 10),
+        email: nextProfile.email ?? "",
+        address_line_1: nextProfile.address_line_1 ?? "",
+        address_line_2: nextProfile.address_line_2 ?? "",
+        city: normalizeCityInput(nextProfile.city ?? ""),
+        province: normalizeProvinceCodeInput(nextProfile.province ?? ""),
+        postal_code: normalizePostalCode(nextProfile.postal_code ?? ""),
+      });
       } catch (error) {
         if (cancelled) return;
         setLoadError(
@@ -613,23 +651,37 @@ export function PatientPortalDashboard() {
 
   async function handleSaveProfile() {
     if (!session) return;
+    if (!validateProfileDraft()) {
+      setProfileMessage("Please fix the highlighted fields.");
+      return;
+    }
     setIsSavingProfile(true);
     setProfileMessage("");
 
     try {
-      const updated = await updatePatientProfile(session.accessToken, profileDraft);
+      const updated = await updatePatientProfile(session.accessToken, {
+        ...profileDraft,
+        first_name: profileDraft.first_name.trim(),
+        last_name: profileDraft.last_name.trim(),
+        phone: limitDigits(profileDraft.phone, 10),
+        email: profileDraft.email.trim(),
+        city: normalizeCityInput(profileDraft.city),
+        province: normalizeProvinceCodeInput(profileDraft.province),
+        postal_code: normalizePostalCode(profileDraft.postal_code),
+      });
       setProfile(updated);
       setProfileDraft({
-        first_name: updated.first_name ?? "",
-        last_name: updated.last_name ?? "",
-        phone: updated.phone ?? "",
+        first_name: normalizeNameInput(updated.first_name ?? ""),
+        last_name: normalizeNameInput(updated.last_name ?? ""),
+        phone: limitDigits(updated.phone ?? "", 10),
         email: updated.email ?? "",
         address_line_1: updated.address_line_1 ?? "",
         address_line_2: updated.address_line_2 ?? "",
-        city: updated.city ?? "",
-        province: updated.province ?? "",
-        postal_code: updated.postal_code ?? "",
+        city: normalizeCityInput(updated.city ?? ""),
+        province: normalizeProvinceCodeInput(updated.province ?? ""),
+        postal_code: normalizePostalCode(updated.postal_code ?? ""),
       });
+      setProfileFormErrors({});
       setProfileMessage("Profile updated successfully.");
     } catch (error) {
       setProfileMessage(error instanceof Error ? error.message : "Could not save the profile.");
@@ -683,20 +735,25 @@ export function PatientPortalDashboard() {
 
   async function handleAddFamilyMember() {
     if (!session) return;
+    if (!validateFamilyForm()) {
+      setFamilyMessage("Please fix the highlighted fields.");
+      return;
+    }
     setIsSavingFamily(true);
     setFamilyMessage("");
 
     try {
       await createPatientFamilyMember(session.accessToken, {
-        first_name: familyForm.first_name,
-        last_name: familyForm.last_name,
-        relationship_label: familyForm.relationship_label,
+        first_name: familyForm.first_name.trim(),
+        last_name: familyForm.last_name.trim(),
+        relationship_label: familyForm.relationship_label.trim(),
         date_of_birth: familyForm.date_of_birth || undefined,
         email: familyForm.email || undefined,
         phn: familyForm.phn || undefined,
         notes: familyForm.notes || undefined,
       });
       setFamilyForm(emptyFamilyForm);
+      setFamilyFormErrors({});
       setFamilyMessage("Family member added successfully.");
       setIsFamilyFormOpen(false);
       await refreshPortalData();
@@ -921,6 +978,163 @@ export function PatientPortalDashboard() {
     router.replace("/patient-portal");
   }
 
+  function updateProfileField(field: keyof ProfileDraft, rawValue: string) {
+    const nextValue =
+      field === "first_name" || field === "last_name"
+        ? normalizeNameInput(rawValue)
+        : field === "city"
+          ? normalizeCityInput(rawValue)
+          : field === "phone"
+            ? limitDigits(rawValue, 10)
+            : field === "province"
+              ? normalizeProvinceCodeInput(rawValue)
+              : field === "postal_code"
+                ? normalizePostalCode(rawValue)
+                : rawValue;
+
+    setProfileDraft((current) => ({
+      ...current,
+      [field]: nextValue,
+    }));
+
+    setProfileFormErrors((current) => {
+      const nextErrors: ProfileFormErrors = { ...current };
+
+      if (field === "first_name" || field === "last_name") {
+        nextErrors[field] = getLiveAlphabeticError(nextValue, field.replaceAll("_", " "));
+      } else if (field === "phone") {
+        nextErrors.phone = getLiveTenDigitError(nextValue, "phone number");
+      } else if (field === "email") {
+        nextErrors.email = getLiveEmailError(nextValue, "email address");
+      } else if (field === "city") {
+        nextErrors.city = getLiveAlphabeticError(nextValue, "city");
+      } else if (field === "province") {
+        nextErrors.province = getLiveProvinceCodeError(nextValue, "province");
+      } else if (field === "postal_code") {
+        nextErrors.postal_code = getLivePostalCodeError(nextValue, "postal code");
+      }
+
+      return nextErrors;
+    });
+  }
+
+  function validateProfileDraft() {
+    const nextErrors: ProfileFormErrors = {};
+
+    if (!profileDraft.first_name.trim()) {
+      nextErrors.first_name = "First name is required.";
+    } else {
+      nextErrors.first_name = getLiveAlphabeticError(profileDraft.first_name, "first name");
+    }
+
+    if (!profileDraft.last_name.trim()) {
+      nextErrors.last_name = "Last name is required.";
+    } else {
+      nextErrors.last_name = getLiveAlphabeticError(profileDraft.last_name, "last name");
+    }
+
+    if (!profileDraft.phone.trim()) {
+      nextErrors.phone = "Phone number is required.";
+    } else {
+      nextErrors.phone = getLiveTenDigitError(profileDraft.phone, "phone number");
+    }
+
+    if (!profileDraft.email.trim()) {
+      nextErrors.email = "Email is required.";
+    } else {
+      nextErrors.email = getLiveEmailError(profileDraft.email, "email address");
+    }
+
+    if (!profileDraft.city.trim()) {
+      nextErrors.city = "City is required.";
+    } else {
+      nextErrors.city = getLiveAlphabeticError(profileDraft.city, "city");
+    }
+
+    if (!profileDraft.province.trim()) {
+      nextErrors.province = "Province is required.";
+    } else {
+      nextErrors.province = getLiveProvinceCodeError(profileDraft.province, "province");
+    }
+
+    if (!profileDraft.postal_code.trim()) {
+      nextErrors.postal_code = "Postal code is required.";
+    } else {
+      nextErrors.postal_code = getLivePostalCodeError(profileDraft.postal_code, "postal code");
+    }
+
+    setProfileFormErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
+
+  function updateFamilyField(field: keyof FamilyForm, rawValue: string) {
+    const nextValue =
+      field === "first_name" || field === "last_name" || field === "relationship_label"
+        ? normalizeNameInput(rawValue)
+        : field === "phn"
+          ? limitDigits(rawValue, 10)
+          : rawValue;
+
+    setFamilyForm((current) => ({
+      ...current,
+      [field]: nextValue,
+    }));
+
+    setFamilyFormErrors((current) => {
+      const nextErrors: FamilyFormErrors = { ...current };
+
+      if (field === "first_name" || field === "last_name" || field === "relationship_label") {
+        nextErrors[field] = getLiveAlphabeticError(nextValue, field.replaceAll("_", " "));
+      } else if (field === "date_of_birth") {
+        nextErrors.date_of_birth = getLiveFutureDateError(nextValue, "Date of birth");
+      } else if (field === "phn") {
+        nextErrors.phn = getLiveTenDigitError(nextValue, "PHN");
+      }
+
+      return nextErrors;
+    });
+  }
+
+  function validateFamilyForm() {
+    const nextErrors: FamilyFormErrors = {};
+
+    if (!familyForm.first_name.trim()) {
+      nextErrors.first_name = "First name is required.";
+    } else {
+      nextErrors.first_name = getLiveAlphabeticError(familyForm.first_name, "first name");
+    }
+
+    if (!familyForm.last_name.trim()) {
+      nextErrors.last_name = "Last name is required.";
+    } else {
+      nextErrors.last_name = getLiveAlphabeticError(familyForm.last_name, "last name");
+    }
+
+    if (!familyForm.relationship_label.trim()) {
+      nextErrors.relationship_label = "Relationship is required.";
+    } else {
+      nextErrors.relationship_label = getLiveAlphabeticError(
+        familyForm.relationship_label,
+        "relationship",
+      );
+    }
+
+    if (!familyForm.date_of_birth.trim()) {
+      nextErrors.date_of_birth = "Date of birth is required.";
+    } else {
+      nextErrors.date_of_birth = getLiveFutureDateError(familyForm.date_of_birth, "Date of birth");
+    }
+
+    if (!familyForm.phn.trim()) {
+      nextErrors.phn = "PHN is required.";
+    } else {
+      nextErrors.phn = getLiveTenDigitError(familyForm.phn, "PHN");
+    }
+
+    setFamilyFormErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
+
   if (isBootstrapping || !session) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center text-slate-500">
@@ -1001,38 +1215,46 @@ export function PatientPortalDashboard() {
                 First name
                 <Input
                   value={profileDraft.first_name}
-                  onChange={(event) =>
-                    setProfileDraft((current) => ({ ...current, first_name: event.target.value }))
-                  }
+                  onChange={(event) => updateProfileField("first_name", event.target.value)}
+                  autoCapitalize="words"
                 />
+                {profileFormErrors.first_name ? (
+                  <div className="text-xs text-rose-600">{profileFormErrors.first_name}</div>
+                ) : null}
               </label>
               <label className="grid gap-2 text-sm text-slate-700">
                 Last name
                 <Input
                   value={profileDraft.last_name}
-                  onChange={(event) =>
-                    setProfileDraft((current) => ({ ...current, last_name: event.target.value }))
-                  }
+                  onChange={(event) => updateProfileField("last_name", event.target.value)}
+                  autoCapitalize="words"
                 />
+                {profileFormErrors.last_name ? (
+                  <div className="text-xs text-rose-600">{profileFormErrors.last_name}</div>
+                ) : null}
               </label>
               <label className="grid gap-2 text-sm text-slate-700">
                 Phone
                 <Input
                   value={profileDraft.phone}
-                  onChange={(event) =>
-                    setProfileDraft((current) => ({ ...current, phone: event.target.value }))
-                  }
+                  onChange={(event) => updateProfileField("phone", event.target.value)}
+                  inputMode="numeric"
+                  maxLength={10}
                 />
+                {profileFormErrors.phone ? (
+                  <div className="text-xs text-rose-600">{profileFormErrors.phone}</div>
+                ) : null}
               </label>
               <label className="grid gap-2 text-sm text-slate-700">
                 Email
                 <Input
                   type="email"
                   value={profileDraft.email}
-                  onChange={(event) =>
-                    setProfileDraft((current) => ({ ...current, email: event.target.value }))
-                  }
+                  onChange={(event) => updateProfileField("email", event.target.value)}
                 />
+                {profileFormErrors.email ? (
+                  <div className="text-xs text-rose-600">{profileFormErrors.email}</div>
+                ) : null}
               </label>
               <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
                 <label className="grid gap-2 text-sm text-slate-700">
@@ -1064,28 +1286,35 @@ export function PatientPortalDashboard() {
                 City
                 <Input
                   value={profileDraft.city}
-                  onChange={(event) =>
-                    setProfileDraft((current) => ({ ...current, city: event.target.value }))
-                  }
+                  onChange={(event) => updateProfileField("city", event.target.value)}
+                  autoCapitalize="words"
                 />
+                {profileFormErrors.city ? (
+                  <div className="text-xs text-rose-600">{profileFormErrors.city}</div>
+                ) : null}
               </label>
               <label className="grid gap-2 text-sm text-slate-700">
                 Province
                 <Input
                   value={profileDraft.province}
-                  onChange={(event) =>
-                    setProfileDraft((current) => ({ ...current, province: event.target.value }))
-                  }
+                  onChange={(event) => updateProfileField("province", event.target.value)}
+                  maxLength={2}
                 />
+                {profileFormErrors.province ? (
+                  <div className="text-xs text-rose-600">{profileFormErrors.province}</div>
+                ) : null}
               </label>
               <label className="grid gap-2 text-sm text-slate-700">
                 Postal code
                 <Input
                   value={profileDraft.postal_code}
-                  onChange={(event) =>
-                    setProfileDraft((current) => ({ ...current, postal_code: event.target.value }))
-                  }
+                  onChange={(event) => updateProfileField("postal_code", event.target.value)}
+                  autoCapitalize="characters"
+                  maxLength={7}
                 />
+                {profileFormErrors.postal_code ? (
+                  <div className="text-xs text-rose-600">{profileFormErrors.postal_code}</div>
+                ) : null}
               </label>
               <label className="grid gap-2 text-sm text-slate-700">
                 Status
@@ -1128,8 +1357,12 @@ export function PatientPortalDashboard() {
                   const availableDates = Array.from(
                     new Set(slotOptions.map((slot) => slot.appointment_date)),
                   );
+                  const todayDate = getCanadaPacificDateKey();
+                  const selectableDates = availableDates.filter((date) => date >= todayDate);
                   const selectedDate =
-                    selectedRescheduleDateByAppointment[appointment.appointment_id] ?? availableDates[0] ?? "";
+                    selectedRescheduleDateByAppointment[appointment.appointment_id] ??
+                    selectableDates[0] ??
+                    "";
                   const slotsForSelectedDate = slotOptions.filter(
                     (slot) => slot.appointment_date === selectedDate,
                   );
@@ -1220,46 +1453,67 @@ export function PatientPortalDashboard() {
                             <div className="mt-4 space-y-4">
                               <label className="grid gap-2 text-sm text-slate-700">
                                 Choose date
-                                <Input
-                                  type="date"
-                                  value={selectedDate}
-                                  min={availableDates[0]}
-                                  max={availableDates[availableDates.length - 1]}
-                                  onChange={(event) =>
-                                    handleRescheduleDateChange(
-                                      appointment.appointment_id,
-                                      event.target.value,
-                                    )
-                                  }
-                                  list={`reschedule-dates-${appointment.appointment_id}`}
-                                />
-                                <datalist id={`reschedule-dates-${appointment.appointment_id}`}>
-                                  {availableDates.map((slotDate) => (
-                                    <option key={slotDate} value={slotDate} />
-                                  ))}
-                                </datalist>
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    className="flex h-12 w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 text-left text-sm shadow-sm transition-colors hover:border-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-200"
+                                    onClick={() => {
+                                      const input = rescheduleDateInputRefs.current[appointment.appointment_id];
+                                      if (!input) return;
+                                      if (typeof input.showPicker === "function") {
+                                        input.showPicker();
+                                      } else {
+                                        input.click();
+                                      }
+                                    }}
+                                  >
+                                    <span className={selectedDate ? "text-slate-900" : "text-slate-400"}>
+                                      {selectedDate ? formatCalendarDate(selectedDate) : "MM/DD/YYYY"}
+                                    </span>
+                                    <CalendarDays className="h-4 w-4 text-slate-400" />
+                                  </button>
+                                  <input
+                                    ref={(node) => {
+                                      rescheduleDateInputRefs.current[appointment.appointment_id] = node;
+                                    }}
+                                    type="date"
+                                    value={selectedDate}
+                                    min={todayDate}
+                                    max={selectableDates[selectableDates.length - 1] || undefined}
+                                    onChange={(event) =>
+                                      handleRescheduleDateChange(
+                                        appointment.appointment_id,
+                                        event.target.value,
+                                      )
+                                    }
+                                    lang="en-US"
+                                    className="sr-only"
+                                    tabIndex={-1}
+                                    aria-hidden="true"
+                                  />
+                                </div>
                               </label>
 
                               <div className="space-y-2">
                                 <div className="text-sm font-medium text-slate-800">Choose time</div>
                                 {slotsForSelectedDate.length ? (
-                                  <div className="grid gap-2">
+                                  <div className="grid max-h-[14rem] gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
                                     {slotsForSelectedDate.map((slot) => {
                                       const value = `${slot.appointment_date}|${slot.appointment_time}|${slot.doctor_id}`;
                                       return (
                                         <label
                                           key={value}
                                           className={cn(
-                                            "flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3 text-sm",
+                                            "flex h-full cursor-pointer items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-sm transition-colors",
                                             selectedSlot === value
                                               ? "border-sky-300 bg-sky-50 text-sky-800"
                                               : "border-slate-200 bg-slate-50 text-slate-700",
                                           )}
                                         >
-                                          <div>
-                                            <div className="font-semibold">{slot.appointment_time}</div>
-                                            <div className="mt-1 text-xs text-slate-500">
-                                              Available provider: {slot.doctor_name}
+                                          <div className="min-w-0">
+                                            <div className="font-semibold leading-tight">{slot.appointment_time}</div>
+                                            <div className="mt-1 truncate text-xs text-slate-500">
+                                              Provider: {slot.doctor_name}
                                             </div>
                                           </div>
                                           <input
@@ -2000,54 +2254,58 @@ export function PatientPortalDashboard() {
                     First name
                     <Input
                       value={familyForm.first_name}
-                      onChange={(event) =>
-                        setFamilyForm((current) => ({ ...current, first_name: event.target.value }))
-                      }
-                      />
+                      onChange={(event) => updateFamilyField("first_name", event.target.value)}
+                      autoCapitalize="words"
+                    />
+                    {familyFormErrors.first_name ? (
+                      <div className="text-xs text-rose-600">{familyFormErrors.first_name}</div>
+                    ) : null}
                   </label>
                   <label className="grid gap-1.5 text-sm text-slate-700">
                     Last name
                     <Input
                       value={familyForm.last_name}
-                      onChange={(event) =>
-                        setFamilyForm((current) => ({ ...current, last_name: event.target.value }))
-                      }
-                      />
+                      onChange={(event) => updateFamilyField("last_name", event.target.value)}
+                      autoCapitalize="words"
+                    />
+                    {familyFormErrors.last_name ? (
+                      <div className="text-xs text-rose-600">{familyFormErrors.last_name}</div>
+                    ) : null}
                   </label>
                   <label className="grid gap-1.5 text-sm text-slate-700">
                     Relationship
                     <Input
                       value={familyForm.relationship_label}
-                      onChange={(event) =>
-                        setFamilyForm((current) => ({
-                          ...current,
-                          relationship_label: event.target.value,
-                        }))
-                      }
-                      />
+                      onChange={(event) => updateFamilyField("relationship_label", event.target.value)}
+                      autoCapitalize="words"
+                    />
+                    {familyFormErrors.relationship_label ? (
+                      <div className="text-xs text-rose-600">{familyFormErrors.relationship_label}</div>
+                    ) : null}
                   </label>
                   <label className="grid gap-1.5 text-sm text-slate-700">
                     Date of birth
                     <Input
                       type="date"
                       value={familyForm.date_of_birth}
-                      onChange={(event) =>
-                        setFamilyForm((current) => ({ ...current, date_of_birth: event.target.value }))
-                      }
-                      />
+                      max={getCanadaPacificDateKey()}
+                      onChange={(event) => updateFamilyField("date_of_birth", event.target.value)}
+                    />
+                    {familyFormErrors.date_of_birth ? (
+                      <div className="text-xs text-rose-600">{familyFormErrors.date_of_birth}</div>
+                    ) : null}
                   </label>
                   <label className="grid gap-1.5 text-sm text-slate-700 sm:col-span-2">
                     PHN
                     <Input
                       value={familyForm.phn}
-                      onChange={(event) =>
-                        setFamilyForm((current) => ({
-                          ...current,
-                          phn: event.target.value.replace(/\D/g, "").slice(0, 20),
-                        }))
-                      }
+                      onChange={(event) => updateFamilyField("phn", event.target.value)}
                       inputMode="numeric"
+                      maxLength={10}
                     />
+                    {familyFormErrors.phn ? (
+                      <div className="text-xs text-rose-600">{familyFormErrors.phn}</div>
+                    ) : null}
                   </label>
                   <label className="grid gap-1.5 text-sm text-slate-700 sm:col-span-2">
                     Notes

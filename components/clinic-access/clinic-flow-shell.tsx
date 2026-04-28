@@ -9,7 +9,7 @@ type ClinicFlowShellProps = {
   backLabel: string;
   children: ReactNode;
   contentClassName?: string;
-  /** Defaults to “Clinic workspace” — use “Find care” for patient flows. */
+  /** Optional secondary brand line shown under the logo. */
   workspaceLabel?: string;
 };
 
@@ -30,9 +30,11 @@ export function ClinicFlowShell({
               <span className="block font-display text-lg font-semibold text-foreground">
                 Bimble
               </span>
-              <span className="block text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
-                {workspaceLabel}
-              </span>
+              {workspaceLabel ? (
+                <span className="block text-[11px] uppercase tracking-[0.24em] text-muted-foreground">
+                  {workspaceLabel}
+                </span>
+              ) : null}
             </div>
           </Link>
         </div>

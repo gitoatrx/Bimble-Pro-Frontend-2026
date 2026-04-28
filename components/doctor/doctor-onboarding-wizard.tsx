@@ -15,12 +15,20 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatCanadaPacificDateKey } from "@/lib/time-zone";
 import {
+  capitalizeLeadingLetter,
+  digitsOnly,
   getLiveFutureDateError,
   getLiveDigitCountError,
   getLiveFiveDigitError,
+  getLiveEmailError,
   getLiveTenDigitError,
   hasExactDigits,
   isFutureDate,
+  normalizeCityInput,
+  normalizeNameInput,
+  normalizePostalCode,
+  normalizeProvinceInput,
+  validateEmail,
 } from "@/lib/form-validation";
 import {
   clearDoctorOnboardingStage,
@@ -220,14 +228,6 @@ function isoDateLabel(value: string) {
     month: "short",
     day: "numeric",
   });
-}
-
-function normalizePostalCode(value?: string | null) {
-  return (value ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6);
-}
-
-function digitsOnly(value?: string | null) {
-  return (value ?? "").replace(/\D/g, "");
 }
 
 function splitDisplayName(value: string) {
@@ -457,6 +457,8 @@ function validateStep2(
   }
   if (!formState.contact_email.trim()) {
     errors.contact_email = "contact_email is required.";
+  } else if (!validateEmail(formState.contact_email)) {
+    errors.contact_email = "Enter a valid email address for contact_email.";
   }
   if (!formState.contact_phone_number.trim()) {
     errors.contact_phone_number = "contact_phone_number is required.";
@@ -621,6 +623,9 @@ function validateStep4(
     errors.home_fax_number = "Enter a valid 10-digit fax number.";
   }
   if (!formState.home_email_address.trim()) errors.home_email_address = "home_email_address is required.";
+  else if (!validateEmail(formState.home_email_address)) {
+    errors.home_email_address = "Enter a valid email address for home_email_address.";
+  }
   if (!formState.business_mailing_address.trim()) errors.business_mailing_address = "business_mailing_address is required.";
   if (!formState.business_city.trim()) errors.business_city = "business_city is required.";
   if (!formState.business_postal_code.trim()) errors.business_postal_code = "business_postal_code is required.";
@@ -633,6 +638,9 @@ function validateStep4(
     errors.business_fax_number = "Enter a valid 10-digit fax number.";
   }
   if (!formState.business_email_address.trim()) errors.business_email_address = "business_email_address is required.";
+  else if (!validateEmail(formState.business_email_address)) {
+    errors.business_email_address = "Enter a valid email address for business_email_address.";
+  }
   if (!formState.medical_school.trim()) errors.medical_school = "medical_school is required.";
   if (!formState.date_of_graduation.trim()) errors.date_of_graduation = "date_of_graduation is required.";
   else if (isFutureDate(formState.date_of_graduation)) {
@@ -1121,65 +1129,94 @@ export function DoctorOnboardingWizard() {
     setStep1SubmitError("");
   }
 
+  function normalizeStep2Value<K extends keyof DoctorHlth2950FormState>(field: K, value: DoctorHlth2950FormState[K]) {
+    if (typeof value !== "string") return value;
+    switch (field) {
+      case "msp_practitioner_number":
+      case "msp_facility_number":
+      case "contact_phone_number":
+      case "contact_fax_number":
+        return digitsOnly(value).slice(0, field.startsWith("contact_") ? 10 : 5) as DoctorHlth2950FormState[K];
+      case "facility_or_practice_name":
+        return capitalizeLeadingLetter(value) as DoctorHlth2950FormState[K];
+      case "facility_physical_address":
+        return capitalizeLeadingLetter(value) as DoctorHlth2950FormState[K];
+      case "facility_physical_city":
+        return normalizeCityInput(value) as DoctorHlth2950FormState[K];
+      case "facility_physical_postal_code":
+        return normalizePostalCode(value) as DoctorHlth2950FormState[K];
+      case "contact_email":
+        return value.trim() as DoctorHlth2950FormState[K];
+      case "signature_label":
+        return capitalizeLeadingLetter(value) as DoctorHlth2950FormState[K];
+      default:
+        return value;
+    }
+  }
+
   function setStep2Field<K extends keyof DoctorHlth2950FormState>(
     field: K,
     value: DoctorHlth2950FormState[K],
   ) {
-    setStep2Form((current) => ({ ...current, [field]: value }));
+    const normalizedValue = normalizeStep2Value(field, value);
+    setStep2Form((current) => ({ ...current, [field]: normalizedValue }));
     setStep2Errors((current) => {
       const next = { ...current, [field]: "" } as typeof current;
-      if (field === "msp_practitioner_number" && typeof value === "string") {
-        next.msp_practitioner_number = getLiveFiveDigitError(value, "msp practitioner number");
+      if (field === "msp_practitioner_number" && typeof normalizedValue === "string") {
+        next.msp_practitioner_number = getLiveFiveDigitError(normalizedValue, "msp practitioner number");
       }
-      if (field === "msp_facility_number" && typeof value === "string") {
-        next.msp_facility_number = getLiveFiveDigitError(value, "msp facility number");
+      if (field === "msp_facility_number" && typeof normalizedValue === "string") {
+        next.msp_facility_number = getLiveFiveDigitError(normalizedValue, "msp facility number");
       }
-      if (field === "contact_phone_number" && typeof value === "string") {
-        next.contact_phone_number = getLiveTenDigitError(value, "contact phone number");
+      if (field === "contact_phone_number" && typeof normalizedValue === "string") {
+        next.contact_phone_number = getLiveTenDigitError(normalizedValue, "contact phone number");
       }
-      if (field === "contact_fax_number" && typeof value === "string") {
-        next.contact_fax_number = getLiveTenDigitError(value, "contact fax number", "fax number");
+      if (field === "contact_fax_number" && typeof normalizedValue === "string") {
+        next.contact_fax_number = getLiveTenDigitError(normalizedValue, "contact fax number", "fax number");
       }
-      if (field === "new_attachment_cancellation_date" && typeof value === "string") {
-        if (step2Form.new_attachment_effective_date && value < step2Form.new_attachment_effective_date) {
+      if (field === "contact_email" && typeof normalizedValue === "string") {
+        next.contact_email = getLiveEmailError(normalizedValue, "contact email");
+      }
+      if (field === "new_attachment_cancellation_date" && typeof normalizedValue === "string") {
+        if (step2Form.new_attachment_effective_date && normalizedValue < step2Form.new_attachment_effective_date) {
           next.new_attachment_cancellation_date =
             "new_attachment_cancellation_date cannot be earlier than new_attachment_effective_date.";
         } else {
           next.new_attachment_cancellation_date = "";
         }
       }
-      if (field === "new_attachment_effective_date" && typeof value === "string") {
-        if (isFutureDate(value)) {
+      if (field === "new_attachment_effective_date" && typeof normalizedValue === "string") {
+        if (isFutureDate(normalizedValue)) {
           next.new_attachment_effective_date = "new_attachment_effective_date cannot be in the future.";
         }
         if (
           step2Form.new_attachment_cancellation_date &&
-          step2Form.new_attachment_cancellation_date < value
+          step2Form.new_attachment_cancellation_date < normalizedValue
         ) {
           next.new_attachment_cancellation_date =
             "new_attachment_cancellation_date cannot be earlier than new_attachment_effective_date.";
         }
       }
-      if (field === "attachment_cancellation_date" && typeof value === "string") {
+      if (field === "attachment_cancellation_date" && typeof normalizedValue === "string") {
         next.attachment_cancellation_date = "";
       }
-      if (field === "change_attachment_effective_date" && typeof value === "string") {
-        if (isFutureDate(value)) {
+      if (field === "change_attachment_effective_date" && typeof normalizedValue === "string") {
+        if (isFutureDate(normalizedValue)) {
           next.change_attachment_effective_date =
             "change_attachment_effective_date cannot be in the future.";
         }
         if (
           step2Form.change_attachment_cancellation_date &&
-          step2Form.change_attachment_cancellation_date < value
+          step2Form.change_attachment_cancellation_date < normalizedValue
         ) {
           next.change_attachment_cancellation_date =
             "change_attachment_cancellation_date cannot be earlier than change_attachment_effective_date.";
         }
       }
-      if (field === "change_attachment_cancellation_date" && typeof value === "string") {
+      if (field === "change_attachment_cancellation_date" && typeof normalizedValue === "string") {
         if (
           step2Form.change_attachment_effective_date &&
-          value < step2Form.change_attachment_effective_date
+          normalizedValue < step2Form.change_attachment_effective_date
         ) {
           next.change_attachment_cancellation_date =
             "change_attachment_cancellation_date cannot be earlier than change_attachment_effective_date.";
@@ -1253,26 +1290,48 @@ export function DoctorOnboardingWizard() {
     field: K,
     value: DoctorHlth2832FormState[K],
   ) {
-    setStep3Form((current) => ({ ...current, [field]: value }));
+    const normalizedValue =
+      typeof value === "string"
+        ? field === "msp_billing_number"
+          ? digitsOnly(value).slice(0, 10)
+          : field === "payment_number"
+            ? digitsOnly(value).slice(0, 5)
+            : field === "institution_number"
+              ? digitsOnly(value).slice(0, 3)
+              : field === "branch_number"
+                ? digitsOnly(value).slice(0, 5)
+                : field === "postal_code"
+                  ? normalizePostalCode(value)
+                  : field === "city"
+                    ? normalizeCityInput(value)
+                    : field === "province"
+                      ? normalizeProvinceInput(value)
+                      : field === "telephone" || field === "telephone2"
+                        ? digitsOnly(value).slice(0, 10)
+                        : field === "payee_name" || field === "institution_bank_name" || field === "branch_name" || field === "street_address" || field === "signature_label"
+                          ? capitalizeLeadingLetter(value)
+                          : value.trim()
+        : value;
+    setStep3Form((current) => ({ ...current, [field]: normalizedValue }));
     setStep3Errors((current) => {
       const next = { ...current, [field]: "" } as typeof current;
-      if (field === "msp_billing_number" && typeof value === "string") {
-        next.msp_billing_number = getLiveDigitCountError(value, "MSP billing number", 10);
+      if (field === "msp_billing_number" && typeof normalizedValue === "string") {
+        next.msp_billing_number = getLiveDigitCountError(normalizedValue, "MSP billing number", 10);
       }
-      if (field === "payment_number" && typeof value === "string") {
-        next.payment_number = getLiveDigitCountError(value, "payment number", 5);
+      if (field === "payment_number" && typeof normalizedValue === "string") {
+        next.payment_number = getLiveDigitCountError(normalizedValue, "payment number", 5);
       }
-      if (field === "institution_number" && typeof value === "string") {
-        next.institution_number = getLiveDigitCountError(value, "institution number", 3);
+      if (field === "institution_number" && typeof normalizedValue === "string") {
+        next.institution_number = getLiveDigitCountError(normalizedValue, "institution number", 3);
       }
-      if (field === "branch_number" && typeof value === "string") {
-        next.branch_number = getLiveDigitCountError(value, "branch number", 5);
+      if (field === "branch_number" && typeof normalizedValue === "string") {
+        next.branch_number = getLiveDigitCountError(normalizedValue, "branch number", 5);
       }
-      if (field === "telephone" && typeof value === "string") {
-        next.telephone = getLiveTenDigitError(value, "telephone number");
+      if (field === "telephone" && typeof normalizedValue === "string") {
+        next.telephone = getLiveTenDigitError(normalizedValue, "telephone number");
       }
-      if (field === "telephone2" && typeof value === "string") {
-        next.telephone2 = getLiveTenDigitError(value, "telephone number");
+      if (field === "telephone2" && typeof normalizedValue === "string") {
+        next.telephone2 = getLiveTenDigitError(normalizedValue, "telephone number");
       }
       return next;
     });
@@ -1283,56 +1342,107 @@ export function DoctorOnboardingWizard() {
     field: K,
     value: DoctorHlth2991FormState[K],
   ) {
-    setStep4Form((current) => ({ ...current, [field]: value }));
+    const normalizedValue =
+      typeof value === "string"
+        ? field === "surname" ||
+          field === "given_name" ||
+          field === "given_name_second" ||
+          field === "citizenship" ||
+          field === "status_in_canada" ||
+          field === "home_mailing_address" ||
+          field === "home_city" ||
+          field === "business_mailing_address" ||
+          field === "business_city" ||
+          field === "medical_school" ||
+          field === "royal_college_specialty" ||
+          field === "royal_college_subspecialty" ||
+          field === "non_royal_college_specialty" ||
+          field === "non_royal_college_subspecialty" ||
+          field === "registrations" ||
+          field === "signature_label"
+          ? field === "home_city" || field === "business_city"
+            ? normalizeCityInput(value)
+            : field === "surname" || field === "given_name" || field === "given_name_second"
+              ? normalizeNameInput(value)
+              : capitalizeLeadingLetter(value)
+          : field === "home_email_address" || field === "business_email_address"
+            ? value.trim()
+            : field === "home_postal_code" || field === "business_postal_code"
+              ? normalizePostalCode(value)
+              : field === "home_phone_number" ||
+                  field === "home_fax_number" ||
+                  field === "business_phone_number" ||
+                  field === "business_fax_number"
+                ? digitsOnly(value).slice(0, 10)
+                : field === "date_of_birth" ||
+                    field === "date_of_graduation" ||
+                    field === "date_of_registration" ||
+                    field === "certification_date_1" ||
+                    field === "certification_date_2" ||
+                    field === "certification_date_3" ||
+                    field === "certification_date_4" ||
+                    field === "license_effective_date" ||
+                    field === "msp_effective_date" ||
+                    field === "cancellation_date"
+                  ? value.trim()
+                  : value
+        : value;
+    setStep4Form((current) => ({ ...current, [field]: normalizedValue }));
     setStep4Errors((current) => {
       const next = { ...current, [field]: "" } as typeof current;
-      if (field === "date_of_birth" && typeof value === "string") {
-        next.date_of_birth = getLiveFutureDateError(value, "Date of birth");
+      if (field === "date_of_birth" && typeof normalizedValue === "string") {
+        next.date_of_birth = getLiveFutureDateError(normalizedValue, "Date of birth");
       }
-      if (field === "date_of_graduation" && typeof value === "string") {
-        next.date_of_graduation = getLiveFutureDateError(value, "Date of graduation");
+      if (field === "date_of_graduation" && typeof normalizedValue === "string") {
+        next.date_of_graduation = getLiveFutureDateError(normalizedValue, "Date of graduation");
       }
-      if (field === "date_of_registration" && typeof value === "string") {
-        next.date_of_registration = getLiveFutureDateError(value, "Date of registration");
+      if (field === "date_of_registration" && typeof normalizedValue === "string") {
+        next.date_of_registration = getLiveFutureDateError(normalizedValue, "Date of registration");
       }
-      if (field === "certification_date_1" && typeof value === "string") {
-        next.certification_date_1 = getLiveFutureDateError(value, "Certification date 1");
+      if (field === "certification_date_1" && typeof normalizedValue === "string") {
+        next.certification_date_1 = getLiveFutureDateError(normalizedValue, "Certification date 1");
       }
-      if (field === "certification_date_2" && typeof value === "string") {
-        next.certification_date_2 = getLiveFutureDateError(value, "Certification date 2");
+      if (field === "certification_date_2" && typeof normalizedValue === "string") {
+        next.certification_date_2 = getLiveFutureDateError(normalizedValue, "Certification date 2");
       }
-      if (field === "certification_date_3" && typeof value === "string") {
-        next.certification_date_3 = getLiveFutureDateError(value, "Certification date 3");
+      if (field === "certification_date_3" && typeof normalizedValue === "string") {
+        next.certification_date_3 = getLiveFutureDateError(normalizedValue, "Certification date 3");
       }
-      if (field === "certification_date_4" && typeof value === "string") {
-        next.certification_date_4 = getLiveFutureDateError(value, "Certification date 4");
+      if (field === "certification_date_4" && typeof normalizedValue === "string") {
+        next.certification_date_4 = getLiveFutureDateError(normalizedValue, "Certification date 4");
       }
-      if (field === "msp_effective_date" && typeof value === "string") {
-        if (isFutureDate(value)) {
+      if (field === "msp_effective_date" && typeof normalizedValue === "string") {
+        if (isFutureDate(normalizedValue)) {
           next.msp_effective_date = "msp_effective_date cannot be in the future.";
         }
-        if (step4Form.cancellation_date && step4Form.cancellation_date < value) {
+        if (step4Form.cancellation_date && step4Form.cancellation_date < normalizedValue) {
           next.cancellation_date = "cancellation_date cannot be earlier than msp_effective_date.";
         }
       }
-      if (field === "cancellation_date" && typeof value === "string") {
-        if (step4Form.msp_effective_date && value < step4Form.msp_effective_date) {
+      if (field === "cancellation_date" && typeof normalizedValue === "string") {
+        if (step4Form.msp_effective_date && normalizedValue < step4Form.msp_effective_date) {
           next.cancellation_date = "cancellation_date cannot be earlier than msp_effective_date.";
         } else {
           next.cancellation_date = "";
         }
       }
-      if (field === "home_phone_number" && typeof value === "string") {
-        next.home_phone_number = getLiveTenDigitError(value, "home phone number");
+      if (field === "home_phone_number" && typeof normalizedValue === "string") {
+        next.home_phone_number = getLiveTenDigitError(normalizedValue, "home phone number");
       }
-      if (field === "home_fax_number" && typeof value === "string") {
-        next.home_fax_number = getLiveTenDigitError(value, "home fax number", "fax number");
+      if (field === "home_fax_number" && typeof normalizedValue === "string") {
+        next.home_fax_number = getLiveTenDigitError(normalizedValue, "home fax number", "fax number");
       }
-      if (field === "business_phone_number" && typeof value === "string") {
-        next.business_phone_number = getLiveTenDigitError(value, "business phone number");
+      if (field === "business_phone_number" && typeof normalizedValue === "string") {
+        next.business_phone_number = getLiveTenDigitError(normalizedValue, "business phone number");
       }
-      if (field === "business_fax_number" && typeof value === "string") {
-        next.business_fax_number = getLiveTenDigitError(value, "business fax number", "fax number");
+      if (field === "business_fax_number" && typeof normalizedValue === "string") {
+        next.business_fax_number = getLiveTenDigitError(normalizedValue, "business fax number", "fax number");
+      }
+      if (field === "home_email_address" && typeof normalizedValue === "string") {
+        next.home_email_address = getLiveEmailError(normalizedValue, "home email address");
+      }
+      if (field === "business_email_address" && typeof normalizedValue === "string") {
+        next.business_email_address = getLiveEmailError(normalizedValue, "business email address");
       }
       return next;
     });

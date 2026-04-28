@@ -6,7 +6,6 @@ export default function PatientPortalProfilePage() {
     <ClinicFlowShell
       backHref="/patient-portal"
       backLabel="Back to patient login"
-      workspaceLabel="Find care"
       contentClassName="max-w-6xl"
     >
       <PatientPortalDashboard />

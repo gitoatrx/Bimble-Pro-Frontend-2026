@@ -15,8 +15,11 @@ import {
 } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import {
+  capitalizeLeadingLetter,
   SignaturePad,
   digitsOnly,
+  normalizeCityInput,
+  normalizeNameInput,
   normalizePostalCode,
 } from "@/components/doctor/doctor-form-shared";
 import {
@@ -659,7 +662,10 @@ function Teleplan2820Dialog({
                     <Input
                       value={formState.name}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, name: event.target.value }))
+                        setFormState((current) => ({
+                          ...current,
+                          name: normalizeNameInput(event.target.value),
+                        }))
                       }
                     />
                   </DialogField>
@@ -673,7 +679,7 @@ function Teleplan2820Dialog({
                       onChange={(event) =>
                         setFormState((current) => ({
                           ...current,
-                          contactPerson: event.target.value,
+                          contactPerson: normalizeNameInput(event.target.value),
                         }))
                       }
                     />
@@ -685,7 +691,10 @@ function Teleplan2820Dialog({
                     <Input
                       value={formState.address}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, address: event.target.value }))
+                        setFormState((current) => ({
+                          ...current,
+                          address: capitalizeLeadingLetter(event.target.value),
+                        }))
                       }
                     />
                   </DialogField>
@@ -693,7 +702,10 @@ function Teleplan2820Dialog({
                     <Input
                       value={formState.city}
                       onChange={(event) =>
-                        setFormState((current) => ({ ...current, city: event.target.value }))
+                        setFormState((current) => ({
+                          ...current,
+                          city: normalizeCityInput(event.target.value),
+                        }))
                       }
                     />
                   </DialogField>

@@ -4,6 +4,27 @@ import React, { useEffect, useRef, useState } from "react";
 import { RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+export {
+  capitalizeLeadingLetter,
+  digitsOnly,
+  formatPostalCodeInput,
+  getLiveAlphabeticError,
+  getLiveDigitCountError,
+  getLiveEmailError,
+  getLiveFiveDigitError,
+  getLiveFutureDateError,
+  getLiveTenDigitError,
+  hasExactDigits,
+  hasValidTenDigitNumber,
+  isFutureDate,
+  limitDigits,
+  normalizeAlphabeticInput,
+  normalizeCityInput,
+  normalizeNameInput,
+  normalizePostalCode,
+  normalizeProvinceInput,
+  validateEmail,
+} from "@/lib/form-validation";
 
 export type FieldErrorState<T extends string> = Partial<Record<T, string>>;
 
@@ -19,14 +40,6 @@ export function FormLabel({
       {children}
     </label>
   );
-}
-
-export function digitsOnly(value: string | null | undefined) {
-  return (value ?? "").replace(/\D/g, "");
-}
-
-export function normalizePostalCode(value: string | null | undefined) {
-  return (value ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6);
 }
 
 export function SignaturePad({
