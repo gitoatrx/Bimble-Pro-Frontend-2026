@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Clock,
   FileClock,
-  HeartPulse,
   LoaderCircle,
   LogOut,
   MapPin,
@@ -257,7 +256,7 @@ function SectionCard({
   children,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   icon: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -269,7 +268,7 @@ function SectionCard({
         </div>
         <div>
           <h2 className="text-[17px] font-semibold text-slate-900">{title}</h2>
-          <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p>
+          {subtitle ? <p className="mt-0.5 text-sm text-slate-600">{subtitle}</p> : null}
         </div>
       </div>
       {children}
@@ -700,26 +699,12 @@ export function PatientPortalDashboard() {
     <div className="grid gap-6 xl:grid-cols-[250px_minmax(0,1fr)] xl:gap-8">
       <aside className="xl:sticky xl:top-8 xl:self-start">
         <div className="rounded-[24px] border border-sky-200/70 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 text-sky-700">
-              <HeartPulse className="h-5 w-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
-                Patient portal
-              </div>
-              <h1 className="truncate text-lg font-semibold tracking-tight text-slate-950">
-                {profile?.first_name || "Patient"} {profile?.last_name || "Portal"}
-              </h1>
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Profile summary
-            </div>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              {profile?.province || "BC"} · {profile?.phone || "No phone"}
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-semibold tracking-tight text-slate-950">
+              {profile?.first_name || "Patient"} {profile?.last_name || "Portal"}
+            </h1>
+            <p className="mt-1 text-xs text-slate-500">
+              PHN: {profile?.phn || "Not available"}
             </p>
           </div>
 
@@ -887,40 +872,56 @@ export function PatientPortalDashboard() {
         {activeSection === "appointments" ? (
           <SectionCard
             title="Appointments"
-            subtitle="Book a visit into the shared pool so any available clinic can pick it."
             icon={<CalendarDays className="h-5 w-5" />}
           >
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:max-w-sm">
               <SmallPill
                 label="Active"
                 value={activeAppointments.length}
                 icon={<CalendarDays className="h-4 w-4" />}
               />
-              <SmallPill
-                label="Past"
-                value={pastAppointments.length}
-                icon={<FileClock className="h-4 w-4" />}
-              />
             </div>
 
-            {!bookingOpen ? (
-              <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
-                <div className="text-sm text-slate-700">
-                  Book another appointment without selecting a clinic. Your request goes into the shared patient pool so an available clinic or doctor can accept it.
+            <div className="mt-4 space-y-3">
+              {activeAppointments.length ? (
+                activeAppointments.map((appointment) => (
+                  <div key={appointment.appointment_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="text-sm font-semibold text-slate-900">
+                      {appointment.service_name || "General appointment"}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      {appointment.clinic_name || "Clinic pending"} ·{" "}
+                      <CanadianTime value={appointment.queued_at} fallback="Not available" />
+                    </div>
+                    {appointment.visit_type || appointment.appointment_date || appointment.appointment_time ? (
+                      <div className="mt-2 text-sm text-slate-600">
+                        {(appointment.visit_type || "").replace("_", "-") || "visit"} ·{" "}
+                        {appointment.appointment_date || "Date pending"} ·{" "}
+                        {appointment.appointment_time || "Time pending"}
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+                  No active appointments right now.
                 </div>
-                <div className="mt-4">
-                  <Button
-                    onClick={() => {
-                      setBookingOpen(true);
-                      setBookingStep("problem");
-                      setBookingMessage("");
-                    }}
-                  >
-                    Book appointment
-                  </Button>
-                </div>
-              </div>
-            ) : (
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-start">
+              <Button
+                onClick={() => {
+                  setBookingOpen(true);
+                  setBookingStep("problem");
+                  setBookingMessage("");
+                }}
+              >
+                Book appointment
+              </Button>
+            </div>
+
+            {bookingOpen && (
               <div className="mt-5 space-y-5 rounded-[24px] border border-slate-200 bg-slate-50/60 p-5">
                 <div className="flex flex-wrap gap-2">
                   {[
@@ -973,10 +974,6 @@ export function PatientPortalDashboard() {
                         ))}
                       </select>
                     </label>
-
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                      The patient no longer chooses a clinic here. This request will be visible in the shared appointment pool for clinics and doctors to pick up.
-                    </div>
 
                     <label className="grid gap-2 text-sm text-slate-700 sm:col-span-2">
                       Extra details for the visit
@@ -1331,32 +1328,6 @@ export function PatientPortalDashboard() {
               </div>
             )}
 
-            <div className="mt-5 space-y-3">
-              {activeAppointments.length ? (
-                activeAppointments.map((appointment) => (
-                  <div key={appointment.appointment_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm font-semibold text-slate-900">
-                      {appointment.service_name || "General appointment"}
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      {(appointment.channel === "POOL" ? "Shared pool" : appointment.clinic_name || "Clinic pending")} ·{" "}
-                      <CanadianTime value={appointment.queued_at} fallback="Not available" />
-                    </div>
-                    {appointment.visit_type || appointment.appointment_date || appointment.appointment_time ? (
-                      <div className="mt-2 text-sm text-slate-600">
-                        {(appointment.visit_type || "").replace("_", "-") || "visit"} ·{" "}
-                        {appointment.appointment_date || "Date pending"} ·{" "}
-                        {appointment.appointment_time || "Time pending"}
-                      </div>
-                    ) : null}
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
-                  No active appointments right now.
-                </div>
-              )}
-            </div>
           </SectionCard>
         ) : null}
 
