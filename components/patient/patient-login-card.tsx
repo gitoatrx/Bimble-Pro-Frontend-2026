@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 type PatientLoginCardProps = {
   phone: string;
   dateOfBirth: string;
+  showDateOfBirth?: boolean;
+  dateOfBirthLabel?: string;
   isSubmitting: boolean;
   error: string;
   notice: string;
@@ -17,6 +19,8 @@ type PatientLoginCardProps = {
 export function PatientLoginCard({
   phone,
   dateOfBirth,
+  showDateOfBirth = true,
+  dateOfBirthLabel = "Date of birth",
   isSubmitting,
   error,
   notice,
@@ -37,15 +41,17 @@ export function PatientLoginCard({
           />
         </label>
 
-        <label className="grid gap-2 text-sm font-medium text-slate-700">
-          Date of birth
-          <Input
-            type="date"
-            value={dateOfBirth}
-            onChange={(event) => onDateOfBirthChange(event.target.value)}
-            autoComplete="bday"
-          />
-        </label>
+        {showDateOfBirth ? (
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            {dateOfBirthLabel}
+            <Input
+              type="date"
+              value={dateOfBirth}
+              onChange={(event) => onDateOfBirthChange(event.target.value)}
+              autoComplete="bday"
+            />
+          </label>
+        ) : null}
 
         {notice ? (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

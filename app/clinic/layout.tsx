@@ -23,7 +23,7 @@ import {
   CLINIC_ONBOARDING_COMPLETE_KEY,
   readClinicLoginSession,
 } from "@/lib/clinic/session";
-import { fetchClinicSetupState } from "@/lib/api/clinic-dashboard";
+import { fetchClinicPool, fetchClinicSetupState } from "@/lib/api/clinic-dashboard";
 import { cn } from "@/lib/utils";
 
 // ── Nav items ─────────────────────────────────────────────────────
@@ -34,6 +34,14 @@ type NavItem = {
   Icon: React.FC<{ className?: string }>;
   requiresOnboarding: boolean;
 };
+
+type PoolAlertState = {
+  newCount: number;
+  totalCount: number;
+};
+
+const CLINIC_POOL_SEEN_IDS_KEY = "bimble:clinic:pool-seen-ids";
+const POOL_POLL_INTERVAL_MS = 15000;
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/clinic/dashboard",               label: "Setup",          Icon: LayoutDashboard, requiresOnboarding: false },
@@ -67,12 +75,14 @@ function Sidebar({
   clinicSlug,
   clinicName,
   onboardingComplete,
+  poolAlert,
   onOpenOscar,
   onLogout,
 }: {
   clinicSlug: string;
   clinicName: string;
   onboardingComplete: boolean;
+  poolAlert: PoolAlertState;
   onOpenOscar: () => void;
   onLogout: () => void;
 }) {
@@ -106,6 +116,10 @@ function Sidebar({
         {visibleNavItems.map(({ href, label, Icon, requiresOnboarding }) => {
           const locked = requiresOnboarding && !onboardingComplete;
           const active = pathname === href || pathname.startsWith(href + "/");
+          const badge =
+            label === "Pool" && poolAlert.totalCount > 0
+              ? String(poolAlert.totalCount)
+              : null;
 
           return (
             <SidebarNavItem
@@ -115,6 +129,7 @@ function Sidebar({
               Icon={Icon}
               active={active}
               locked={locked}
+              badge={badge}
             />
           );
         })}
@@ -154,12 +169,14 @@ function SidebarNavItem({
   Icon,
   active,
   locked,
+  badge,
 }: {
   href: string;
   label: string;
   Icon: React.FC<{ className?: string }>;
   active: boolean;
   locked: boolean;
+  badge?: string | null;
 }) {
   const baseClass = "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors";
 
@@ -191,10 +208,64 @@ function SidebarNavItem({
           ? "bg-primary/10 text-primary font-semibold"
           : "text-muted-foreground hover:bg-accent hover:text-foreground",
       )}
-    >
-      <Icon className="h-4 w-4 flex-shrink-0" />
-      <span>{label}</span>
-    </Link>
+      >
+        <Icon className="h-4 w-4 flex-shrink-0" />
+        <span className="flex-1">{label}</span>
+        {badge ? (
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+              active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/10 text-primary",
+            )}
+          >
+            {badge}
+          </span>
+        ) : null}
+      </Link>
+  );
+}
+
+function PoolAlertBanner({
+  href,
+  poolAlert,
+  onDismiss,
+}: {
+  href: string;
+  poolAlert: PoolAlertState;
+  onDismiss: () => void;
+}) {
+  if (poolAlert.newCount <= 0) {
+    return null;
+  }
+
+  return (
+    <div className="sticky top-0 z-30 border-b border-amber-200 bg-amber-50/95 px-4 py-3 backdrop-blur sm:px-6">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-amber-950">
+            New appointment{poolAlert.newCount === 1 ? "" : "s"} waiting in the pool
+          </p>
+          <p className="text-xs text-amber-800">
+            {poolAlert.newCount} new item{poolAlert.newCount === 1 ? "" : "s"} detected. Open the pool to accept or reject them.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href={href}
+            className="rounded-full bg-amber-900 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-amber-950"
+          >
+            Open pool
+          </Link>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="rounded-full border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -226,6 +297,10 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
   );
   const onboardingComplete = onboardingCompleteRaw === "true";
   const session = hydrated && sessionRaw ? readClinicLoginSession() : null;
+  const pathname = usePathname();
+  const [poolAlert, setPoolAlert] = useState<PoolAlertState>({ newCount: 0, totalCount: 0 });
+  const resolvedOnboardingComplete =
+    onboardingComplete || backendOnboardingComplete;
 
   useEffect(() => {
     if (!hydrated) return;
@@ -297,6 +372,71 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     return () => window.removeEventListener("bimble:clinic:onboarding-complete", handleComplete);
   }, []);
 
+  useEffect(() => {
+    if (!session?.accessToken || !resolvedOnboardingComplete) return;
+    const accessToken = session.accessToken;
+
+    let active = true;
+    let initialized = false;
+
+    function readSeenIds() {
+      if (typeof window === "undefined") return new Set<number>();
+      try {
+        const raw = sessionStorage.getItem(CLINIC_POOL_SEEN_IDS_KEY);
+        const parsed: unknown = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(parsed) ? parsed.filter((value): value is number => typeof value === "number") : []);
+      } catch {
+        return new Set<number>();
+      }
+    }
+
+    function writeSeenIds(ids: number[]) {
+      if (typeof window === "undefined") return;
+      sessionStorage.setItem(CLINIC_POOL_SEEN_IDS_KEY, JSON.stringify(ids));
+    }
+
+    async function pollPool() {
+      try {
+        const response = await fetchClinicPool(accessToken);
+        if (!active) return;
+
+        const appointmentIds = response.appointments.map((item) => item.appointment_id);
+        const currentSet = new Set(appointmentIds);
+        const seenIds = readSeenIds();
+        const unseenIds = appointmentIds.filter((id) => !seenIds.has(id));
+
+        if (!initialized) {
+          writeSeenIds(appointmentIds);
+          initialized = true;
+          setPoolAlert({ newCount: 0, totalCount: appointmentIds.length });
+          return;
+        }
+
+        if (pathname === "/clinic/pool") {
+          writeSeenIds(appointmentIds);
+          setPoolAlert({ newCount: 0, totalCount: appointmentIds.length });
+          return;
+        }
+
+        const retainedSeenIds = [...seenIds].filter((id) => currentSet.has(id));
+        writeSeenIds([...retainedSeenIds, ...unseenIds]);
+        setPoolAlert({ newCount: unseenIds.length, totalCount: appointmentIds.length });
+      } catch {
+        if (!active) return;
+      }
+    }
+
+    void pollPool();
+    const intervalId = window.setInterval(() => {
+      void pollPool();
+    }, POOL_POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [pathname, resolvedOnboardingComplete, session?.accessToken]);
+
   if (!hydrated) return null;
   if (!session) return null;
   const clinicSession = session;
@@ -338,20 +478,23 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     window.open(launchUrl, "_blank", "noopener,noreferrer");
   }
 
-  const resolvedOnboardingComplete =
-    onboardingComplete || backendOnboardingComplete;
-
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar
         clinicSlug={clinicSession.clinicSlug}
         clinicName={clinicSession.clinicName || clinicSession.clinicSlug}
         onboardingComplete={resolvedOnboardingComplete}
+        poolAlert={poolAlert}
         onOpenOscar={handleOpenOscar}
         onLogout={handleLogout}
       />
 
       <main className="flex-1 overflow-y-auto">
+        <PoolAlertBanner
+          href="/clinic/pool"
+          poolAlert={poolAlert}
+          onDismiss={() => setPoolAlert((current) => ({ ...current, newCount: 0 }))}
+        />
         {children}
       </main>
     </div>

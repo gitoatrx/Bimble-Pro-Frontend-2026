@@ -97,8 +97,15 @@ export type PatientLoginSession = {
 };
 
 export type PatientOtpStartResponse = {
-  patient_id: number;
+  otp_token: string;
   channel: string;
+  message: string;
+  debug_otp?: string | null;
+};
+
+export type PatientPhoneOtpVerifyResponse = {
+  otp_token: string;
+  phone_verified: boolean;
   message: string;
 };
 

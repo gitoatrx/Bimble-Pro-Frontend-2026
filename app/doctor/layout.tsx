@@ -28,7 +28,11 @@ import {
   storeDoctorLoginSession,
   suppressDoctorUiPreviewForTab,
 } from "@/lib/doctor/session";
-import { fetchDoctorClinics, type DoctorClinicListItem } from "@/lib/api/doctor-dashboard";
+import {
+  fetchDoctorClinics,
+  fetchDoctorPool,
+  type DoctorClinicListItem,
+} from "@/lib/api/doctor-dashboard";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -36,6 +40,14 @@ type NavItem = {
   label: string;
   Icon: React.FC<{ className?: string }>;
 };
+
+type PoolAlertState = {
+  newCount: number;
+  totalCount: number;
+};
+
+const DOCTOR_POOL_SEEN_IDS_KEY = "bimble:doctor:pool-seen-ids";
+const POOL_POLL_INTERVAL_MS = 15000;
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/doctor/dashboard",     label: "Today",         Icon: LayoutDashboard },
@@ -82,6 +94,50 @@ function readDoctorSessionSnapshot() {
   return getDoctorUiPreviewSessionRaw();
 }
 
+function PoolAlertBanner({
+  href,
+  poolAlert,
+  onDismiss,
+}: {
+  href: string;
+  poolAlert: PoolAlertState;
+  onDismiss: () => void;
+}) {
+  if (poolAlert.newCount <= 0) {
+    return null;
+  }
+
+  return (
+    <div className="sticky top-0 z-40 border-b border-amber-200 bg-amber-50/95 px-4 py-3 backdrop-blur sm:px-6">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-amber-950">
+            New appointment{poolAlert.newCount === 1 ? "" : "s"} waiting in the pool
+          </p>
+          <p className="text-xs text-amber-800">
+            {poolAlert.newCount} new item{poolAlert.newCount === 1 ? "" : "s"} detected. Open the pool to claim the next patient.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href={href}
+            className="rounded-full bg-amber-900 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-amber-950"
+          >
+            Open pool
+          </Link>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="rounded-full border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100"
+          >
+            Dismiss
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DoctorLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -103,6 +159,7 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
   }, [hydrated, sessionRaw]);
   const [clinics, setClinics] = useState<DoctorClinicListItem[]>([]);
   const [switchingClinic, setSwitchingClinic] = useState(false);
+  const [poolAlert, setPoolAlert] = useState<PoolAlertState>({ newCount: 0, totalCount: 0 });
 
   useEffect(() => {
     let active = true;
@@ -142,6 +199,73 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
       router.replace("/doctor/onboarding");
     }
   }, [hydrated, isPublic, pathname, router, session]);
+
+  useEffect(() => {
+    if (!session?.accessToken || !isDoctorOnboardingComplete(session.doctorId) || isPublic) {
+      return;
+    }
+    const accessToken = session.accessToken;
+
+    let active = true;
+    let initialized = false;
+
+    function readSeenIds() {
+      if (typeof window === "undefined") return new Set<number>();
+      try {
+        const raw = sessionStorage.getItem(DOCTOR_POOL_SEEN_IDS_KEY);
+        const parsed: unknown = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(parsed) ? parsed.filter((value): value is number => typeof value === "number") : []);
+      } catch {
+        return new Set<number>();
+      }
+    }
+
+    function writeSeenIds(ids: number[]) {
+      if (typeof window === "undefined") return;
+      sessionStorage.setItem(DOCTOR_POOL_SEEN_IDS_KEY, JSON.stringify(ids));
+    }
+
+    async function pollPool() {
+      try {
+        const response = await fetchDoctorPool(accessToken);
+        if (!active) return;
+
+        const appointmentIds = response.appointments.map((item) => item.appointment_id);
+        const currentSet = new Set(appointmentIds);
+        const seenIds = readSeenIds();
+        const unseenIds = appointmentIds.filter((id) => !seenIds.has(id));
+
+        if (!initialized) {
+          writeSeenIds(appointmentIds);
+          initialized = true;
+          setPoolAlert({ newCount: 0, totalCount: appointmentIds.length });
+          return;
+        }
+
+        if (pathname === "/doctor/pool") {
+          writeSeenIds(appointmentIds);
+          setPoolAlert({ newCount: 0, totalCount: appointmentIds.length });
+          return;
+        }
+
+        const retainedSeenIds = [...seenIds].filter((id) => currentSet.has(id));
+        writeSeenIds([...retainedSeenIds, ...unseenIds]);
+        setPoolAlert({ newCount: unseenIds.length, totalCount: appointmentIds.length });
+      } catch {
+        if (!active) return;
+      }
+    }
+
+    void pollPool();
+    const intervalId = window.setInterval(() => {
+      void pollPool();
+    }, POOL_POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [isPublic, pathname, session?.accessToken, session?.doctorId]);
 
   if (isPublic) {
     return <>{children}</>;
@@ -270,6 +394,10 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
               <div className="space-y-1">
                 {NAV_ITEMS.map(({ href, label, Icon }) => {
                   const active = pathname === href || pathname.startsWith(href + "/");
+                  const badge =
+                    label === "Pool" && poolAlert.totalCount > 0
+                      ? String(poolAlert.totalCount)
+                      : null;
                   return (
                     <Link
                       key={href}
@@ -282,8 +410,18 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
                       )}
                     >
                       <Icon className="h-4 w-4 flex-shrink-0" />
-                      <span>{label}</span>
-                      {active ? <span className="ml-auto h-2 w-2 rounded-full bg-current/80" /> : null}
+                      <span className="flex-1">{label}</span>
+                      {badge ? (
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                            active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/10 text-primary",
+                          )}
+                        >
+                          {badge}
+                        </span>
+                      ) : null}
+                      {active ? <span className="h-2 w-2 rounded-full bg-current/80" /> : null}
                     </Link>
                   );
                 })}
@@ -338,6 +476,10 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
             <nav className="flex gap-2 overflow-x-auto px-4 pb-3">
               {NAV_ITEMS.map(({ href, label, Icon }) => {
                 const active = pathname === href || pathname.startsWith(href + "/");
+                const badge =
+                  label === "Pool" && poolAlert.totalCount > 0
+                    ? String(poolAlert.totalCount)
+                    : null;
                 return (
                   <Link
                     key={href}
@@ -351,6 +493,16 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {label}
+                    {badge ? (
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                          active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/10 text-primary",
+                        )}
+                      >
+                        {badge}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}
@@ -358,6 +510,11 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
           </header>
 
           <main className="min-w-0 flex-1">
+            <PoolAlertBanner
+              href="/doctor/pool"
+              poolAlert={poolAlert}
+              onDismiss={() => setPoolAlert((current) => ({ ...current, newCount: 0 }))}
+            />
             {children}
           </main>
         </div>

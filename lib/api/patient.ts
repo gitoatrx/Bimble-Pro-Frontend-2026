@@ -2,6 +2,7 @@ import { apiRequest } from "@/lib/api/request";
 import type {
   PatientFamilyMember,
   PatientOtpStartResponse,
+  PatientPhoneOtpVerifyResponse,
   PatientOtpVerifyResponse,
   PatientPortalAppointment,
   PatientPortalAppointmentsPayload,
@@ -18,7 +19,6 @@ function authHeaders(accessToken: string) {
 
 export function submitPatientPhoneLogin(payload: {
   phone: string;
-  date_of_birth: string;
 }) {
   return apiRequest<PatientOtpStartResponse, typeof payload>({
     endpoint: "/api/v1/patients/auth/phone",
@@ -27,12 +27,24 @@ export function submitPatientPhoneLogin(payload: {
   });
 }
 
-export function submitPatientVerifyOtp(payload: {
-  patient_id: number;
+export function submitPatientVerifyPhoneOtp(payload: {
+  otp_token: string;
   otp_code: string;
 }) {
+  return apiRequest<PatientPhoneOtpVerifyResponse, typeof payload>({
+    endpoint: "/api/v1/patients/auth/phone/verify",
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function submitPatientPhoneProfileLogin(payload: {
+  otp_token: string;
+  date_of_birth: string;
+  phn: string;
+}) {
   return apiRequest<PatientOtpVerifyResponse, typeof payload>({
-    endpoint: "/api/v1/patients/auth/verify",
+    endpoint: "/api/v1/patients/auth/phone/profile",
     method: "POST",
     body: payload,
   });
