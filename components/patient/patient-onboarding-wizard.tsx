@@ -891,9 +891,7 @@ export function PatientOnboardingWizard() {
             <GooglePlacesAddressInput
               id="patient-street-address"
               value={draft.addressLine}
-              onChange={(value) =>
-                setField("addressLine", value.replace(NON_ADDRESS_CHARACTERS, ""))
-              }
+              onChange={(value) => setField("addressLine", value)}
               onAddressSelected={handleAddressSelected}
               placeholder="Start typing your address"
             />
