@@ -24,6 +24,8 @@ type Availability = {
   specificDate?: string;
   startTime: string;
   endTime: string;
+  breakStartTime?: string;
+  breakEndTime?: string;
   effectiveFrom: string;
   effectiveUntil: string;
 };
@@ -63,6 +65,14 @@ function normalizeAvailability(record: Record<string, unknown>): Availability {
       (typeof record.endTime === "string" && record.endTime) ||
       (typeof record.end_time === "string" && record.end_time) ||
       "",
+    breakStartTime:
+      (typeof record.breakStartTime === "string" && record.breakStartTime) ||
+      (typeof record.break_start_time === "string" && record.break_start_time) ||
+      undefined,
+    breakEndTime:
+      (typeof record.breakEndTime === "string" && record.breakEndTime) ||
+      (typeof record.break_end_time === "string" && record.break_end_time) ||
+      undefined,
     effectiveFrom:
       (typeof record.effectiveFrom === "string" && record.effectiveFrom) ||
       (typeof record.effective_from === "string" && record.effective_from) ||
@@ -95,6 +105,8 @@ function AddEntryForm({
   const [specificDate, setSpecificDate] = useState("");
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("17:00");
+  const [breakStartTime, setBreakStartTime] = useState("12:00");
+  const [breakEndTime, setBreakEndTime] = useState("13:00");
   const [effectiveFrom, setEffectiveFrom] = useState(getCanadaPacificDateKey());
   const [effectiveUntil, setEffectiveUntil] = useState("");
   const [saving, setSaving] = useState(false);
@@ -115,6 +127,12 @@ function AddEntryForm({
   function canSave() {
     if (!doctorId) return false;
     if (startTime >= endTime) return false;
+    if ((breakStartTime && !breakEndTime) || (!breakStartTime && breakEndTime)) return false;
+    if (breakStartTime && breakEndTime) {
+      if (!(startTime < breakStartTime && breakStartTime < breakEndTime && breakEndTime < endTime)) {
+        return false;
+      }
+    }
     if (mode === "recurring" && daysOfWeek.length === 0) return false;
     if (mode === "specific" && !specificDate) return false;
     return effectiveFrom !== "";
@@ -134,6 +152,8 @@ function AddEntryForm({
         specificDate: mode === "specific" ? specificDate : undefined,
         startTime,
         endTime,
+        breakStartTime: breakStartTime || undefined,
+        breakEndTime: breakEndTime || undefined,
         effectiveFrom,
         effectiveUntil,
       });
@@ -141,6 +161,8 @@ function AddEntryForm({
       setSpecificDate("");
       setStartTime("09:00");
       setEndTime("17:00");
+      setBreakStartTime("12:00");
+      setBreakEndTime("13:00");
       setEffectiveUntil("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add availability.");
@@ -242,6 +264,26 @@ function AddEntryForm({
         )}
       </div>
 
+      <div>
+        <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Lunch break
+        </label>
+        <div className="flex max-w-xs items-center gap-2">
+          <Input type="time" value={breakStartTime} onChange={(e) => setBreakStartTime(e.target.value)} />
+          <span className="flex-shrink-0 text-sm text-muted-foreground">to</span>
+          <Input type="time" value={breakEndTime} onChange={(e) => setBreakEndTime(e.target.value)} />
+        </div>
+        {breakStartTime && breakEndTime && !(startTime < breakStartTime && breakStartTime < breakEndTime && breakEndTime < endTime) ? (
+          <p className="mt-1 text-xs text-destructive">
+            Lunch break must stay inside the doctor&apos;s working hours.
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-muted-foreground">
+            These times are excluded when 15-minute appointment slots are generated.
+          </p>
+        )}
+      </div>
+
       {mode === "recurring" && (
         <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -281,6 +323,7 @@ function EntryRow({
 }) {
   const dayNames = entry.daysOfWeek.map((day) => DAY_LABELS[day]).join(", ");
   const until = entry.effectiveUntil ? displayDate(entry.effectiveUntil) : "No end date";
+  const lunch = entry.breakStartTime && entry.breakEndTime ? `${entry.breakStartTime} - ${entry.breakEndTime}` : null;
 
   return (
     <div className="flex items-start gap-4 rounded-2xl border border-border bg-card px-5 py-4 transition-colors hover:bg-accent/30">
@@ -302,6 +345,9 @@ function EntryRow({
             <Clock className="h-3 w-3" />
             {entry.startTime} - {entry.endTime}
           </span>
+          {lunch ? (
+            <span className="text-xs text-muted-foreground">Lunch: {lunch}</span>
+          ) : null}
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <CalendarDays className="h-3 w-3" />
             From {displayDate(entry.effectiveFrom)} - {until}
@@ -377,6 +423,8 @@ export default function DoctorSchedulePage() {
       specificDate: entry.specificDate,
       startTime: entry.startTime,
       endTime: entry.endTime,
+      breakStartTime: entry.breakStartTime,
+      breakEndTime: entry.breakEndTime,
       effectiveFrom: entry.effectiveFrom,
       effectiveUntil: entry.effectiveUntil || undefined,
     };

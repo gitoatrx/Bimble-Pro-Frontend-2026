@@ -19,12 +19,15 @@ import {
 } from "lucide-react";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { FieldError } from "@/components/clinic-access/field-error";
+import { GooglePlacesAddressInput } from "@/components/clinic-access/google-places-address-input";
+import type { ClinicAddressSelection } from "@/lib/clinic/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ClinicOtpCard } from "@/components/clinic-access/clinic-otp-card";
 import { formatCanadaPacificDateKey, getCanadaPacificDateKey, shiftCanadaPacificDateKey } from "@/lib/time-zone";
 import {
   completePatientIntake,
+  fetchBimblePharmacies,
   fetchPatientIntakeSlots,
   savePatientIntakeHealth,
   savePatientIntakeProfile,
@@ -32,6 +35,7 @@ import {
   startPatientIntakePhone,
   verifyPatientIntakePhone,
 } from "@/lib/api/patient-intake";
+import type { PatientBimblePharmacy } from "@/lib/api/patient-intake";
 import type {
   PatientIntakeCompletion,
   PatientFulfillment,
@@ -66,73 +70,6 @@ const GENDERS = ["Female", "Male", "Non-binary", "Prefer not to say", "Other"];
 const NON_NAME_CHARACTERS = /[^\p{L}\s'’-]/gu;
 const NON_ADDRESS_CHARACTERS = /[^\p{L}\d\s.'’#/-]/gu;
 
-type NearbyPharmacyOption = {
-  id: string;
-  name: string;
-  address: string;
-  city: string;
-  postalCode: string;
-  phone: string;
-  distanceLabel: string;
-};
-
-const NEARBY_PHARMACY_OPTIONS: NearbyPharmacyOption[] = [
-  {
-    id: "main-street-pharmacy",
-    name: "Main Street Pharmacy",
-    address: "123 Main St",
-    city: "Vancouver",
-    postalCode: "V6B 1A1",
-    phone: "(604) 555-0123",
-    distanceLabel: "0.8 km",
-  },
-  {
-    id: "west-coast-care-pharmacy",
-    name: "West Coast Care Pharmacy",
-    address: "2450 Burrard St",
-    city: "Vancouver",
-    postalCode: "V6J 3J2",
-    phone: "(604) 555-0188",
-    distanceLabel: "1.2 km",
-  },
-  {
-    id: "oakridge-community-pharmacy",
-    name: "Oakridge Community Pharmacy",
-    address: "650 W 41st Ave",
-    city: "Vancouver",
-    postalCode: "V5Z 2M9",
-    phone: "(604) 555-0144",
-    distanceLabel: "2.1 km",
-  },
-  {
-    id: "burnaby-central-pharmacy",
-    name: "Burnaby Central Pharmacy",
-    address: "4550 Kingsway",
-    city: "Burnaby",
-    postalCode: "V5H 2A9",
-    phone: "(604) 555-0194",
-    distanceLabel: "3.4 km",
-  },
-  {
-    id: "surrey-gateway-pharmacy",
-    name: "Surrey Gateway Pharmacy",
-    address: "10280 120 St",
-    city: "Surrey",
-    postalCode: "V3V 4G1",
-    phone: "(604) 555-0166",
-    distanceLabel: "4.0 km",
-  },
-  {
-    id: "richmond-medical-pharmacy",
-    name: "Richmond Medical Pharmacy",
-    address: "8171 Ackroyd Rd",
-    city: "Richmond",
-    postalCode: "V6X 3K1",
-    phone: "(604) 555-0177",
-    distanceLabel: "4.6 km",
-  },
-];
-
 function normalizeNameInput(value: string) {
   return value.replace(NON_NAME_CHARACTERS, "");
 }
@@ -143,6 +80,14 @@ function normalizeCityInput(value: string) {
 
 function normalizeProvinceInput(value: string) {
   return value.replace(/[^\p{L}\s.'’-]/gu, "");
+}
+
+function formatPostalCodeInput(value: string) {
+  const compact = value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  if (compact.length <= 3) {
+    return compact;
+  }
+  return `${compact.slice(0, 3)} ${compact.slice(3)}`;
 }
 
 function isValidName(value: string) {
@@ -164,24 +109,18 @@ function isValidAddress(value: string) {
   );
 }
 
-function normalizePostalPrefix(value: string) {
-  return value.replace(/\s/g, "").toUpperCase().slice(0, 3);
-}
-
-function getNearbyPharmacies(city: string, postalCode: string) {
-  const normalizedCity = city.trim().toLowerCase();
-  const postalPrefix = normalizePostalPrefix(postalCode);
-
-  return [...NEARBY_PHARMACY_OPTIONS].sort((a, b) => {
-    const aMatchesCity = normalizedCity && a.city.toLowerCase() === normalizedCity ? 1 : 0;
-    const bMatchesCity = normalizedCity && b.city.toLowerCase() === normalizedCity ? 1 : 0;
-    if (aMatchesCity !== bMatchesCity) return bMatchesCity - aMatchesCity;
-
-    const aMatchesPostal = postalPrefix && a.postalCode.replace(/\s/g, "").startsWith(postalPrefix) ? 1 : 0;
-    const bMatchesPostal = postalPrefix && b.postalCode.replace(/\s/g, "").startsWith(postalPrefix) ? 1 : 0;
-    if (aMatchesPostal !== bMatchesPostal) return bMatchesPostal - aMatchesPostal;
-
-    return a.distanceLabel.localeCompare(b.distanceLabel, undefined, { numeric: true });
+async function requestBrowserCoordinates(): Promise<{ lat: number; lng: number } | null> {
+  if (typeof window === "undefined" || !navigator.geolocation) return null;
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        resolve({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
+    );
   });
 }
 
@@ -275,6 +214,12 @@ export function PatientOnboardingWizard() {
     const params = new URLSearchParams(window.location.search);
     const reason = params.get("reason")?.trim() ?? "";
     const location = params.get("location")?.trim() ?? "";
+    const latitudeRaw = params.get("lat");
+    const longitudeRaw = params.get("lng");
+    const careLatitude =
+      latitudeRaw && Number.isFinite(Number(latitudeRaw)) ? Number(latitudeRaw) : baseDraft.careLatitude;
+    const careLongitude =
+      longitudeRaw && Number.isFinite(Number(longitudeRaw)) ? Number(longitudeRaw) : baseDraft.careLongitude;
     const serviceIdRaw = params.get("serviceId");
     const serviceId = serviceIdRaw ? Number(serviceIdRaw) : null;
     return {
@@ -282,6 +227,8 @@ export function PatientOnboardingWizard() {
       serviceId: baseDraft.serviceId ?? (Number.isFinite(serviceId) ? serviceId : null),
       careReason: reason || baseDraft.careReason,
       careLocation: location || baseDraft.careLocation,
+      careLatitude,
+      careLongitude,
     };
   });
   const [otpCode, setOtpCode] = useState("");
@@ -293,6 +240,9 @@ export function PatientOnboardingWizard() {
   const [previewCode, setPreviewCode] = useState<string | null>(() => readPatientPreviewCode());
   const [intakeToken, setIntakeToken] = useState<string | null>(() => readPatientIntakeAccessToken());
   const [intakeSessionId, setIntakeSessionId] = useState<number | null>(() => readPatientIntakeSessionId());
+  const [bimblePharmacies, setBimblePharmacies] = useState<PatientBimblePharmacy[]>([]);
+  const [isLoadingBimblePharmacies, setIsLoadingBimblePharmacies] = useState(false);
+  const [bimblePharmacyError, setBimblePharmacyError] = useState("");
   const [dobMonth, setDobMonth] = useState(() => splitDateOfBirth(readPatientOnboardingDraft().dateOfBirth).month);
   const [dobDay, setDobDay] = useState(() => splitDateOfBirth(readPatientOnboardingDraft().dateOfBirth).day);
   const [dobYear, setDobYear] = useState(() => splitDateOfBirth(readPatientOnboardingDraft().dateOfBirth).year);
@@ -322,19 +272,14 @@ export function PatientOnboardingWizard() {
     return { progressOrder: order, stepIndex: i, progressPct: pct };
   }, [step]);
 
-  const nearbyPharmacies = useMemo(
-    () => getNearbyPharmacies(draft.city, draft.postalCode),
-    [draft.city, draft.postalCode],
-  );
-
   const selectedNearbyPharmacyId = useMemo(() => {
-    const match = nearbyPharmacies.find(
+    const match = bimblePharmacies.find(
       (option) =>
         option.name === draft.preferredPharmacyName &&
         option.address === draft.preferredPharmacyAddress &&
         option.city === draft.preferredPharmacyCity &&
-        option.postalCode === draft.preferredPharmacyPostalCode &&
-        option.phone === draft.preferredPharmacyPhone,
+        (option.postal_code || "") === draft.preferredPharmacyPostalCode &&
+        (option.phone || "") === draft.preferredPharmacyPhone,
     );
     return match?.id ?? "";
   }, [
@@ -343,7 +288,7 @@ export function PatientOnboardingWizard() {
     draft.preferredPharmacyName,
     draft.preferredPharmacyPhone,
     draft.preferredPharmacyPostalCode,
-    nearbyPharmacies,
+    bimblePharmacies,
   ]);
 
   function setField<K extends keyof PatientOnboardingDraft>(key: K, value: PatientOnboardingDraft[K]) {
@@ -351,16 +296,37 @@ export function PatientOnboardingWizard() {
     setErrors((e) => ({ ...e, [String(key)]: "" }));
   }
 
+  function handleAddressSelected(selection: ClinicAddressSelection) {
+    setDraft((current) => ({
+      ...current,
+      addressLine: selection.address || current.addressLine,
+      city: selection.city ? normalizeCityInput(selection.city) : current.city,
+      province: selection.province
+        ? normalizeProvinceInput(selection.province)
+        : current.province,
+      postalCode: selection.postalCode
+        ? formatPostalCodeInput(selection.postalCode)
+        : current.postalCode,
+    }));
+    setErrors((current) => ({
+      ...current,
+      addressLine: "",
+      city: "",
+      province: "",
+      postalCode: "",
+    }));
+  }
+
   function applyNearbyPharmacy(optionId: string) {
-    const option = nearbyPharmacies.find((item) => item.id === optionId);
+    const option = bimblePharmacies.find((item) => item.id === optionId);
     if (!option) return;
     setDraft((prev) => ({
       ...prev,
       preferredPharmacyName: option.name,
       preferredPharmacyAddress: option.address,
       preferredPharmacyCity: option.city,
-      preferredPharmacyPostalCode: option.postalCode,
-      preferredPharmacyPhone: option.phone,
+      preferredPharmacyPostalCode: option.postal_code || "",
+      preferredPharmacyPhone: option.phone || "",
     }));
     setErrors((current) => ({
       ...current,
@@ -399,6 +365,65 @@ export function PatientOnboardingWizard() {
   }, [draft.visitType, step]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadBimblePharmacies() {
+      if (step !== "pharmacy" || draft.pharmacyChoice !== "bimble") return;
+      setBimblePharmacyError("");
+      setIsLoadingBimblePharmacies(true);
+      let lat = draft.careLatitude;
+      let lng = draft.careLongitude;
+      if (lat == null || lng == null) {
+        const coords = await requestBrowserCoordinates();
+        if (coords) {
+          lat = coords.lat;
+          lng = coords.lng;
+          if (!cancelled) {
+            setDraft((current) => ({
+              ...current,
+              careLatitude: coords.lat,
+              careLongitude: coords.lng,
+            }));
+          }
+        }
+      }
+
+      if (lat == null || lng == null) {
+        if (!cancelled) {
+          setBimblePharmacies([]);
+          setBimblePharmacyError("Allow location access to see nearby Bimble pharmacies.");
+          setIsLoadingBimblePharmacies(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetchBimblePharmacies(lat, lng);
+        if (cancelled) return;
+        setBimblePharmacies(response.pharmacies ?? []);
+        if (!response.pharmacies?.length) {
+          setBimblePharmacyError("No active Bimble pharmacies are available for this location right now.");
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setBimblePharmacies([]);
+        setBimblePharmacyError(
+          error instanceof Error ? error.message : "Could not load Bimble pharmacies right now.",
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoadingBimblePharmacies(false);
+        }
+      }
+    }
+
+    void loadBimblePharmacies();
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.careLatitude, draft.careLongitude, draft.pharmacyChoice, step]);
+
+  useEffect(() => {
     const dob = splitDateOfBirth(draft.dateOfBirth);
     setDobMonth(dob.month);
     setDobDay(dob.day);
@@ -422,6 +447,8 @@ export function PatientOnboardingWizard() {
         phone: draft.phone,
         careReason: draft.careReason || "General consultation",
         careLocation: draft.careLocation || undefined,
+        careLatitude: draft.careLatitude,
+        careLongitude: draft.careLongitude,
         serviceId: draft.serviceId,
       });
       storePatientIntakeSessionId(response.intake_session_id);
@@ -539,22 +566,18 @@ export function PatientOnboardingWizard() {
       return;
     }
 
-    const preferredPharmacyDetails =
-      pharmacyChoice === "preferred"
-        ? {
-            preferredPharmacyName: draft.preferredPharmacyName,
-            preferredPharmacyAddress: draft.preferredPharmacyAddress,
-            preferredPharmacyCity: draft.preferredPharmacyCity,
-            preferredPharmacyPostalCode: draft.preferredPharmacyPostalCode,
-            preferredPharmacyPhone: draft.preferredPharmacyPhone,
-          }
-        : {
-            preferredPharmacyName: "",
-            preferredPharmacyAddress: "",
-            preferredPharmacyCity: "",
-            preferredPharmacyPostalCode: "",
-            preferredPharmacyPhone: "",
-          };
+    if (!draft.preferredPharmacyName.trim()) {
+      setErrors({ preferredPharmacyName: "Please choose a pharmacy before confirming the booking." });
+      return;
+    }
+
+    const preferredPharmacyDetails = {
+      preferredPharmacyName: draft.preferredPharmacyName,
+      preferredPharmacyAddress: draft.preferredPharmacyAddress,
+      preferredPharmacyCity: draft.preferredPharmacyCity,
+      preferredPharmacyPostalCode: draft.preferredPharmacyPostalCode,
+      preferredPharmacyPhone: draft.preferredPharmacyPhone,
+    };
 
     setSubmitting(true);
     try {
@@ -865,13 +888,14 @@ export function PatientOnboardingWizard() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Street address</label>
-            <Input
+            <GooglePlacesAddressInput
+              id="patient-street-address"
               value={draft.addressLine}
-              onChange={(e) => setField("addressLine", e.target.value.replace(NON_ADDRESS_CHARACTERS, ""))}
-              className="h-12 rounded-xl border-border"
-              placeholder="123 Main St"
-              autoComplete="street-address"
-              inputMode="text"
+              onChange={(value) =>
+                setField("addressLine", value.replace(NON_ADDRESS_CHARACTERS, ""))
+              }
+              onAddressSelected={handleAddressSelected}
+              placeholder="Start typing your address"
             />
             <FieldError message={errors.addressLine} />
           </div>
@@ -904,7 +928,7 @@ export function PatientOnboardingWizard() {
             <label className="text-sm font-medium">Postal code</label>
             <Input
               value={draft.postalCode}
-              onChange={(e) => setField("postalCode", e.target.value.toUpperCase().slice(0, 7))}
+              onChange={(e) => setField("postalCode", formatPostalCodeInput(e.target.value))}
               className="h-12 rounded-xl border-border"
               placeholder="V6B 1A1"
             />
@@ -1187,15 +1211,16 @@ export function PatientOnboardingWizard() {
             <button
               type="button"
               onClick={() => {
-                setField("pharmacyChoice", "bimble");
-                setErrors((current) => ({
+                setDraft((current) => ({
                   ...current,
+                  pharmacyChoice: "bimble",
                   preferredPharmacyName: "",
                   preferredPharmacyAddress: "",
                   preferredPharmacyCity: "",
                   preferredPharmacyPostalCode: "",
                   preferredPharmacyPhone: "",
                 }));
+                setBimblePharmacyError("");
               }}
               className={cn(
                 "flex flex-col items-start gap-3 rounded-[1.5rem] border p-6 text-left shadow-sm transition-all",
@@ -1211,10 +1236,15 @@ export function PatientOnboardingWizard() {
             <button
               type="button"
               onClick={() => {
-                setField("pharmacyChoice", "preferred");
-                if (!selectedNearbyPharmacyId && nearbyPharmacies.length > 0) {
-                  applyNearbyPharmacy(nearbyPharmacies[0]!.id);
-                }
+                setDraft((current) => ({
+                  ...current,
+                  pharmacyChoice: "preferred",
+                  preferredPharmacyName: "",
+                  preferredPharmacyAddress: "",
+                  preferredPharmacyCity: "",
+                  preferredPharmacyPostalCode: "",
+                  preferredPharmacyPhone: "",
+                }));
               }}
               className={cn(
                 "flex flex-col items-start gap-3 rounded-[1.5rem] border p-6 text-left shadow-sm transition-all",
@@ -1230,21 +1260,6 @@ export function PatientOnboardingWizard() {
           </div>
           {draft.pharmacyChoice === "preferred" ? (
             <div className="space-y-6 rounded-[1.5rem] border border-primary/10 bg-gradient-to-br from-primary/5 via-white to-primary/10 p-5 shadow-sm">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Nearby pharmacies</label>
-                <select
-                  value={selectedNearbyPharmacyId}
-                  onChange={(e) => applyNearbyPharmacy(e.target.value)}
-                  className="flex h-12 w-full rounded-2xl border border-border bg-white px-4 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/20"
-                >
-                  <option value="">Select a nearby pharmacy</option>
-                  {nearbyPharmacies.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.name} · {option.distanceLabel} · {option.city}
-                    </option>
-                  ))}
-                </select>
-              </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Pharmacy name</label>
                 <Input
@@ -1308,17 +1323,68 @@ export function PatientOnboardingWizard() {
               </div>
             </div>
           ) : draft.pharmacyChoice === "bimble" ? (
-            <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-foreground">
-              <Sparkles className="mb-1 inline h-4 w-4 text-primary" />{" "}
-              {draft.fulfillment === "delivery" ? (
-                <>
-                  <strong>Our pharmacist will deliver in about 1 hour</strong> after your prescription is ready.
-                </>
-              ) : (
-                <>
-                  <strong>Bimble pharmacy will prepare your prescription quickly</strong> for pharmacy pickup.
-                </>
-              )}
+            <div className="space-y-4 rounded-[1.5rem] border border-primary/10 bg-gradient-to-br from-primary/5 via-white to-primary/10 p-5 shadow-sm">
+              <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-foreground">
+                <Sparkles className="mb-1 inline h-4 w-4 text-primary" />{" "}
+                {draft.fulfillment === "delivery" ? (
+                  <>
+                    <strong>Our pharmacist will deliver in about 1 hour</strong> after your prescription is ready.
+                  </>
+                ) : (
+                  <>
+                    <strong>Bimble pharmacy will prepare your prescription quickly</strong> for pharmacy pickup.
+                  </>
+                )}
+              </div>
+              {isLoadingBimblePharmacies ? (
+                <div className="rounded-2xl border border-border bg-white px-4 py-3 text-sm text-muted-foreground">
+                  Loading nearby Bimble pharmacies...
+                </div>
+              ) : null}
+              {bimblePharmacyError ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  {bimblePharmacyError}
+                </div>
+              ) : null}
+              {bimblePharmacies.length ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Available Bimble pharmacies</label>
+                  <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                    {bimblePharmacies.map((option) => {
+                      const selected = selectedNearbyPharmacyId === option.id;
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => applyNearbyPharmacy(option.id)}
+                          className={cn(
+                            "w-full rounded-2xl border bg-white px-4 py-3 text-left transition-all",
+                            selected
+                              ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                              : "border-border hover:border-primary/40",
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-foreground">{option.name}</p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {[option.address, option.city, option.postal_code].filter(Boolean).join(", ")}
+                              </p>
+                              {option.phone ? (
+                                <p className="mt-1 text-xs text-muted-foreground">{option.phone}</p>
+                              ) : null}
+                            </div>
+                            <div className="shrink-0 text-right text-xs font-semibold text-primary">
+                              {option.distance_label || "Nearby"}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <FieldError message={errors.preferredPharmacyName} />
+                </div>
+              ) : null}
             </div>
           ) : null}
           {draft.pharmacyChoice === "preferred" ? (
@@ -1342,7 +1408,11 @@ export function PatientOnboardingWizard() {
             <Button
               type="button"
               className="flex-1 rounded-xl"
-              disabled={!draft.pharmacyChoice || submitting}
+              disabled={
+                !draft.pharmacyChoice ||
+                submitting ||
+                (draft.pharmacyChoice === "bimble" && !draft.preferredPharmacyName.trim())
+              }
               onClick={() => {
                 if (!draft.pharmacyChoice) return;
                 void finalizeBooking(draft.fulfillment || "pickup", draft.pharmacyChoice);
@@ -1400,11 +1470,9 @@ export function PatientOnboardingWizard() {
                 )}
                 <span>
                   {(completion?.summary.fulfillment || draft.fulfillment) === "pickup"
-                    ? (completion?.summary.pharmacy_choice || draft.pharmacyChoice) === "bimble"
-                      ? "Pickup — Bimble pharmacy"
-                      : `Pickup — ${draft.preferredPharmacyName || "your preferred pharmacy"}`
+                    ? `Pickup — ${draft.preferredPharmacyName || "selected pharmacy"}`
                     : (completion?.summary.pharmacy_choice || draft.pharmacyChoice) === "bimble"
-                      ? "Delivery — Bimble pharmacy (~1 hour)"
+                      ? `Delivery — ${draft.preferredPharmacyName || "Bimble pharmacy"} (~1 hour)`
                       : `Delivery — ${draft.preferredPharmacyName || "your preferred pharmacy"} (3–5 hours)`}
                 </span>
               </li>

@@ -21,7 +21,7 @@ export async function proxyPatientBackendRequest(
   const url = new URL(request.url);
   const method = request.method.toUpperCase();
   const hasBody = method !== "GET" && method !== "HEAD";
-  const body = hasBody ? await request.text() : undefined;
+  const body = hasBody ? await request.arrayBuffer() : undefined;
 
   const response = await fetch(
     buildBackendApiUrl(buildBackendPath(backendPath, url.search)),

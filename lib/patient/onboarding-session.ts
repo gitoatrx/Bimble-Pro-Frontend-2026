@@ -42,6 +42,8 @@ function parseDraft(raw: string | null): PatientOnboardingDraft {
       serviceName: typeof p.serviceName === "string" ? p.serviceName : "",
       careReason: typeof p.careReason === "string" ? p.careReason : "",
       careLocation: typeof p.careLocation === "string" ? p.careLocation : "",
+      careLatitude: typeof p.careLatitude === "number" ? p.careLatitude : null,
+      careLongitude: typeof p.careLongitude === "number" ? p.careLongitude : null,
       phone: typeof p.phone === "string" ? p.phone : "",
       dateOfBirth: typeof p.dateOfBirth === "string" ? p.dateOfBirth : "",
       phn: typeof p.phn === "string" ? p.phn : "",

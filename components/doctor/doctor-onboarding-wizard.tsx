@@ -31,6 +31,7 @@ import {
   storeDoctorOnboardingStage,
 } from "@/lib/doctor/session";
 import {
+  fetchDoctorHlth2870Onboarding,
   fetchDoctorHlth2950Onboarding,
   fetchDoctorHlth2991Onboarding,
   submitDoctorHlth2870Onboarding,
@@ -39,6 +40,7 @@ import {
   submitDoctorHlth2991Onboarding,
   type DoctorHlth2870Request,
   type DoctorHlth2870Response,
+  type DoctorHlth2870SavedValues,
   type DoctorHlth2832Request,
   type DoctorHlth2832Response,
   type DoctorHlth2950GetResponse,
@@ -963,6 +965,43 @@ export function DoctorOnboardingWizard() {
   }, [router, stage]);
 
   useEffect(() => {
+    if (stage !== "hlth_2870" || !accessToken) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response: DoctorHlth2870Response = await fetchDoctorHlth2870Onboarding(accessToken);
+        const savedValues: DoctorHlth2870SavedValues | undefined = response.saved_values;
+        if (!cancelled && savedValues) {
+          setStep1Form((current) => ({
+            ...current,
+            msp_billing_number: savedValues.msp_billing_number ?? current.msp_billing_number,
+            principal_practitioner_name:
+              savedValues.principal_practitioner_name ?? current.principal_practitioner_name,
+            principal_practitioner_number:
+              savedValues.principal_practitioner_number ?? current.principal_practitioner_number,
+            effective_date: savedValues.effective_date ?? current.effective_date,
+            cancel_date: savedValues.cancel_date ?? current.cancel_date,
+            signature_label: savedValues.signature.signature_label ?? current.signature_label,
+          }));
+          if (savedValues.signature.signature_data_url) {
+            setStep1SignatureDataUrl(savedValues.signature.signature_data_url);
+          }
+        }
+      } catch {
+        // Keep the local defaults when no prior or clinic-drafted values exist.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, stage]);
+
+  useEffect(() => {
     if (stage !== "hlth_2991" || !accessToken) {
       return;
     }
@@ -997,8 +1036,50 @@ export function DoctorOnboardingWizard() {
     void (async () => {
       try {
         const response: DoctorHlth2950GetResponse = await fetchDoctorHlth2950Onboarding(accessToken);
-        if (!cancelled && response.ui_content) {
-          setStep2UiContent(response.ui_content);
+        if (!cancelled) {
+          if (response.ui_content) {
+            setStep2UiContent(response.ui_content);
+          }
+          if (response.saved_values) {
+            setStep2Form((current) => ({
+              ...current,
+              attachment_action: response.saved_values.attachment_action ?? current.attachment_action,
+              msp_practitioner_number:
+                response.saved_values.msp_practitioner_number ?? current.msp_practitioner_number,
+              facility_or_practice_name:
+                response.saved_values.facility_or_practice_name ?? current.facility_or_practice_name,
+              msp_facility_number:
+                response.saved_values.msp_facility_number ?? current.msp_facility_number,
+              facility_physical_address:
+                response.saved_values.facility_physical_address ?? current.facility_physical_address,
+              facility_physical_city:
+                response.saved_values.facility_physical_city ?? current.facility_physical_city,
+              facility_physical_postal_code:
+                response.saved_values.facility_physical_postal_code ?? current.facility_physical_postal_code,
+              contact_email: response.saved_values.contact_email ?? current.contact_email,
+              contact_phone_number:
+                response.saved_values.contact_phone_number ?? current.contact_phone_number,
+              contact_fax_number:
+                response.saved_values.contact_fax_number ?? current.contact_fax_number,
+              new_attachment_effective_date:
+                response.saved_values.new_attachment_effective_date ?? current.new_attachment_effective_date,
+              new_attachment_cancellation_date:
+                response.saved_values.new_attachment_cancellation_date ?? current.new_attachment_cancellation_date,
+              attachment_cancellation_date:
+                response.saved_values.attachment_cancellation_date ?? current.attachment_cancellation_date,
+              change_attachment_effective_date:
+                response.saved_values.change_attachment_effective_date ?? current.change_attachment_effective_date,
+              change_attachment_cancellation_date:
+                response.saved_values.change_attachment_cancellation_date ?? current.change_attachment_cancellation_date,
+              confirm_declarations:
+                response.saved_values.confirm_declarations ?? current.confirm_declarations,
+              signature_label:
+                response.saved_values.signature.signature_label ?? current.signature_label,
+            }));
+            if (response.saved_values.signature.signature_data_url) {
+              setStep2SignatureDataUrl(response.saved_values.signature.signature_data_url);
+            }
+          }
         }
       } catch {
         if (!cancelled) {

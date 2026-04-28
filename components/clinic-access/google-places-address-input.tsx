@@ -112,7 +112,7 @@ export function GooglePlacesAddressInput({
       return;
     }
 
-    if (loadingState !== "ready" || trimmedValue.length < 3) {
+    if (loadingState !== "ready" || trimmedValue.length < 2) {
       return;
     }
 
@@ -278,7 +278,7 @@ export function GooglePlacesAddressInput({
             const nextValue = event.target.value;
             latestChangeHandler.current(nextValue);
 
-            if (nextValue.trim().length < 3) {
+            if (nextValue.trim().length < 2) {
               setShowDropdown(false);
               setPredictions([]);
               setSelectedIndex(-1);

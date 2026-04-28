@@ -59,6 +59,7 @@ export const API_ENDPOINTS = {
     "/api/v1/doctors/me/onboarding/settings-forms/duplicate-prescription-pad-order",
   patientIntakePhoneStart: "/api/v1/patient-intake/phone/start",
   patientIntakeLocationReverseGeocode: "/api/v1/patient-intake/location/reverse-geocode",
+  patientIntakeBimblePharmacies: "/api/v1/patient-intake/pharmacies/bimble",
   patientIntakePhoneVerify: "/api/v1/patient-intake/phone/verify",
   patientIntakeHealth: "/api/v1/patient-intake/health",
   patientIntakeProfile: "/api/v1/patient-intake/profile",

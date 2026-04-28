@@ -154,6 +154,38 @@ export type DoctorInviteRecord = {
   accepted_at: string | null;
 };
 
+export type ClinicDoctorInvite2870Draft = {
+  msp_billing_number?: string;
+  principal_practitioner_name?: string;
+  principal_practitioner_number?: string;
+  effective_date?: string;
+  cancel_date?: string;
+};
+
+export type ClinicDoctorInvite2950Draft = {
+  attachment_action?: "ADD" | "CANCEL" | "CHANGE";
+  msp_practitioner_number?: string;
+  facility_or_practice_name?: string;
+  msp_facility_number?: string;
+  facility_physical_address?: string;
+  facility_physical_city?: string;
+  facility_physical_postal_code?: string;
+  contact_email?: string;
+  contact_phone_number?: string;
+  contact_fax_number?: string;
+  new_attachment_effective_date?: string;
+  new_attachment_cancellation_date?: string;
+  attachment_cancellation_date?: string;
+  change_attachment_effective_date?: string;
+  change_attachment_cancellation_date?: string;
+  confirm_declarations?: boolean;
+};
+
+export type ClinicDoctorInviteFormDrafts = {
+  HLTH_2870?: ClinicDoctorInvite2870Draft;
+  HLTH_2950?: ClinicDoctorInvite2950Draft;
+};
+
 /**
  * Fetch all doctor invites for the current clinic.
  */
@@ -175,11 +207,12 @@ export async function fetchDoctorInvites(
 export async function inviteDoctor(
   email: string,
   accessToken: string,
+  formDrafts?: ClinicDoctorInviteFormDrafts,
 ): Promise<void> {
-  await apiRequest<unknown, { email: string }>({
+  await apiRequest<unknown, { email: string; form_drafts?: ClinicDoctorInviteFormDrafts }>({
     endpoint: API_ENDPOINTS.clinicDoctorInvite,
     method: "POST",
-    body: { email },
+    body: { email, ...(formDrafts ? { form_drafts: formDrafts } : {}) },
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 }

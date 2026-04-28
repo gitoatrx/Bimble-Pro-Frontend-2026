@@ -5,10 +5,10 @@ import {
 } from "@/lib/api/backend";
 
 export async function POST(request: Request) {
-  let body: { email?: string };
+  let body: Record<string, unknown>;
 
   try {
-    body = (await request.json()) as { email?: string };
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json(
       { message: "Invalid request payload." },
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const email = body.email?.trim().toLowerCase();
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const authHeader = request.headers.get("Authorization") ?? "";
   const accessToken = authHeader.replace(/^Bearer\s+/i, "").trim();
 
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     const backendResponse = await requestBackendApiJson({
       path: "/clinics/me/doctors/invite",
       method: "POST",
-      body: { email },
+      body: { ...body, email },
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },

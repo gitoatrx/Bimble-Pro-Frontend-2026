@@ -60,6 +60,12 @@ export type ClinicPoolResponse = {
   clinic_slug: string;
   appointments: ClinicPoolAppointment[];
 };
+export type ClinicAppointmentRescheduleSlot = {
+  appointment_date: string;
+  appointment_time: string;
+  doctor_id: number;
+  doctor_name: string;
+};
 export type ClinicPortalRequest = {
   request_id: number;
   patient_id: number;
@@ -71,6 +77,11 @@ export type ClinicPortalRequest = {
   details: string | null;
   patient_message?: string | null;
   clinic_response?: string | null;
+  attachment_name?: string | null;
+  attachment_mime_type?: string | null;
+  attachment_uploaded_at?: string | null;
+  attachment_size_bytes?: number | null;
+  attachment_download_url?: string | null;
   service_name?: string | null;
   chief_complaint?: string | null;
   appointment_status?: string | null;
@@ -811,6 +822,36 @@ export async function updateClinicRequestStatus(
   });
 }
 
+export async function uploadClinicRequestAttachment(
+  accessToken: string,
+  requestId: number,
+  file: File,
+) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_ENDPOINTS.clinicMeRequests}/${requestId}/attachment`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: formData,
+  });
+
+  const responseData = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      responseData &&
+      typeof responseData === "object" &&
+      "detail" in responseData &&
+      typeof responseData.detail === "string"
+        ? responseData.detail
+        : "Request failed.";
+    throw new Error(message);
+  }
+
+  return responseData as { request: ClinicPortalRequest };
+}
+
 export async function acceptClinicPoolAppointment(
   accessToken: string,
   appointmentId: number,
@@ -890,6 +931,67 @@ export async function assignClinicAppointmentDoctor(
   });
 }
 
+export async function fetchClinicAppointmentAvailableDoctors(
+  accessToken: string,
+  appointmentId: string | number,
+) {
+  return apiRequest<{ appointment_id: number; doctors: Array<Record<string, unknown>> }>({
+    endpoint: `${API_ENDPOINTS.clinicMeAppointments}/${appointmentId}/available-doctors`,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function cancelClinicAppointment(
+  accessToken: string,
+  appointmentId: string | number,
+  reason?: string,
+) {
+  return apiRequest<ClinicAppointmentRecord, { reason?: string }>({
+    endpoint: `${API_ENDPOINTS.clinicMeAppointments}/${appointmentId}/cancel`,
+    method: "POST",
+    body: reason ? { reason } : {},
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicAppointmentRescheduleOptions(
+  accessToken: string,
+  appointmentId: string | number,
+  options?: { date?: string; days?: number },
+) {
+  return apiRequest<{
+    appointment_id: number;
+    clinic_id: number;
+    slots: ClinicAppointmentRescheduleSlot[];
+  }>({
+    endpoint: withQuery(
+      `${API_ENDPOINTS.clinicMeAppointments}/${appointmentId}/reschedule-options`,
+      {
+        date: options?.date,
+        days: options?.days,
+      },
+    ),
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function rescheduleClinicAppointment(
+  accessToken: string,
+  appointmentId: string | number,
+  payload: {
+    appointmentDate: string;
+    appointmentTime: string;
+    doctorId: string | number;
+  },
+) {
+  return apiRequest<ClinicAppointmentRecord, typeof payload>({
+    endpoint: `${API_ENDPOINTS.clinicMeAppointments}/${appointmentId}/reschedule`,
+    method: "PATCH",
+    body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
 export async function fetchClinicDoctors(accessToken: string) {
   return apiRequest<ClinicDoctorRecord[]>({
     endpoint: API_ENDPOINTS.clinicMeDoctors,
@@ -922,7 +1024,10 @@ export async function updateClinicDoctorStatus(
 
 export async function inviteClinicDoctor(
   accessToken: string,
-  payload: { email: string },
+  payload: {
+    email: string;
+    form_drafts?: Record<string, Record<string, unknown>>;
+  },
 ) {
   return apiRequest<ClinicDoctorInviteRecord, typeof payload>({
     endpoint: API_ENDPOINTS.clinicMeDoctorInvite,

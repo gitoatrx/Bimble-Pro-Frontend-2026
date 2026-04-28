@@ -25,18 +25,23 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
+  cancelPatientAppointment,
   createPatientDocumentRequest,
   createPatientFamilyMember,
   createPatientPoolAppointment,
+  downloadPatientRequestAttachment,
+  createPatientRescheduleRequest,
   deletePatientFamilyMember,
   fetchPatientAppointments,
   fetchPatientFamilyMembers,
   fetchPatientProfile,
+  fetchPatientRescheduleOptions,
   fetchPatientRequests,
   fetchPatientServices,
   updatePatientProfile,
 } from "@/lib/api/patient";
-import { fetchPatientIntakeSlots } from "@/lib/api/patient-intake";
+import { fetchBimblePharmacies, fetchPatientIntakeSlots } from "@/lib/api/patient-intake";
+import type { PatientBimblePharmacy } from "@/lib/api/patient-intake";
 import { clearPatientLoginSession, readPatientLoginSession } from "@/lib/patient/session";
 import type {
   PatientFamilyMember,
@@ -46,6 +51,7 @@ import type {
   PatientPharmacyChoice,
   PatientPortalAppointmentsPayload,
   PatientPortalRequest,
+  PatientRescheduleSlotOption,
   PatientPortalService,
   PatientProfile,
   PatientVisitType,
@@ -91,16 +97,6 @@ type BookingDraft = {
   preferred_pharmacy_city: string;
   preferred_pharmacy_postal_code: string;
   preferred_pharmacy_phone: string;
-};
-
-type NearbyPharmacyOption = {
-  id: string;
-  name: string;
-  address: string;
-  city: string;
-  postalCode: string;
-  phone: string;
-  distanceLabel: string;
 };
 
 const emptyProfileDraft: ProfileDraft = {
@@ -159,45 +155,6 @@ const TIME_SLOTS = [
   "4:30 PM",
 ];
 
-const NEARBY_PHARMACY_OPTIONS: NearbyPharmacyOption[] = [
-  {
-    id: "main-street-pharmacy",
-    name: "Main Street Pharmacy",
-    address: "123 Main St",
-    city: "Vancouver",
-    postalCode: "V6B 1A1",
-    phone: "(604) 555-0123",
-    distanceLabel: "0.8 km",
-  },
-  {
-    id: "west-coast-care-pharmacy",
-    name: "West Coast Care Pharmacy",
-    address: "2450 Burrard St",
-    city: "Vancouver",
-    postalCode: "V6J 3J2",
-    phone: "(604) 555-0188",
-    distanceLabel: "1.2 km",
-  },
-  {
-    id: "oakridge-community-pharmacy",
-    name: "Oakridge Community Pharmacy",
-    address: "650 W 41st Ave",
-    city: "Vancouver",
-    postalCode: "V5Z 2M9",
-    phone: "(604) 555-0144",
-    distanceLabel: "2.1 km",
-  },
-  {
-    id: "burnaby-central-pharmacy",
-    name: "Burnaby Central Pharmacy",
-    address: "4550 Kingsway",
-    city: "Burnaby",
-    postalCode: "V5H 2A9",
-    phone: "(604) 555-0194",
-    distanceLabel: "3.4 km",
-  },
-];
-
 function nextDates(count: number): string[] {
   const base = getCanadaPacificDateKey();
   return Array.from({ length: count }, (_, index) => shiftCanadaPacificDateKey(base, index));
@@ -230,24 +187,18 @@ function resolveServiceIdFromProblem(problemLabel: string, services: PatientPort
   return "";
 }
 
-function normalizePostalPrefix(value: string) {
-  return value.replace(/\s/g, "").toUpperCase().slice(0, 3);
-}
-
-function getNearbyPharmacies(city: string, postalCode: string) {
-  const normalizedCity = city.trim().toLowerCase();
-  const postalPrefix = normalizePostalPrefix(postalCode);
-
-  return [...NEARBY_PHARMACY_OPTIONS].sort((a, b) => {
-    const aMatchesCity = normalizedCity && a.city.toLowerCase() === normalizedCity ? 1 : 0;
-    const bMatchesCity = normalizedCity && b.city.toLowerCase() === normalizedCity ? 1 : 0;
-    if (aMatchesCity !== bMatchesCity) return bMatchesCity - aMatchesCity;
-
-    const aMatchesPostal = postalPrefix && a.postalCode.replace(/\s/g, "").startsWith(postalPrefix) ? 1 : 0;
-    const bMatchesPostal = postalPrefix && b.postalCode.replace(/\s/g, "").startsWith(postalPrefix) ? 1 : 0;
-    if (aMatchesPostal !== bMatchesPostal) return bMatchesPostal - aMatchesPostal;
-
-    return a.distanceLabel.localeCompare(b.distanceLabel, undefined, { numeric: true });
+async function requestBrowserCoordinates(): Promise<{ lat: number; lng: number } | null> {
+  if (typeof window === "undefined" || !navigator.geolocation) return null;
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        resolve({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
+    );
   });
 }
 
@@ -322,12 +273,30 @@ export function PatientPortalDashboard() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingStep, setBookingStep] = useState<BookingStep>("problem");
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(emptyBookingDraft);
+  const [bimblePharmacies, setBimblePharmacies] = useState<PatientBimblePharmacy[]>([]);
+  const [isLoadingBimblePharmacies, setIsLoadingBimblePharmacies] = useState(false);
+  const [bimblePharmacyError, setBimblePharmacyError] = useState("");
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [availableTimes, setAvailableTimes] = useState<string[]>(TIME_SLOTS);
   const [isBooking, setIsBooking] = useState(false);
   const [bookingMessage, setBookingMessage] = useState("");
   const [requestMessage, setRequestMessage] = useState("");
   const [requestActionKey, setRequestActionKey] = useState("");
+  const [downloadingRequestId, setDownloadingRequestId] = useState<number | null>(null);
+  const [expandedRescheduleAppointmentId, setExpandedRescheduleAppointmentId] = useState<number | null>(null);
+  const [rescheduleOptionsByAppointment, setRescheduleOptionsByAppointment] = useState<
+    Record<number, PatientRescheduleSlotOption[]>
+  >({});
+  const [selectedRescheduleDateByAppointment, setSelectedRescheduleDateByAppointment] = useState<
+    Record<number, string>
+  >({});
+  const [selectedRescheduleSlotByAppointment, setSelectedRescheduleSlotByAppointment] = useState<
+    Record<number, string>
+  >({});
+  const [appointmentMessage, setAppointmentMessage] = useState("");
+  const [appointmentActionKey, setAppointmentActionKey] = useState("");
+  const [rescheduleMessage, setRescheduleMessage] = useState("");
+  const [rescheduleActionKey, setRescheduleActionKey] = useState("");
 
   const navigation: PortalNavItem[] = [
     {
@@ -362,22 +331,17 @@ export function PatientPortalDashboard() {
     },
   ];
 
-  const nearbyPharmacies = useMemo(
-    () => getNearbyPharmacies(profileDraft.city, profileDraft.postal_code),
-    [profileDraft.city, profileDraft.postal_code],
-  );
-
   const selectedNearbyPharmacyId = useMemo(() => {
-    const match = nearbyPharmacies.find(
+    const match = bimblePharmacies.find(
       (option) =>
         option.name === bookingDraft.preferred_pharmacy_name &&
         option.address === bookingDraft.preferred_pharmacy_address &&
         option.city === bookingDraft.preferred_pharmacy_city &&
-        option.postalCode === bookingDraft.preferred_pharmacy_postal_code &&
-        option.phone === bookingDraft.preferred_pharmacy_phone,
+        (option.postal_code || "") === bookingDraft.preferred_pharmacy_postal_code &&
+        (option.phone || "") === bookingDraft.preferred_pharmacy_phone,
     );
     return match?.id ?? "";
-  }, [bookingDraft, nearbyPharmacies]);
+  }, [bimblePharmacies, bookingDraft]);
 
   const requestableAppointments = useMemo(() => {
     const seen = new Set<number>();
@@ -480,6 +444,49 @@ export function PatientPortalDashboard() {
     };
   }, [bookingDraft.visit_type, bookingOpen, bookingStep]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadBimbleList() {
+      if (!bookingOpen || bookingStep !== "pharmacy" || bookingDraft.pharmacy_choice !== "bimble") return;
+      setBimblePharmacyError("");
+      setIsLoadingBimblePharmacies(true);
+      const coords = await requestBrowserCoordinates();
+      if (!coords) {
+        if (!cancelled) {
+          setBimblePharmacies([]);
+          setBimblePharmacyError("Allow location access to view nearby Bimble pharmacies.");
+          setIsLoadingBimblePharmacies(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetchBimblePharmacies(coords.lat, coords.lng);
+        if (cancelled) return;
+        setBimblePharmacies(response.pharmacies ?? []);
+        if (!response.pharmacies?.length) {
+          setBimblePharmacyError("No active Bimble pharmacies are available for your location right now.");
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setBimblePharmacies([]);
+        setBimblePharmacyError(
+          error instanceof Error ? error.message : "Could not load Bimble pharmacies right now.",
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoadingBimblePharmacies(false);
+        }
+      }
+    }
+
+    void loadBimbleList();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingDraft.pharmacy_choice, bookingOpen, bookingStep]);
+
   async function refreshPortalData() {
     if (!session) return;
     const accessToken = session.accessToken;
@@ -497,22 +504,43 @@ export function PatientPortalDashboard() {
 
   function resetBookingFlow() {
     setBookingDraft(emptyBookingDraft);
+    setBimblePharmacies([]);
+    setBimblePharmacyError("");
     setBookingStep("problem");
     setBookingMessage("");
     setAvailableDates([]);
     setAvailableTimes(TIME_SLOTS);
   }
 
+  function getAppointmentStatusLabel(status: string) {
+    if (status === "QUEUED") return "Pending acceptance";
+    if (status === "ASSIGNED") return "Accepted";
+    if (status === "IN_PROGRESS") return "In progress";
+    if (status === "COMPLETED") return "Completed";
+    if (status === "CANCELLED") return "Cancelled";
+    if (status === "NO_SHOW") return "No show";
+    return status.replaceAll("_", " ").toLowerCase();
+  }
+
+  function getRescheduleStatusLabel(request: PatientPortalRequest | undefined) {
+    if (!request) return "No reschedule requested";
+    if (request.status === "SUBMITTED") return "Reschedule pending review";
+    if (request.status === "IN_REVIEW") return "Reschedule under review";
+    if (request.status === "FULFILLED") return "Reschedule accepted";
+    if (request.status === "REJECTED") return "Reschedule declined";
+    return request.status.replaceAll("_", " ").toLowerCase();
+  }
+
   function applyNearbyPharmacy(optionId: string) {
-    const option = nearbyPharmacies.find((item) => item.id === optionId);
+    const option = bimblePharmacies.find((item) => item.id === optionId);
     if (!option) return;
     setBookingDraft((current) => ({
       ...current,
       preferred_pharmacy_name: option.name,
       preferred_pharmacy_address: option.address,
       preferred_pharmacy_city: option.city,
-      preferred_pharmacy_postal_code: option.postalCode,
-      preferred_pharmacy_phone: option.phone,
+      preferred_pharmacy_postal_code: option.postal_code || "",
+      preferred_pharmacy_phone: option.phone || "",
     }));
   }
 
@@ -539,10 +567,14 @@ export function PatientPortalDashboard() {
       if (!bookingDraft.pharmacy_choice) {
         return "Please choose Bimble pharmacy or your preferred pharmacy.";
       }
+      if (!bookingDraft.preferred_pharmacy_name) {
+        return bookingDraft.pharmacy_choice === "bimble"
+          ? "Please choose one of the Bimble pharmacies."
+          : "Please complete the preferred pharmacy details.";
+      }
       if (
         bookingDraft.pharmacy_choice === "preferred" &&
-        (!bookingDraft.preferred_pharmacy_name ||
-          !bookingDraft.preferred_pharmacy_address ||
+        (!bookingDraft.preferred_pharmacy_address ||
           !bookingDraft.preferred_pharmacy_city ||
           !bookingDraft.preferred_pharmacy_postal_code ||
           !bookingDraft.preferred_pharmacy_phone)
@@ -622,26 +654,12 @@ export function PatientPortalDashboard() {
         appointment_time: bookingDraft.appointment_time || undefined,
         fulfillment: bookingDraft.fulfillment || undefined,
         pharmacy_choice: bookingDraft.pharmacy_choice || undefined,
-        preferred_pharmacy_name:
-          bookingDraft.pharmacy_choice === "preferred"
-            ? bookingDraft.preferred_pharmacy_name.trim() || undefined
-            : undefined,
-        preferred_pharmacy_address:
-          bookingDraft.pharmacy_choice === "preferred"
-            ? bookingDraft.preferred_pharmacy_address.trim() || undefined
-            : undefined,
-        preferred_pharmacy_city:
-          bookingDraft.pharmacy_choice === "preferred"
-            ? bookingDraft.preferred_pharmacy_city.trim() || undefined
-            : undefined,
+        preferred_pharmacy_name: bookingDraft.preferred_pharmacy_name.trim() || undefined,
+        preferred_pharmacy_address: bookingDraft.preferred_pharmacy_address.trim() || undefined,
+        preferred_pharmacy_city: bookingDraft.preferred_pharmacy_city.trim() || undefined,
         preferred_pharmacy_postal_code:
-          bookingDraft.pharmacy_choice === "preferred"
-            ? bookingDraft.preferred_pharmacy_postal_code.trim() || undefined
-            : undefined,
-        preferred_pharmacy_phone:
-          bookingDraft.pharmacy_choice === "preferred"
-            ? bookingDraft.preferred_pharmacy_phone.trim() || undefined
-            : undefined,
+          bookingDraft.preferred_pharmacy_postal_code.trim() || undefined,
+        preferred_pharmacy_phone: bookingDraft.preferred_pharmacy_phone.trim() || undefined,
         care_location: profileDraft.city || undefined,
       });
       await refreshPortalData();
@@ -737,6 +755,159 @@ export function PatientPortalDashboard() {
     } finally {
       setRequestActionKey((current) => (current === actionKey ? "" : current));
     }
+  }
+
+  async function handleDownloadRequestAttachment(request: PatientPortalRequest) {
+    if (!session) return;
+    setRequestMessage("");
+    setDownloadingRequestId(request.request_id);
+    try {
+      const file = await downloadPatientRequestAttachment(session.accessToken, request.request_id);
+      const objectUrl = window.URL.createObjectURL(file.blob);
+      const link = window.document.createElement("a");
+      link.href = objectUrl;
+      link.download = file.filename || request.attachment_name || `request-${request.request_id}-document`;
+      window.document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      setRequestMessage(
+        error instanceof Error ? error.message : "Could not download the clinic document right now.",
+      );
+    } finally {
+      setDownloadingRequestId(null);
+    }
+  }
+
+  function getLatestRescheduleRequest(appointmentId: number) {
+    return requests.find(
+      (request) => request.appointment_id === appointmentId && request.request_type === "RESCHEDULE",
+    );
+  }
+
+  async function handleOpenReschedule(appointment: PatientPortalAppointment) {
+    if (!session) return;
+    setRescheduleMessage("");
+    setExpandedRescheduleAppointmentId(appointment.appointment_id);
+
+    if (rescheduleOptionsByAppointment[appointment.appointment_id]) {
+      return;
+    }
+
+    const actionKey = `load:${appointment.appointment_id}`;
+    setRescheduleActionKey(actionKey);
+    try {
+      const response = await fetchPatientRescheduleOptions(session.accessToken, appointment.appointment_id);
+      setRescheduleOptionsByAppointment((current) => ({
+        ...current,
+        [appointment.appointment_id]: response.slots ?? [],
+      }));
+      if (response.slots?.[0]) {
+        const firstSlot = response.slots[0];
+        setSelectedRescheduleDateByAppointment((current) => ({
+          ...current,
+          [appointment.appointment_id]: firstSlot.appointment_date,
+        }));
+        setSelectedRescheduleSlotByAppointment((current) => ({
+          ...current,
+          [appointment.appointment_id]: `${firstSlot.appointment_date}|${firstSlot.appointment_time}|${firstSlot.doctor_id}`,
+        }));
+      }
+      if (!response.slots?.length) {
+        setRescheduleMessage("No doctor-approved reschedule slots are available right now.");
+      }
+    } catch (error) {
+      setRescheduleMessage(
+        error instanceof Error ? error.message : "Could not load reschedule options.",
+      );
+    } finally {
+      setRescheduleActionKey((current) => (current === actionKey ? "" : current));
+    }
+  }
+
+  async function handleSubmitReschedule(appointment: PatientPortalAppointment) {
+    if (!session) return;
+    const selectedSlot = selectedRescheduleSlotByAppointment[appointment.appointment_id];
+    if (!selectedSlot) {
+      setRescheduleMessage("Please choose one of the available slots.");
+      return;
+    }
+    const [requestedDate, requestedTime, requestedDoctorIdRaw] = selectedSlot.split("|");
+    if (!requestedDate || !requestedTime) {
+      setRescheduleMessage("Please choose one of the available slots.");
+      return;
+    }
+
+    const actionKey = `submit:${appointment.appointment_id}`;
+    setRescheduleActionKey(actionKey);
+    setRescheduleMessage("");
+    try {
+      await createPatientRescheduleRequest(session.accessToken, appointment.appointment_id, {
+        clinic_id: appointment.clinic_id ?? undefined,
+        requested_appointment_date: requestedDate,
+        requested_appointment_time: requestedTime,
+        requested_doctor_id: requestedDoctorIdRaw ? Number(requestedDoctorIdRaw) : undefined,
+        details: [
+          appointment.chief_complaint || appointment.service_name || "Appointment",
+          "Patient requested a new date and time from the approved availability list.",
+        ].join(" · "),
+      });
+      await refreshPortalData();
+      setRescheduleMessage("Reschedule request sent to the clinic.");
+      setExpandedRescheduleAppointmentId(null);
+    } catch (error) {
+      setRescheduleMessage(
+        error instanceof Error ? error.message : "Could not send the reschedule request.",
+      );
+    } finally {
+      setRescheduleActionKey((current) => (current === actionKey ? "" : current));
+    }
+  }
+
+  async function handleCancelAppointment(appointment: PatientPortalAppointment) {
+    if (!session) return;
+    const confirmed = window.confirm(
+      "Do you want to cancel this appointment? You can book another appointment later.",
+    );
+    if (!confirmed) return;
+
+    const actionKey = `cancel:${appointment.appointment_id}`;
+    setAppointmentActionKey(actionKey);
+    setAppointmentMessage("");
+    setRescheduleMessage("");
+    try {
+      await cancelPatientAppointment(session.accessToken, appointment.appointment_id, {
+        reason: "Cancelled by patient",
+      });
+      await refreshPortalData();
+      if (expandedRescheduleAppointmentId === appointment.appointment_id) {
+        setExpandedRescheduleAppointmentId(null);
+      }
+      setAppointmentMessage("Appointment cancelled successfully.");
+    } catch (error) {
+      setAppointmentMessage(
+        error instanceof Error ? error.message : "Could not cancel the appointment.",
+      );
+    } finally {
+      setAppointmentActionKey((current) => (current === actionKey ? "" : current));
+    }
+  }
+
+  function handleRescheduleDateChange(appointmentId: number, nextDate: string) {
+    setSelectedRescheduleDateByAppointment((current) => ({
+      ...current,
+      [appointmentId]: nextDate,
+    }));
+    const nextSlot = (rescheduleOptionsByAppointment[appointmentId] ?? []).find(
+      (slot) => slot.appointment_date === nextDate,
+    );
+    setSelectedRescheduleSlotByAppointment((current) => ({
+      ...current,
+      [appointmentId]: nextSlot
+        ? `${nextSlot.appointment_date}|${nextSlot.appointment_time}|${nextSlot.doctor_id}`
+        : "",
+    }));
   }
 
   function handleSignOut() {
@@ -945,30 +1116,212 @@ export function PatientPortalDashboard() {
 
             <div className="mt-4 space-y-3">
               {activeAppointments.length ? (
-                activeAppointments.map((appointment) => (
-                  <div key={appointment.appointment_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm font-semibold text-slate-900">
-                      {appointment.service_name || "General appointment"}
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      {appointment.clinic_name || "Clinic pending"} ·{" "}
-                      <CanadianTime value={appointment.queued_at} fallback="Not available" />
-                    </div>
-                    {appointment.visit_type || appointment.appointment_date || appointment.appointment_time ? (
-                      <div className="mt-2 text-sm text-slate-600">
-                        {(appointment.visit_type || "").replace("_", "-") || "visit"} ·{" "}
-                        {appointment.appointment_date || "Date pending"} ·{" "}
-                        {appointment.appointment_time || "Time pending"}
+                activeAppointments.map((appointment) => {
+                  const latestRescheduleRequest = getLatestRescheduleRequest(appointment.appointment_id);
+                  const slotOptions = rescheduleOptionsByAppointment[appointment.appointment_id] ?? [];
+                  const availableDates = Array.from(
+                    new Set(slotOptions.map((slot) => slot.appointment_date)),
+                  );
+                  const selectedDate =
+                    selectedRescheduleDateByAppointment[appointment.appointment_id] ?? availableDates[0] ?? "";
+                  const slotsForSelectedDate = slotOptions.filter(
+                    (slot) => slot.appointment_date === selectedDate,
+                  );
+                  const isExpanded = expandedRescheduleAppointmentId === appointment.appointment_id;
+                  const selectedSlot = selectedRescheduleSlotByAppointment[appointment.appointment_id] ?? "";
+                  const isLoadingOptions = rescheduleActionKey === `load:${appointment.appointment_id}`;
+                  const isSubmittingReschedule = rescheduleActionKey === `submit:${appointment.appointment_id}`;
+                  const isCancellingAppointment = appointmentActionKey === `cancel:${appointment.appointment_id}`;
+
+                  return (
+                    <div
+                      key={appointment.appointment_id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {appointment.service_name || "General appointment"}
+                          </div>
+                          <div className="mt-1 text-sm text-slate-600">
+                            {appointment.clinic_name || "Clinic pending"} ·{" "}
+                            <CanadianTime value={appointment.queued_at} fallback="Not available" />
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.14em]">
+                            <span className="rounded-full bg-sky-100 px-3 py-1 text-sky-700">
+                              {getAppointmentStatusLabel(appointment.status)}
+                            </span>
+                            <span className="rounded-full bg-slate-200 px-3 py-1 text-slate-700">
+                              {getRescheduleStatusLabel(latestRescheduleRequest)}
+                            </span>
+                          </div>
+                          {appointment.visit_type || appointment.appointment_date || appointment.appointment_time ? (
+                            <div className="mt-2 text-sm text-slate-600">
+                              {(appointment.visit_type || "").replace("_", "-") || "visit"} ·{" "}
+                              {appointment.appointment_date || "Date pending"} ·{" "}
+                              {appointment.appointment_time || "Time pending"}
+                            </div>
+                          ) : null}
+                          {latestRescheduleRequest?.requested_appointment_date ||
+                          latestRescheduleRequest?.requested_appointment_time ? (
+                            <div className="mt-2 text-sm text-slate-600">
+                              Requested reschedule: {latestRescheduleRequest.requested_appointment_date || "Date pending"}
+                              {latestRescheduleRequest.requested_appointment_time
+                                ? ` · ${latestRescheduleRequest.requested_appointment_time}`
+                                : ""}
+                            </div>
+                          ) : null}
+                          {latestRescheduleRequest?.clinic_response ? (
+                            <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                              Clinic update: {latestRescheduleRequest.clinic_response}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            disabled={
+                              !appointment.clinic_id ||
+                              appointment.status === "QUEUED" ||
+                              isCancellingAppointment
+                            }
+                            onClick={() => void handleOpenReschedule(appointment)}
+                          >
+                            Reschedule
+                          </Button>
+                          <Button
+                            variant="outline"
+                            disabled={isCancellingAppointment}
+                            onClick={() => void handleCancelAppointment(appointment)}
+                          >
+                            {isCancellingAppointment ? "Cancelling..." : "Cancel appointment"}
+                          </Button>
+                        </div>
                       </div>
-                    ) : null}
-                  </div>
-                ))
+
+                      {isExpanded ? (
+                        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                          <div className="text-sm font-semibold text-slate-900">Choose a new slot</div>
+                          <div className="mt-1 text-sm text-slate-600">
+                            Only slots available with the current doctor, or another doctor in the same clinic with the
+                            same specialty, are shown here.
+                          </div>
+
+                          {isLoadingOptions ? (
+                            <div className="mt-4 text-sm text-slate-600">Loading available slots...</div>
+                          ) : slotOptions.length ? (
+                            <div className="mt-4 space-y-4">
+                              <label className="grid gap-2 text-sm text-slate-700">
+                                Choose date
+                                <Input
+                                  type="date"
+                                  value={selectedDate}
+                                  min={availableDates[0]}
+                                  max={availableDates[availableDates.length - 1]}
+                                  onChange={(event) =>
+                                    handleRescheduleDateChange(
+                                      appointment.appointment_id,
+                                      event.target.value,
+                                    )
+                                  }
+                                  list={`reschedule-dates-${appointment.appointment_id}`}
+                                />
+                                <datalist id={`reschedule-dates-${appointment.appointment_id}`}>
+                                  {availableDates.map((slotDate) => (
+                                    <option key={slotDate} value={slotDate} />
+                                  ))}
+                                </datalist>
+                              </label>
+
+                              <div className="space-y-2">
+                                <div className="text-sm font-medium text-slate-800">Choose time</div>
+                                {slotsForSelectedDate.length ? (
+                                  <div className="grid gap-2">
+                                    {slotsForSelectedDate.map((slot) => {
+                                      const value = `${slot.appointment_date}|${slot.appointment_time}|${slot.doctor_id}`;
+                                      return (
+                                        <label
+                                          key={value}
+                                          className={cn(
+                                            "flex cursor-pointer items-center justify-between rounded-2xl border px-4 py-3 text-sm",
+                                            selectedSlot === value
+                                              ? "border-sky-300 bg-sky-50 text-sky-800"
+                                              : "border-slate-200 bg-slate-50 text-slate-700",
+                                          )}
+                                        >
+                                          <div>
+                                            <div className="font-semibold">{slot.appointment_time}</div>
+                                            <div className="mt-1 text-xs text-slate-500">
+                                              Available provider: {slot.doctor_name}
+                                            </div>
+                                          </div>
+                                          <input
+                                            type="radio"
+                                            name={`reschedule-slot-${appointment.appointment_id}`}
+                                            checked={selectedSlot === value}
+                                            onChange={() =>
+                                              setSelectedRescheduleSlotByAppointment((current) => ({
+                                                ...current,
+                                                [appointment.appointment_id]: value,
+                                              }))
+                                            }
+                                          />
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-600">
+                                    No approved times are available for this date. Please choose another available date.
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-4 text-sm text-slate-600">
+                              No doctor-approved reschedule slots are available right now.
+                            </div>
+                          )}
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button
+                              variant="outline"
+                              onClick={() => setExpandedRescheduleAppointmentId(null)}
+                              disabled={isSubmittingReschedule}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              onClick={() => void handleSubmitReschedule(appointment)}
+                              disabled={!slotOptions.length || isSubmittingReschedule}
+                            >
+                              {isSubmittingReschedule ? "Sending request..." : "Request reschedule"}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
               ) : (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
                   No active appointments right now.
                 </div>
               )}
             </div>
+
+            {appointmentMessage ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                {appointmentMessage}
+              </div>
+            ) : null}
+
+            {rescheduleMessage ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                {rescheduleMessage}
+              </div>
+            ) : null}
 
             <div className="mt-5 flex justify-start">
               <Button
@@ -1237,10 +1590,12 @@ export function PatientPortalDashboard() {
                           setBookingDraft((current) => ({
                             ...current,
                             pharmacy_choice: "preferred",
+                            preferred_pharmacy_name: "",
+                            preferred_pharmacy_address: "",
+                            preferred_pharmacy_city: "",
+                            preferred_pharmacy_postal_code: "",
+                            preferred_pharmacy_phone: "",
                           }));
-                          if (!selectedNearbyPharmacyId && nearbyPharmacies.length > 0) {
-                            applyNearbyPharmacy(nearbyPharmacies[0]!.id);
-                          }
                         }}
                         className={cn(
                           "rounded-[24px] border p-5 text-left shadow-sm transition-all",
@@ -1261,21 +1616,6 @@ export function PatientPortalDashboard() {
 
                     {bookingDraft.pharmacy_choice === "preferred" ? (
                       <div className="space-y-4 rounded-[24px] border border-sky-100 bg-sky-50/50 p-5">
-                        <label className="grid gap-2 text-sm text-slate-700">
-                          Nearby pharmacies
-                          <select
-                            className="h-12 rounded-2xl border border-border bg-white px-4 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                            value={selectedNearbyPharmacyId}
-                            onChange={(event) => applyNearbyPharmacy(event.target.value)}
-                          >
-                            <option value="">Select a nearby pharmacy</option>
-                            {nearbyPharmacies.map((option) => (
-                              <option key={option.id} value={option.id}>
-                                {option.name} - {option.distanceLabel} - {option.city}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <label className="grid gap-2 text-sm text-slate-700">
                             Pharmacy name
@@ -1344,11 +1684,65 @@ export function PatientPortalDashboard() {
                     ) : null}
 
                     {bookingDraft.pharmacy_choice === "bimble" ? (
-                      <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-700">
-                        <Clock className="mr-2 inline h-4 w-4 text-sky-700" />
-                        {bookingDraft.fulfillment === "delivery"
-                          ? "Bimble pharmacy is the fastest delivery option."
-                          : "Bimble pharmacy is the fastest pickup option."}
+                      <div className="space-y-4 rounded-[24px] border border-sky-100 bg-sky-50/50 p-5">
+                        <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-700">
+                          <Clock className="mr-2 inline h-4 w-4 text-sky-700" />
+                          {bookingDraft.fulfillment === "delivery"
+                            ? "Bimble pharmacy is the fastest delivery option."
+                            : "Bimble pharmacy is the fastest pickup option."}
+                        </div>
+                        {isLoadingBimblePharmacies ? (
+                          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                            Loading nearby Bimble pharmacies...
+                          </div>
+                        ) : null}
+                        {bimblePharmacyError ? (
+                          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            {bimblePharmacyError}
+                          </div>
+                        ) : null}
+                        {bimblePharmacies.length ? (
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700">
+                              Available Bimble pharmacies
+                            </label>
+                            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                              {bimblePharmacies.map((option) => {
+                                const selected = selectedNearbyPharmacyId === option.id;
+                                return (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    onClick={() => applyNearbyPharmacy(option.id)}
+                                    className={cn(
+                                      "w-full rounded-2xl border bg-white px-4 py-3 text-left transition-all",
+                                      selected
+                                        ? "border-sky-300 bg-sky-50 ring-2 ring-sky-100"
+                                        : "border-slate-200 hover:border-sky-200",
+                                    )}
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div>
+                                        <div className="text-sm font-semibold text-slate-900">{option.name}</div>
+                                        <div className="mt-1 text-sm text-slate-600">
+                                          {[option.address, option.city, option.postal_code]
+                                            .filter(Boolean)
+                                            .join(", ")}
+                                        </div>
+                                        {option.phone ? (
+                                          <div className="mt-1 text-xs text-slate-500">{option.phone}</div>
+                                        ) : null}
+                                      </div>
+                                      <div className="shrink-0 text-xs font-semibold text-sky-700">
+                                        {option.distance_label || "Nearby"}
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -1519,9 +1913,31 @@ export function PatientPortalDashboard() {
                             {request.patient_message || request.details}
                           </div>
                         ) : null}
+                        {request.request_type === "RESCHEDULE" &&
+                        (request.requested_appointment_date || request.requested_appointment_time) ? (
+                          <div className="mt-2 text-sm text-slate-600">
+                            Requested slot: {request.requested_appointment_date || "Date pending"}
+                            {request.requested_appointment_time ? ` · ${request.requested_appointment_time}` : ""}
+                          </div>
+                        ) : null}
                         {request.clinic_response ? (
                           <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                             Clinic update: {request.clinic_response}
+                          </div>
+                        ) : null}
+                        {request.attachment_name ? (
+                          <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-700">
+                            <div className="flex flex-wrap items-center gap-3">
+                              <span>Document ready: {request.attachment_name}</span>
+                                <Button
+                                  variant="outline"
+                                  className="h-8 rounded-xl px-3 text-xs"
+                                  disabled={downloadingRequestId === request.request_id}
+                                  onClick={() => void handleDownloadRequestAttachment(request)}
+                                >
+                                  {downloadingRequestId === request.request_id ? "Downloading..." : "Download document"}
+                                </Button>
+                            </div>
                           </div>
                         ) : null}
                       </div>

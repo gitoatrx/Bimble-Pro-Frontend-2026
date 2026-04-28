@@ -201,6 +201,7 @@ export function Homepage() {
   const [careQuery, setCareQuery] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
   const [locationQuery, setLocationQuery] = useState("");
+  const [locationCoordinates, setLocationCoordinates] = useState<{ lat: number; lng: number } | null>(null);
   const [geoStatus, setGeoStatus] = useState<
     "idle" | "loading" | "done" | "denied" | "unavailable"
   >("idle");
@@ -243,6 +244,7 @@ export function Homepage() {
     const resolveDetectedPosition = async (pos: GeolocationPosition) => {
       const latitude = pos.coords.latitude;
       const longitude = pos.coords.longitude;
+      setLocationCoordinates({ lat: latitude, lng: longitude });
 
       try {
         let detectedLocation =
@@ -516,6 +518,7 @@ export function Homepage() {
 
   const handleSelectCity = useCallback((city: string) => {
     setLocationQuery(city + ", BC");
+    setLocationCoordinates(null);
     setLocationResolved(true);
     setShowCitySuggestions(false);
   }, []);
@@ -752,6 +755,7 @@ export function Homepage() {
                   value={locationQuery}
                   onChange={(e) => {
                     setLocationQuery(e.target.value);
+                    setLocationCoordinates(null);
                     setLocationResolved(false);
                     setShowCitySuggestions(true);
                   }}
@@ -835,6 +839,10 @@ export function Homepage() {
                   if (resolvedServiceId) params.set("serviceId", String(resolvedServiceId));
                   if (locationQuery.trim() && (locationResolved || geoStatus !== "done")) {
                     params.set("location", locationQuery.trim());
+                  }
+                  if (locationCoordinates) {
+                    params.set("lat", String(locationCoordinates.lat));
+                    params.set("lng", String(locationCoordinates.lng));
                   }
                   const q = params.toString();
                   router.push(q ? `/patient/onboarding?${q}` : "/patient/onboarding");

@@ -19,7 +19,29 @@ export type PatientIntakePhoneStartRequest = {
   phone: string;
   careReason: string;
   careLocation?: string;
+  careLatitude?: number | null;
+  careLongitude?: number | null;
   serviceId?: number | null;
+};
+
+export type PatientBimblePharmacy = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  province: string | null;
+  postal_code: string | null;
+  phone: string | null;
+  fax: string | null;
+  email: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  distance_km: number | null;
+  distance_label: string | null;
+};
+
+export type PatientBimblePharmacyListResponse = {
+  pharmacies: PatientBimblePharmacy[];
 };
 
 export type PatientIntakeLocationResponse = {
@@ -110,6 +132,15 @@ export async function startPatientIntakePhone(payload: PatientIntakePhoneStartRe
 export async function reverseGeocodePatientLocation(lat: number, lng: number) {
   return apiRequest<PatientIntakeLocationResponse>({
     endpoint: withQuery(API_ENDPOINTS.patientIntakeLocationReverseGeocode, {
+      lat: String(lat),
+      lng: String(lng),
+    }),
+  });
+}
+
+export async function fetchBimblePharmacies(lat: number, lng: number) {
+  return apiRequest<PatientBimblePharmacyListResponse>({
+    endpoint: withQuery(API_ENDPOINTS.patientIntakeBimblePharmacies, {
       lat: String(lat),
       lng: String(lng),
     }),

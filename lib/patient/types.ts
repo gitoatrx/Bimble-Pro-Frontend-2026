@@ -20,6 +20,8 @@ export type PatientOnboardingDraft = {
   serviceName: string;
   careReason: string;
   careLocation: string;
+  careLatitude: number | null;
+  careLongitude: number | null;
   phone: string;
   dateOfBirth: string;
   phn: string;
@@ -66,6 +68,8 @@ export const initialPatientOnboardingDraft: PatientOnboardingDraft = {
   serviceName: "",
   careReason: "",
   careLocation: "",
+  careLatitude: null,
+  careLongitude: null,
   phone: "",
   dateOfBirth: "",
   phn: "",
@@ -179,6 +183,20 @@ export type PatientPortalAppointment = {
   cancelled_at: string | null;
 };
 
+export type PatientRescheduleSlotOption = {
+  appointment_date: string;
+  appointment_time: string;
+  doctor_id: number;
+  doctor_name: string;
+};
+
+export type PatientRescheduleOptionsResponse = {
+  appointment_id: number;
+  clinic_id: number;
+  clinic_name: string;
+  slots: PatientRescheduleSlotOption[];
+};
+
 export type PatientPortalAppointmentsPayload = {
   current: PatientPortalAppointment[];
   past: PatientPortalAppointment[];
@@ -195,6 +213,14 @@ export type PatientPortalRequest = {
   details: string | null;
   patient_message?: string | null;
   clinic_response?: string | null;
+  requested_appointment_date?: string | null;
+  requested_appointment_time?: string | null;
+  requested_doctor_id?: number | null;
+  attachment_name?: string | null;
+  attachment_mime_type?: string | null;
+  attachment_uploaded_at?: string | null;
+  attachment_size_bytes?: number | null;
+  attachment_download_url?: string | null;
   created_at: string;
 };
 

@@ -180,9 +180,68 @@ function toInvite(record: Record<string, unknown>): PendingInvite {
 
 function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
   const [email, setEmail] = useState("");
+  const [showClinicPaidDraft, setShowClinicPaidDraft] = useState(false);
+  const [showFacilityAttachmentDraft, setShowFacilityAttachmentDraft] = useState(false);
+  const [clinicPaidDraft, setClinicPaidDraft] = useState({
+    msp_billing_number: "",
+    principal_practitioner_name: "",
+    principal_practitioner_number: "",
+    effective_date: "",
+    cancel_date: "",
+  });
+  const [facilityDraft, setFacilityDraft] = useState({
+    attachment_action: "ADD",
+    msp_practitioner_number: "",
+    facility_or_practice_name: "",
+    msp_facility_number: "",
+    facility_physical_address: "",
+    facility_physical_city: "",
+    facility_physical_postal_code: "",
+    contact_email: "",
+    contact_phone_number: "",
+    contact_fax_number: "",
+    new_attachment_effective_date: "",
+    new_attachment_cancellation_date: "",
+    attachment_cancellation_date: "",
+    change_attachment_effective_date: "",
+    change_attachment_cancellation_date: "",
+    confirm_declarations: false,
+  });
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  function buildFormDrafts() {
+    const drafts: Record<string, Record<string, unknown>> = {};
+
+    if (
+      showClinicPaidDraft &&
+      Object.values(clinicPaidDraft).some((value) => String(value).trim() !== "")
+    ) {
+      drafts.HLTH_2870 = Object.fromEntries(
+        Object.entries(clinicPaidDraft).filter(([, value]) => String(value).trim() !== ""),
+      );
+    }
+
+    if (showFacilityAttachmentDraft) {
+      const filtered = Object.fromEntries(
+        Object.entries(facilityDraft).filter(([key, value]) => {
+          if (typeof value === "boolean") {
+            return value;
+          }
+          if (key === "attachment_action") {
+            return true;
+          }
+          return String(value).trim() !== "";
+        }),
+      );
+      if (Object.keys(filtered).length > 1 || Boolean(filtered.confirm_declarations)) {
+        drafts.HLTH_2950 = filtered;
+      }
+    }
+
+    return Object.keys(drafts).length > 0 ? drafts : undefined;
+  }
 
   async function handleInvite() {
     const trimmed = email.trim().toLowerCase();
@@ -203,9 +262,39 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
     setSuccess("");
 
     try {
-      await inviteClinicDoctor(session.accessToken, { email: trimmed });
+      await inviteClinicDoctor(session.accessToken, {
+        email: trimmed,
+        form_drafts: buildFormDrafts(),
+      });
       onInvite(trimmed);
       setEmail("");
+      setShowClinicPaidDraft(false);
+      setShowFacilityAttachmentDraft(false);
+      setClinicPaidDraft({
+        msp_billing_number: "",
+        principal_practitioner_name: "",
+        principal_practitioner_number: "",
+        effective_date: "",
+        cancel_date: "",
+      });
+      setFacilityDraft({
+        attachment_action: "ADD",
+        msp_practitioner_number: "",
+        facility_or_practice_name: "",
+        msp_facility_number: "",
+        facility_physical_address: "",
+        facility_physical_city: "",
+        facility_physical_postal_code: "",
+        contact_email: "",
+        contact_phone_number: "",
+        contact_fax_number: "",
+        new_attachment_effective_date: "",
+        new_attachment_cancellation_date: "",
+        attachment_cancellation_date: "",
+        change_attachment_effective_date: "",
+        change_attachment_cancellation_date: "",
+        confirm_declarations: false,
+      });
       setSuccess(`Invite sent to ${trimmed}`);
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
@@ -240,6 +329,187 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
           {sending ? "Sending…" : "Send invite"}
         </Button>
       </div>
+
+      <div className="mt-4 space-y-3 rounded-2xl border border-border/70 bg-background/60 p-4">
+        <div>
+          <p className="text-sm font-semibold text-foreground">Optional doctor form prefills</p>
+          <p className="text-xs text-muted-foreground">
+            Clinic can prefill these drafts before sending the invite, or skip them entirely.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-border bg-white p-3">
+          <button
+            type="button"
+            onClick={() => setShowClinicPaidDraft((current) => !current)}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <div>
+              <p className="text-sm font-semibold text-foreground">HLTH 2870</p>
+              <p className="text-xs text-muted-foreground">Clinic-paid assignment draft</p>
+            </div>
+            {showClinicPaidDraft ? <X className="h-4 w-4 text-muted-foreground" /> : <Plus className="h-4 w-4 text-muted-foreground" />}
+          </button>
+          {showClinicPaidDraft ? (
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <Input
+                placeholder="MSP billing number"
+                value={clinicPaidDraft.msp_billing_number}
+                onChange={(e) => setClinicPaidDraft((current) => ({ ...current, msp_billing_number: e.target.value }))}
+              />
+              <Input
+                placeholder="Principal practitioner name"
+                value={clinicPaidDraft.principal_practitioner_name}
+                onChange={(e) => setClinicPaidDraft((current) => ({ ...current, principal_practitioner_name: e.target.value }))}
+              />
+              <Input
+                placeholder="Principal practitioner number"
+                value={clinicPaidDraft.principal_practitioner_number}
+                onChange={(e) => setClinicPaidDraft((current) => ({ ...current, principal_practitioner_number: e.target.value }))}
+              />
+              <Input
+                type="date"
+                placeholder="Effective date"
+                value={clinicPaidDraft.effective_date}
+                onChange={(e) => setClinicPaidDraft((current) => ({ ...current, effective_date: e.target.value }))}
+              />
+              <Input
+                type="date"
+                placeholder="Cancel date"
+                value={clinicPaidDraft.cancel_date}
+                onChange={(e) => setClinicPaidDraft((current) => ({ ...current, cancel_date: e.target.value }))}
+              />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-xl border border-border bg-white p-3">
+          <button
+            type="button"
+            onClick={() => setShowFacilityAttachmentDraft((current) => !current)}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <div>
+              <p className="text-sm font-semibold text-foreground">HLTH 2950</p>
+              <p className="text-xs text-muted-foreground">Facility attachment draft</p>
+            </div>
+            {showFacilityAttachmentDraft ? <X className="h-4 w-4 text-muted-foreground" /> : <Plus className="h-4 w-4 text-muted-foreground" />}
+          </button>
+          {showFacilityAttachmentDraft ? (
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <select
+                  value={facilityDraft.attachment_action}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, attachment_action: e.target.value }))}
+                  className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="ADD">Add attachment</option>
+                  <option value="CANCEL">Cancel attachment</option>
+                  <option value="CHANGE">Change attachment</option>
+                </select>
+                <Input
+                  placeholder="MSP practitioner number"
+                  value={facilityDraft.msp_practitioner_number}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, msp_practitioner_number: e.target.value }))}
+                />
+                <Input
+                  placeholder="Facility or practice name"
+                  value={facilityDraft.facility_or_practice_name}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, facility_or_practice_name: e.target.value }))}
+                />
+                <Input
+                  placeholder="MSP facility number"
+                  value={facilityDraft.msp_facility_number}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, msp_facility_number: e.target.value }))}
+                />
+                <Input
+                  placeholder="Physical address"
+                  value={facilityDraft.facility_physical_address}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, facility_physical_address: e.target.value }))}
+                />
+                <Input
+                  placeholder="Physical city"
+                  value={facilityDraft.facility_physical_city}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, facility_physical_city: e.target.value }))}
+                />
+                <Input
+                  placeholder="Physical postal code"
+                  value={facilityDraft.facility_physical_postal_code}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, facility_physical_postal_code: e.target.value }))}
+                />
+                <Input
+                  placeholder="Contact email"
+                  value={facilityDraft.contact_email}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, contact_email: e.target.value }))}
+                />
+                <Input
+                  placeholder="Contact phone number"
+                  value={facilityDraft.contact_phone_number}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, contact_phone_number: e.target.value }))}
+                />
+                <Input
+                  placeholder="Contact fax number"
+                  value={facilityDraft.contact_fax_number}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, contact_fax_number: e.target.value }))}
+                />
+              </div>
+
+              {facilityDraft.attachment_action === "ADD" ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Input
+                    type="date"
+                    placeholder="New attachment effective date"
+                    value={facilityDraft.new_attachment_effective_date}
+                    onChange={(e) => setFacilityDraft((current) => ({ ...current, new_attachment_effective_date: e.target.value }))}
+                  />
+                  <Input
+                    type="date"
+                    placeholder="New attachment cancellation date"
+                    value={facilityDraft.new_attachment_cancellation_date}
+                    onChange={(e) => setFacilityDraft((current) => ({ ...current, new_attachment_cancellation_date: e.target.value }))}
+                  />
+                </div>
+              ) : null}
+
+              {facilityDraft.attachment_action === "CANCEL" ? (
+                <Input
+                  type="date"
+                  placeholder="Attachment cancellation date"
+                  value={facilityDraft.attachment_cancellation_date}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, attachment_cancellation_date: e.target.value }))}
+                />
+              ) : null}
+
+              {facilityDraft.attachment_action === "CHANGE" ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Input
+                    type="date"
+                    placeholder="Change attachment effective date"
+                    value={facilityDraft.change_attachment_effective_date}
+                    onChange={(e) => setFacilityDraft((current) => ({ ...current, change_attachment_effective_date: e.target.value }))}
+                  />
+                  <Input
+                    type="date"
+                    placeholder="Change attachment cancellation date"
+                    value={facilityDraft.change_attachment_cancellation_date}
+                    onChange={(e) => setFacilityDraft((current) => ({ ...current, change_attachment_cancellation_date: e.target.value }))}
+                  />
+                </div>
+              ) : null}
+
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={facilityDraft.confirm_declarations}
+                  onChange={(e) => setFacilityDraft((current) => ({ ...current, confirm_declarations: e.target.checked }))}
+                />
+                Confirm facility attachment declarations
+              </label>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
       {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
       {success && <p className="mt-2 text-xs text-green-600">{success}</p>}
     </div>

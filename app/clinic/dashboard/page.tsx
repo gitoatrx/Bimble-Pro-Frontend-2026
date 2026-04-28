@@ -669,6 +669,54 @@ function DoctorInviteStep({
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [showDraftForms, setShowDraftForms] = useState(false);
+  const [hlth2870Draft, setHlth2870Draft] = useState({
+    msp_billing_number: "",
+    principal_practitioner_name: "",
+    principal_practitioner_number: "",
+    effective_date: "",
+    cancel_date: "",
+  });
+  const [hlth2950Draft, setHlth2950Draft] = useState({
+    attachment_action: "ADD" as "ADD" | "CANCEL" | "CHANGE",
+    msp_practitioner_number: "",
+    facility_or_practice_name: "",
+    msp_facility_number: "",
+    facility_physical_address: "",
+    facility_physical_city: "",
+    facility_physical_postal_code: "",
+    contact_email: "",
+    contact_phone_number: "",
+    contact_fax_number: "",
+    new_attachment_effective_date: "",
+    new_attachment_cancellation_date: "",
+    attachment_cancellation_date: "",
+    change_attachment_effective_date: "",
+    change_attachment_cancellation_date: "",
+  });
+
+  function buildFormDrafts() {
+    const hlth2870 = Object.fromEntries(
+      Object.entries(hlth2870Draft).filter(([, value]) => value.trim() !== ""),
+    );
+    const hlth2950 = Object.fromEntries(
+      Object.entries(hlth2950Draft).filter(([, value]) => value.trim() !== ""),
+    );
+    if (!hlth2950.attachment_action) {
+      hlth2950.attachment_action = hlth2950Draft.attachment_action;
+    }
+    const drafts: Record<string, Record<string, string | boolean>> = {};
+    if (Object.keys(hlth2870).length > 0) {
+      drafts.HLTH_2870 = hlth2870;
+    }
+    if (Object.keys(hlth2950).length > 1 || (Object.keys(hlth2950).length === 1 && !("attachment_action" in hlth2950))) {
+      drafts.HLTH_2950 = {
+        ...hlth2950,
+        confirm_declarations: true,
+      };
+    }
+    return Object.keys(drafts).length > 0 ? drafts : undefined;
+  }
 
   async function handleInvite() {
     const trimmed = email.trim().toLowerCase();
@@ -685,7 +733,7 @@ function DoctorInviteStep({
       return;
     }
     try {
-      await inviteDoctor(trimmed, session.accessToken);
+      await inviteDoctor(trimmed, session.accessToken, buildFormDrafts());
       setSending(false);
       onDoctorInvited(trimmed);
       setEmail("");
@@ -725,6 +773,190 @@ function DoctorInviteStep({
         <Button onClick={handleInvite} disabled={sending || !email.trim()} size="sm" className="shrink-0">
           {sending ? "Sending…" : "Invite"}
         </Button>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card/70 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Prefill doctor onboarding forms</p>
+            <p className="text-xs text-muted-foreground">
+              Optional: fill HLTH 2870 and HLTH 2950 now so the doctor only needs to review, correct, sign, and resubmit.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDraftForms((value) => !value)}
+          >
+            {showDraftForms ? "Hide drafts" : "Open drafts"}
+          </Button>
+        </div>
+
+        {showDraftForms ? (
+          <div className="mt-4 grid gap-4">
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-sm font-semibold text-foreground">HLTH 2870</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Input
+                  placeholder="MSP billing number"
+                  value={hlth2870Draft.msp_billing_number}
+                  onChange={(e) => setHlth2870Draft((current) => ({ ...current, msp_billing_number: e.target.value }))}
+                />
+                <Input
+                  placeholder="Principal practitioner name"
+                  value={hlth2870Draft.principal_practitioner_name}
+                  onChange={(e) =>
+                    setHlth2870Draft((current) => ({ ...current, principal_practitioner_name: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Principal practitioner number"
+                  value={hlth2870Draft.principal_practitioner_number}
+                  onChange={(e) =>
+                    setHlth2870Draft((current) => ({ ...current, principal_practitioner_number: e.target.value }))
+                  }
+                />
+                <Input
+                  type="date"
+                  placeholder="Effective date"
+                  value={hlth2870Draft.effective_date}
+                  onChange={(e) => setHlth2870Draft((current) => ({ ...current, effective_date: e.target.value }))}
+                />
+                <Input
+                  type="date"
+                  placeholder="Cancel date"
+                  value={hlth2870Draft.cancel_date}
+                  onChange={(e) => setHlth2870Draft((current) => ({ ...current, cancel_date: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border p-4">
+              <p className="text-sm font-semibold text-foreground">HLTH 2950</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2 flex gap-2">
+                  {(["ADD", "CANCEL", "CHANGE"] as const).map((action) => (
+                    <button
+                      key={action}
+                      type="button"
+                      onClick={() => setHlth2950Draft((current) => ({ ...current, attachment_action: action }))}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-sm font-medium transition-all",
+                        hlth2950Draft.attachment_action === action
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-card text-muted-foreground hover:border-primary/40",
+                      )}
+                    >
+                      {action}
+                    </button>
+                  ))}
+                </div>
+                <Input
+                  placeholder="MSP practitioner number"
+                  value={hlth2950Draft.msp_practitioner_number}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, msp_practitioner_number: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Facility or practice name"
+                  value={hlth2950Draft.facility_or_practice_name}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, facility_or_practice_name: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="MSP facility number"
+                  value={hlth2950Draft.msp_facility_number}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, msp_facility_number: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Facility address"
+                  value={hlth2950Draft.facility_physical_address}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, facility_physical_address: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Facility city"
+                  value={hlth2950Draft.facility_physical_city}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, facility_physical_city: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Facility postal code"
+                  value={hlth2950Draft.facility_physical_postal_code}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, facility_physical_postal_code: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Contact email"
+                  value={hlth2950Draft.contact_email}
+                  onChange={(e) => setHlth2950Draft((current) => ({ ...current, contact_email: e.target.value }))}
+                />
+                <Input
+                  placeholder="Contact phone"
+                  value={hlth2950Draft.contact_phone_number}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, contact_phone_number: e.target.value }))
+                  }
+                />
+                <Input
+                  placeholder="Contact fax"
+                  value={hlth2950Draft.contact_fax_number}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, contact_fax_number: e.target.value }))
+                  }
+                />
+                <Input
+                  type="date"
+                  placeholder="New attachment effective date"
+                  value={hlth2950Draft.new_attachment_effective_date}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, new_attachment_effective_date: e.target.value }))
+                  }
+                />
+                <Input
+                  type="date"
+                  placeholder="New attachment cancellation date"
+                  value={hlth2950Draft.new_attachment_cancellation_date}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, new_attachment_cancellation_date: e.target.value }))
+                  }
+                />
+                <Input
+                  type="date"
+                  placeholder="Attachment cancellation date"
+                  value={hlth2950Draft.attachment_cancellation_date}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, attachment_cancellation_date: e.target.value }))
+                  }
+                />
+                <Input
+                  type="date"
+                  placeholder="Change attachment effective date"
+                  value={hlth2950Draft.change_attachment_effective_date}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, change_attachment_effective_date: e.target.value }))
+                  }
+                />
+                <Input
+                  type="date"
+                  placeholder="Change attachment cancellation date"
+                  value={hlth2950Draft.change_attachment_cancellation_date}
+                  onChange={(e) =>
+                    setHlth2950Draft((current) => ({ ...current, change_attachment_cancellation_date: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}

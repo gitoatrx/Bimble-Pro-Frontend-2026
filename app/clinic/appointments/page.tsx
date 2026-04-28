@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Clock, Loader2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
@@ -11,9 +11,14 @@ import {
 } from "@/lib/time-zone";
 import {
   assignClinicAppointmentDoctor,
+  cancelClinicAppointment,
+  fetchClinicAppointmentAvailableDoctors,
+  fetchClinicAppointmentRescheduleOptions,
   fetchClinicAppointmentsByDate,
   fetchClinicAppointmentsByRange,
   fetchClinicDoctors,
+  rescheduleClinicAppointment,
+  type ClinicAppointmentRescheduleSlot,
 } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 
@@ -27,11 +32,14 @@ type Appointment = {
   assignedDoctorId: number | null;
   time: string;
   dateKey: string;
+  appointmentDate: string;
+  appointmentTime: string;
 };
 
 type ClinicDoctorOption = {
   id: number;
   name: string;
+  specialty: string | null;
 };
 
 function todayKey() {
@@ -80,6 +88,16 @@ function normalizeAppointment(record: Record<string, unknown>): Appointment {
       (typeof record.date === "string" && record.date) ||
       (typeof record.date_key === "string" && record.date_key) ||
       todayKey(),
+    appointmentDate:
+      (typeof record.appointment_date === "string" && record.appointment_date) ||
+      (typeof record.date === "string" && record.date) ||
+      (typeof record.date_key === "string" && record.date_key) ||
+      todayKey(),
+    appointmentTime:
+      (typeof record.appointment_time === "string" && record.appointment_time) ||
+      (typeof record.time === "string" && record.time) ||
+      (typeof record.start_time === "string" && record.start_time) ||
+      "",
   };
 }
 
@@ -221,9 +239,87 @@ export default function AppointmentsCalendarPage() {
     hasSession ? "" : "You are not logged in. Please sign in again.",
   );
   const [assignSelections, setAssignSelections] = useState<Record<number, string>>({});
+  const [availableDoctorsByAppointment, setAvailableDoctorsByAppointment] = useState<Record<number, ClinicDoctorOption[]>>({});
   const [assignPendingId, setAssignPendingId] = useState<number | null>(null);
   const [assignError, setAssignError] = useState("");
   const [assignSuccess, setAssignSuccess] = useState("");
+  const [cancelPendingId, setCancelPendingId] = useState<number | null>(null);
+  const [expandedRescheduleId, setExpandedRescheduleId] = useState<number | null>(null);
+  const [rescheduleDateByAppointment, setRescheduleDateByAppointment] = useState<Record<number, string>>({});
+  const [rescheduleSlotsByAppointment, setRescheduleSlotsByAppointment] = useState<Record<number, ClinicAppointmentRescheduleSlot[]>>({});
+  const [rescheduleSelections, setRescheduleSelections] = useState<Record<number, string>>({});
+  const [rescheduleLoadingId, setRescheduleLoadingId] = useState<number | null>(null);
+  const [reschedulePendingId, setReschedulePendingId] = useState<number | null>(null);
+
+  const loadAppointments = useCallback(async () => {
+    if (!hasSession) {
+      return;
+    }
+
+    setLoading(true);
+    const [weekRecords, dayRecords] = await Promise.all([
+      fetchClinicAppointmentsByRange(
+        accessToken,
+        weekStart,
+        offsetKey(weekStart, 6),
+      ),
+      fetchClinicAppointmentsByDate(accessToken, selectedKey),
+    ]);
+
+    const weekList = Array.isArray(weekRecords)
+      ? weekRecords
+      : (weekRecords as Record<string, unknown>).appointments ??
+        (weekRecords as Record<string, unknown>).items ??
+        (weekRecords as Record<string, unknown>).data ??
+        [];
+    const dayList = Array.isArray(dayRecords)
+      ? dayRecords
+      : (dayRecords as Record<string, unknown>).appointments ??
+        (dayRecords as Record<string, unknown>).items ??
+        (dayRecords as Record<string, unknown>).data ??
+        [];
+
+    const normalizedWeek = (weekList as Record<string, unknown>[]).map(normalizeAppointment);
+    const normalizedDay = (dayList as Record<string, unknown>[]).map(normalizeAppointment);
+
+    setWeekAppointments(normalizedWeek);
+    setDayAppointments(normalizedDay);
+
+    const appointmentsNeedingDoctors = normalizedDay.filter(
+      (appointment) => !["CANCELLED", "COMPLETED", "NO_SHOW"].includes(appointment.status),
+    );
+    const availableDoctorEntries = await Promise.all(
+      appointmentsNeedingDoctors.map(async (appointment) => {
+        try {
+          const response = await fetchClinicAppointmentAvailableDoctors(accessToken, appointment.id);
+          const doctorsForAppointment = Array.isArray(response.doctors)
+            ? response.doctors
+                .map((record) => {
+                  const id = Number(record.doctor_id ?? record.id ?? 0);
+                  const name =
+                    (typeof record.name === "string" && record.name) ||
+                    (typeof record.doctor_name === "string" && record.doctor_name) ||
+                    "";
+                  if (!Number.isFinite(id) || !name) {
+                    return null;
+                  }
+                  return {
+                    id,
+                    name,
+                    specialty: typeof record.specialty === "string" ? record.specialty : null,
+                  };
+                })
+                .filter((value): value is ClinicDoctorOption => value !== null)
+            : [];
+          return [appointment.id, doctorsForAppointment] as const;
+        } catch {
+          return [appointment.id, []] as const;
+        }
+      }),
+    );
+    setAvailableDoctorsByAppointment(Object.fromEntries(availableDoctorEntries));
+    setError("");
+  }, [accessToken, hasSession, selectedKey, weekStart]);
 
   useEffect(() => {
     if (!hasSession) {
@@ -268,34 +364,7 @@ export default function AppointmentsCalendarPage() {
     }
 
     let active = true;
-
-      Promise.all([
-        fetchClinicAppointmentsByRange(
-        accessToken,
-        weekStart,
-        offsetKey(weekStart, 6),
-      ),
-      fetchClinicAppointmentsByDate(accessToken, selectedKey),
-    ])
-      .then(([weekRecords, dayRecords]) => {
-        if (!active) return;
-
-        const weekList = Array.isArray(weekRecords)
-          ? weekRecords
-          : (weekRecords as Record<string, unknown>).appointments ??
-            (weekRecords as Record<string, unknown>).items ??
-            (weekRecords as Record<string, unknown>).data ??
-            [];
-        const dayList = Array.isArray(dayRecords)
-          ? dayRecords
-          : (dayRecords as Record<string, unknown>).appointments ??
-            (dayRecords as Record<string, unknown>).items ??
-            (dayRecords as Record<string, unknown>).data ??
-            [];
-
-        setWeekAppointments((weekList as Record<string, unknown>[]).map(normalizeAppointment));
-        setDayAppointments((dayList as Record<string, unknown>[]).map(normalizeAppointment));
-      })
+    loadAppointments()
       .catch((err) => {
         if (!active) return;
         setError(err instanceof Error ? err.message : "Could not load appointments.");
@@ -307,7 +376,7 @@ export default function AppointmentsCalendarPage() {
     return () => {
       active = false;
     };
-  }, [accessToken, hasSession, selectedKey, weekStart]);
+  }, [hasSession, loadAppointments]);
 
   async function handleAssignDoctor(appointmentId: number) {
     if (!accessToken) {
@@ -337,13 +406,116 @@ export default function AppointmentsCalendarPage() {
           appointment.id === appointmentId ? updated : appointment,
         ),
       );
-      setAssignSuccess("Appointment assigned successfully.");
+      setAssignSuccess("Provider updated successfully.");
     } catch (err) {
       setAssignError(
         err instanceof Error ? err.message : "Could not assign doctor.",
       );
     } finally {
       setAssignPendingId((current) => (current === appointmentId ? null : current));
+    }
+  }
+
+  async function handleCancelAppointment(appointment: Appointment) {
+    if (!accessToken) {
+      setAssignError("You are not logged in. Please sign in again.");
+      return;
+    }
+    if (!window.confirm(`Cancel ${appointment.patientName}'s appointment?`)) {
+      return;
+    }
+    setCancelPendingId(appointment.id);
+    setAssignError("");
+    setAssignSuccess("");
+    try {
+      await cancelClinicAppointment(accessToken, appointment.id, "Cancelled by clinic");
+      await loadAppointments();
+      setAssignSuccess("Appointment cancelled successfully.");
+      if (expandedRescheduleId === appointment.id) {
+        setExpandedRescheduleId(null);
+      }
+    } catch (err) {
+      setAssignError(err instanceof Error ? err.message : "Could not cancel appointment.");
+    } finally {
+      setCancelPendingId((current) => (current === appointment.id ? null : current));
+      setLoading(false);
+    }
+  }
+
+  async function handleOpenReschedule(appointment: Appointment) {
+    if (!accessToken) {
+      setAssignError("You are not logged in. Please sign in again.");
+      return;
+    }
+    const nextExpanded = expandedRescheduleId === appointment.id ? null : appointment.id;
+    setExpandedRescheduleId(nextExpanded);
+    if (nextExpanded === null) {
+      return;
+    }
+    const dateValue = rescheduleDateByAppointment[appointment.id] || appointment.appointmentDate || appointment.dateKey;
+    setRescheduleDateByAppointment((current) => ({ ...current, [appointment.id]: dateValue }));
+    setRescheduleLoadingId(appointment.id);
+    setAssignError("");
+    try {
+      const response = await fetchClinicAppointmentRescheduleOptions(accessToken, appointment.id, { date: dateValue });
+      setRescheduleSlotsByAppointment((current) => ({ ...current, [appointment.id]: response.slots }));
+    } catch (err) {
+      setAssignError(err instanceof Error ? err.message : "Could not load reschedule slots.");
+    } finally {
+      setRescheduleLoadingId((current) => (current === appointment.id ? null : current));
+    }
+  }
+
+  async function handleRescheduleDateChange(appointment: Appointment, dateValue: string) {
+    setRescheduleDateByAppointment((current) => ({ ...current, [appointment.id]: dateValue }));
+    setRescheduleSelections((current) => ({ ...current, [appointment.id]: "" }));
+    if (!accessToken || !dateValue) {
+      return;
+    }
+    setRescheduleLoadingId(appointment.id);
+    setAssignError("");
+    try {
+      const response = await fetchClinicAppointmentRescheduleOptions(accessToken, appointment.id, { date: dateValue });
+      setRescheduleSlotsByAppointment((current) => ({ ...current, [appointment.id]: response.slots }));
+    } catch (err) {
+      setAssignError(err instanceof Error ? err.message : "Could not load reschedule slots.");
+    } finally {
+      setRescheduleLoadingId((current) => (current === appointment.id ? null : current));
+    }
+  }
+
+  async function handleSubmitReschedule(appointment: Appointment) {
+    if (!accessToken) {
+      setAssignError("You are not logged in. Please sign in again.");
+      return;
+    }
+    const selectedValue = rescheduleSelections[appointment.id];
+    if (!selectedValue) {
+      setAssignError("Choose a new slot before rescheduling.");
+      return;
+    }
+    const [appointmentDate, appointmentTime, doctorId] = selectedValue.split("|");
+    if (!appointmentDate || !appointmentTime || !doctorId) {
+      setAssignError("Choose a valid slot before rescheduling.");
+      return;
+    }
+    setReschedulePendingId(appointment.id);
+    setAssignError("");
+    setAssignSuccess("");
+    try {
+      await rescheduleClinicAppointment(accessToken, appointment.id, {
+        appointmentDate,
+        appointmentTime,
+        doctorId,
+      });
+      await loadAppointments();
+      setAssignSuccess("Appointment rescheduled successfully.");
+      setExpandedRescheduleId(null);
+    } catch (err) {
+      setAssignError(err instanceof Error ? err.message : "Could not reschedule appointment.");
+    } finally {
+      setReschedulePendingId((current) => (current === appointment.id ? null : current));
+      setLoading(false);
     }
   }
 
@@ -463,11 +635,32 @@ export default function AppointmentsCalendarPage() {
                   </div>
                 </div>
 
-                {!appt.assignedDoctorId && appt.status === "ASSIGNED" ? (
+                {!["CANCELLED", "COMPLETED", "NO_SHOW"].includes(appt.status) ? (
+                  <div className="mt-4 flex flex-wrap gap-2 border-t border-border/70 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenReschedule(appt)}
+                      className="inline-flex h-10 items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-accent"
+                    >
+                      {expandedRescheduleId === appt.id ? "Close reschedule" : "Reschedule"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleCancelAppointment(appt)}
+                      disabled={cancelPendingId === appt.id}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 px-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {cancelPendingId === appt.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      Cancel
+                    </button>
+                  </div>
+                ) : null}
+
+                {!["CANCELLED", "COMPLETED", "NO_SHOW"].includes(appt.status) ? (
                   <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center">
                     <div className="min-w-0 flex-1">
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Assign doctor
+                        {appt.assignedDoctorId ? "Reassign doctor" : "Assign doctor"}
                       </label>
                       <select
                         value={assignSelections[appt.id] ?? ""}
@@ -480,12 +673,15 @@ export default function AppointmentsCalendarPage() {
                         className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                       >
                         <option value="">Select a doctor</option>
-                        {doctors.map((doctor) => (
+                        {(availableDoctorsByAppointment[appt.id] ?? doctors).map((doctor) => (
                           <option key={doctor.id} value={doctor.id}>
-                            {doctor.name}
+                            {doctor.name}{doctor.specialty ? ` · ${doctor.specialty}` : ""}
                           </option>
                         ))}
                       </select>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Only doctors available for this appointment time are shown.
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -496,8 +692,94 @@ export default function AppointmentsCalendarPage() {
                       {assignPendingId === appt.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : null}
-                      Assign
+                      {appt.assignedDoctorId ? "Reassign" : "Assign"}
                     </button>
+                  </div>
+                ) : null}
+
+                {expandedRescheduleId === appt.id ? (
+                  <div className="mt-4 rounded-2xl border border-border/70 bg-background px-4 py-4">
+                    <div className="space-y-4">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Choose date
+                        </label>
+                        <input
+                          type="date"
+                          value={rescheduleDateByAppointment[appt.id] ?? appt.appointmentDate ?? appt.dateKey}
+                          onChange={(event) => void handleRescheduleDateChange(appt, event.target.value)}
+                          className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                        />
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Available slots
+                        </p>
+                        {rescheduleLoadingId === appt.id ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading available slots...
+                          </div>
+                        ) : (rescheduleSlotsByAppointment[appt.id] ?? []).length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No doctor-approved reschedule slots are available right now.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {(rescheduleSlotsByAppointment[appt.id] ?? []).map((slot) => {
+                              const slotValue = `${slot.appointment_date}|${slot.appointment_time}|${slot.doctor_id}`;
+                              return (
+                                <label
+                                  key={slotValue}
+                                  className={cn(
+                                    "flex cursor-pointer items-center justify-between rounded-xl border px-3 py-3 transition",
+                                    rescheduleSelections[appt.id] === slotValue
+                                      ? "border-primary bg-primary/5"
+                                      : "border-border hover:bg-accent/40",
+                                  )}
+                                >
+                                  <div>
+                                    <p className="text-sm font-semibold text-foreground">{slot.appointment_time}</p>
+                                    <p className="text-xs text-muted-foreground">Available provider: {slot.doctor_name}</p>
+                                  </div>
+                                  <input
+                                    type="radio"
+                                    name={`reschedule-slot-${appt.id}`}
+                                    checked={rescheduleSelections[appt.id] === slotValue}
+                                    onChange={() =>
+                                      setRescheduleSelections((current) => ({
+                                        ...current,
+                                        [appt.id]: slotValue,
+                                      }))
+                                    }
+                                  />
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRescheduleId(null)}
+                          className="inline-flex h-10 items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-accent"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleSubmitReschedule(appt)}
+                          disabled={reschedulePendingId === appt.id || !rescheduleSelections[appt.id]}
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {reschedulePendingId === appt.id ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          Save new slot
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ) : null}
               </div>

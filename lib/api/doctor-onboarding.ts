@@ -27,6 +27,19 @@ export type DoctorHlth2870Response = {
   missing_fields: string[];
   field_values: Record<string, string>;
   download_url: string;
+  saved_values?: DoctorHlth2870SavedValues;
+};
+
+export type DoctorHlth2870SavedValues = {
+  msp_billing_number: string | null;
+  principal_practitioner_name: string | null;
+  principal_practitioner_number: string | null;
+  effective_date: string | null;
+  cancel_date: string | null;
+  signature: {
+    signature_data_url: string | null;
+    signature_label: string | null;
+  };
 };
 
 export type DoctorHlth2950Signature = DoctorHlth2870Signature;
@@ -350,6 +363,18 @@ export async function submitDoctorHlth2870Onboarding(
     endpoint: API_ENDPOINTS.doctorMeOnboardingHlth2870,
     method: "POST",
     body: payload,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
+export async function fetchDoctorHlth2870Onboarding(
+  accessToken: string,
+) {
+  return apiRequest<DoctorHlth2870Response>({
+    endpoint: API_ENDPOINTS.doctorMeOnboardingHlth2870,
+    method: "GET",
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },

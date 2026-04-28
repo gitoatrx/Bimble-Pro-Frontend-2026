@@ -11,6 +11,7 @@ import type {
   PatientPortalClinic,
   PatientPortalDashboard,
   PatientPortalRequest,
+  PatientRescheduleOptionsResponse,
   PatientPortalService,
   PatientProfile,
   PatientVisitType,
@@ -86,11 +87,53 @@ export function fetchPatientAppointments(accessToken: string) {
   });
 }
 
+export function fetchPatientRescheduleOptions(
+  accessToken: string,
+  appointmentId: number,
+  days = 14,
+) {
+  return apiRequest<PatientRescheduleOptionsResponse>({
+    endpoint: `/api/v1/patient/appointments/${appointmentId}/reschedule-options?days=${days}`,
+    headers: authHeaders(accessToken),
+  });
+}
+
 export function fetchPatientRequests(accessToken: string) {
   return apiRequest<PatientPortalRequest[]>({
     endpoint: "/api/v1/patient/requests",
     headers: authHeaders(accessToken),
   });
+}
+
+export async function downloadPatientRequestAttachment(
+  accessToken: string,
+  requestId: number,
+) {
+  const response = await fetch(`/api/v1/patient/requests/${requestId}/attachment/download`, {
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    const responseData = await response.json().catch(() => null);
+    const message =
+      responseData &&
+      typeof responseData === "object" &&
+      "detail" in responseData &&
+      typeof responseData.detail === "string"
+        ? responseData.detail
+        : "Request failed.";
+    throw new Error(message);
+  }
+
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const filenameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+  const filename = filenameMatch?.[1] ? decodeURIComponent(filenameMatch[1].replace(/"/g, "")) : null;
+  const blob = await response.blob();
+  return {
+    blob,
+    filename,
+    contentType: response.headers.get("content-type") ?? blob.type ?? "application/octet-stream",
+  };
 }
 
 export function fetchPatientFamilyMembers(accessToken: string) {
@@ -201,7 +244,7 @@ export function cancelPatientAppointment(
   payload: { reason?: string },
 ) {
   return apiRequest<PatientPortalAppointment, typeof payload>({
-    endpoint: `/api/v1/appointments/${appointmentId}/cancel`,
+    endpoint: `/api/v1/patient/appointments/${appointmentId}/cancel`,
     method: "POST",
     headers: authHeaders(accessToken),
     body: payload,
@@ -228,9 +271,25 @@ export function createPatientPortalRequest(
 export function createPatientRescheduleRequest(
   accessToken: string,
   appointmentId: number,
-  payload: { details?: string; clinic_id?: number },
+  payload: {
+    details?: string;
+    clinic_id?: number;
+    requested_appointment_date: string;
+    requested_appointment_time: string;
+    requested_doctor_id?: number;
+  },
 ) {
-  return apiRequest<PatientPortalRequest, { request_type: "RESCHEDULE"; details?: string; clinic_id?: number }>({
+  return apiRequest<
+    PatientPortalRequest,
+    {
+      request_type: "RESCHEDULE";
+      details?: string;
+      clinic_id?: number;
+      requested_appointment_date: string;
+      requested_appointment_time: string;
+      requested_doctor_id?: number;
+    }
+  >({
     endpoint: `/api/v1/patient/appointments/${appointmentId}/reschedule-request`,
     method: "POST",
     headers: authHeaders(accessToken),
@@ -238,6 +297,9 @@ export function createPatientRescheduleRequest(
       request_type: "RESCHEDULE",
       details: payload.details,
       clinic_id: payload.clinic_id,
+      requested_appointment_date: payload.requested_appointment_date,
+      requested_appointment_time: payload.requested_appointment_time,
+      requested_doctor_id: payload.requested_doctor_id,
     },
   });
 }

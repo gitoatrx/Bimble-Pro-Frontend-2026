@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import {
   fetchClinicRequests,
+  uploadClinicRequestAttachment,
   updateClinicRequestStatus,
   type ClinicPortalRequest,
 } from "@/lib/api/clinic-dashboard";
@@ -18,6 +19,10 @@ function requestLabel(requestType: string) {
   return requestType;
 }
 
+function requestSupportsDocumentUpload(requestType: string) {
+  return requestType === "PRESCRIPTION" || requestType === "LAB_REPORT";
+}
+
 export default function ClinicRequestsPage() {
   const [requests, setRequests] = useState<ClinicPortalRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +30,7 @@ export default function ClinicRequestsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingKey, setPendingKey] = useState("");
   const [responseDrafts, setResponseDrafts] = useState<Record<number, string>>({});
+  const [selectedFiles, setSelectedFiles] = useState<Record<number, File | null>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +105,38 @@ export default function ClinicRequestsPage() {
     }
   }
 
+  async function handleUploadAttachment(requestId: number) {
+    const session = readClinicLoginSession();
+    if (!session?.accessToken) {
+      setError("You are not logged in.");
+      return;
+    }
+
+    const file = selectedFiles[requestId];
+    if (!file) {
+      setError("Please choose a file to upload first.");
+      return;
+    }
+
+    const actionKey = `${requestId}:UPLOAD`;
+    setPendingKey(actionKey);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const response = await uploadClinicRequestAttachment(session.accessToken, requestId, file);
+      setRequests((current) =>
+        current.map((request) => (request.request_id === requestId ? response.request : request)),
+      );
+      setSelectedFiles((current) => ({ ...current, [requestId]: null }));
+      setSuccessMessage("Document uploaded. The patient can now access it from the request history.");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to upload the document.");
+    } finally {
+      setPendingKey((current) => (current === actionKey ? "" : current));
+    }
+  }
+
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
       <div className="mb-8">
@@ -137,7 +175,9 @@ export default function ClinicRequestsPage() {
               {successMessage}
             </div>
           ) : null}
-          {requests.map((request) => (
+          {requests.map((request) => {
+            const canUploadDocument = requestSupportsDocumentUpload(request.request_type);
+            return (
             <div key={request.request_id} className="rounded-2xl border border-border bg-card p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -182,14 +222,62 @@ export default function ClinicRequestsPage() {
                       }))
                     }
                     placeholder={
-                      request.request_type === "LAB_REPORT"
+                      request.request_type === "RESCHEDULE"
+                        ? "Add a note about the reschedule update you are sending."
+                        : request.request_type === "LAB_REPORT"
                         ? "Add a note about the lab report you are sending."
                         : "Add a note about the prescription you are sending."
                     }
                   />
                 </label>
 
+                {canUploadDocument ? (
+                  <label className="grid gap-2 text-sm text-slate-700">
+                    Upload requested document
+                    <input
+                      type="file"
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-sky-700"
+                      onChange={(event) =>
+                        setSelectedFiles((current) => ({
+                          ...current,
+                          [request.request_id]: event.target.files?.[0] ?? null,
+                        }))
+                      }
+                    />
+                  </label>
+                ) : null}
+
+                {request.attachment_name ? (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-700">
+                    Uploaded document:{" "}
+                    {request.attachment_download_url ? (
+                      <a
+                        href={request.attachment_download_url}
+                        className="font-medium underline underline-offset-2"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {request.attachment_name}
+                      </a>
+                    ) : (
+                      request.attachment_name
+                    )}
+                  </div>
+                ) : null}
+
                 <div className="flex flex-wrap gap-2">
+                  {canUploadDocument ? (
+                    <Button
+                      variant="outline"
+                      disabled={!selectedFiles[request.request_id] || pendingKey === `${request.request_id}:UPLOAD`}
+                      onClick={() => void handleUploadAttachment(request.request_id)}
+                    >
+                      {pendingKey === `${request.request_id}:UPLOAD` ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : null}
+                      Upload document
+                    </Button>
+                  ) : null}
                   <Button
                     variant="outline"
                     disabled={pendingKey === `${request.request_id}:IN_REVIEW`}
@@ -222,7 +310,8 @@ export default function ClinicRequestsPage() {
                 ) : null}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
