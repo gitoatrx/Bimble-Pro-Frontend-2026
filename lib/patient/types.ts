@@ -189,9 +189,12 @@ export type PatientPortalRequest = {
   patient_id: number;
   appointment_id: number | null;
   clinic_id: number | null;
+  clinic_name?: string | null;
   request_type: "RESCHEDULE" | "PRESCRIPTION" | "LAB_REPORT" | string;
   status: string;
   details: string | null;
+  patient_message?: string | null;
+  clinic_response?: string | null;
   created_at: string;
 };
 

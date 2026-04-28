@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
   clinicMeToday: "/api/v1/clinics/me/today",
   clinicMeAppointments: "/api/v1/clinics/me/appointments",
   clinicMePool: "/api/v1/clinics/me/pool",
+  clinicMeRequests: "/api/v1/clinics/me/requests",
   clinicMeDoctors: "/api/v1/clinics/me/doctors",
   clinicMeDoctorInvite: "/api/v1/clinics/me/doctors/invite",
   clinicMeDoctorInvites: "/api/v1/clinics/me/doctors/invites",

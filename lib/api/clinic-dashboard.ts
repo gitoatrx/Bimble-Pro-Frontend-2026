@@ -60,6 +60,30 @@ export type ClinicPoolResponse = {
   clinic_slug: string;
   appointments: ClinicPoolAppointment[];
 };
+export type ClinicPortalRequest = {
+  request_id: number;
+  patient_id: number;
+  patient_name: string;
+  appointment_id: number | null;
+  clinic_id: number | null;
+  request_type: "PRESCRIPTION" | "LAB_REPORT" | "RESCHEDULE" | string;
+  status: string;
+  details: string | null;
+  patient_message?: string | null;
+  clinic_response?: string | null;
+  service_name?: string | null;
+  chief_complaint?: string | null;
+  appointment_status?: string | null;
+  appointment_date?: string | null;
+  appointment_time?: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+export type ClinicRequestsResponse = {
+  clinic_id: number;
+  clinic_slug: string;
+  requests: ClinicPortalRequest[];
+};
 
 export type ClinicFacilityFormDeclaration = {
   id: string;
@@ -761,6 +785,29 @@ export async function fetchClinicPool(accessToken: string) {
   return apiRequest<ClinicPoolResponse>({
     endpoint: API_ENDPOINTS.clinicMePool,
     headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicRequests(accessToken: string) {
+  return apiRequest<ClinicRequestsResponse>({
+    endpoint: API_ENDPOINTS.clinicMeRequests,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function updateClinicRequestStatus(
+  accessToken: string,
+  requestId: number,
+  payload: {
+    status: "SUBMITTED" | "IN_REVIEW" | "FULFILLED" | "REJECTED";
+    clinicResponse?: string;
+  },
+) {
+  return apiRequest<{ request: ClinicPortalRequest }, typeof payload>({
+    endpoint: `${API_ENDPOINTS.clinicMeRequests}/${requestId}`,
+    method: "PATCH",
+    headers: authHeaders(accessToken),
+    body: payload,
   });
 }
 

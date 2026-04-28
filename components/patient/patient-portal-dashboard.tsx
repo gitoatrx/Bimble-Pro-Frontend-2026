@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
+  createPatientDocumentRequest,
   createPatientFamilyMember,
   createPatientPoolAppointment,
   deletePatientFamilyMember,
@@ -42,6 +43,7 @@ import type {
   PatientFamilyMember,
   PatientFulfillment,
   PatientLoginSession,
+  PatientPortalAppointment,
   PatientPharmacyChoice,
   PatientPortalAppointmentsPayload,
   PatientPortalRequest,
@@ -325,6 +327,8 @@ export function PatientPortalDashboard() {
   const [availableTimes, setAvailableTimes] = useState<string[]>(TIME_SLOTS);
   const [isBooking, setIsBooking] = useState(false);
   const [bookingMessage, setBookingMessage] = useState("");
+  const [requestMessage, setRequestMessage] = useState("");
+  const [requestActionKey, setRequestActionKey] = useState("");
 
   const navigation: PortalNavItem[] = [
     {
@@ -375,6 +379,22 @@ export function PatientPortalDashboard() {
     );
     return match?.id ?? "";
   }, [bookingDraft, nearbyPharmacies]);
+
+  const requestableAppointments = useMemo(() => {
+    const seen = new Set<number>();
+    const nextAppointments: PatientPortalAppointment[] = [];
+    for (const appointment of [...(appointments?.current ?? []), ...(appointments?.past ?? [])]) {
+      if (!appointment.clinic_id || !appointment.clinic_name || appointment.status === "CANCELLED") {
+        continue;
+      }
+      if (seen.has(appointment.appointment_id)) {
+        continue;
+      }
+      seen.add(appointment.appointment_id);
+      nextAppointments.push(appointment);
+    }
+    return nextAppointments;
+  }, [appointments]);
 
   useEffect(() => {
     const storedSession = readPatientLoginSession();
@@ -676,6 +696,47 @@ export function PatientPortalDashboard() {
       setFamilyMessage(
         error instanceof Error ? error.message : "Could not remove the family member.",
       );
+    }
+  }
+
+  async function handleCreateDocumentRequest(
+    appointment: PatientPortalAppointment,
+    requestType: "PRESCRIPTION" | "LAB_REPORT",
+  ) {
+    if (!session) return;
+    if (!appointment.clinic_id) {
+      setRequestMessage("This appointment is not linked to a clinic yet.");
+      return;
+    }
+
+    const actionKey = `${appointment.appointment_id}:${requestType}`;
+    setRequestActionKey(actionKey);
+    setRequestMessage("");
+
+    try {
+      await createPatientDocumentRequest(session.accessToken, appointment.appointment_id, {
+        request_type: requestType,
+        clinic_id: appointment.clinic_id,
+        details: [
+          appointment.chief_complaint,
+          appointment.appointment_date ? `Visit date: ${appointment.appointment_date}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      });
+      await refreshPortalData();
+      setRequestMessage(
+        `${requestType === "PRESCRIPTION" ? "Prescription" : "Lab report"} request sent to ${
+          appointment.clinic_name ?? "the clinic"
+        }.`,
+      );
+      setActiveSection("requests");
+    } catch (error) {
+      setRequestMessage(
+        error instanceof Error ? error.message : "Could not send the clinic request.",
+      );
+    } finally {
+      setRequestActionKey((current) => (current === actionKey ? "" : current));
     }
   }
 
@@ -1412,6 +1473,66 @@ export function PatientPortalDashboard() {
             icon={<NotebookPen className="h-5 w-5" />}
           >
             <div className="space-y-3">
+              {requestMessage ? (
+                <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-700">
+                  {requestMessage}
+                </div>
+              ) : null}
+              {requestableAppointments.length ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-semibold text-slate-900">Request documents from your clinic</div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    Choose the visit and send the request directly to the clinic that treated you.
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {requestableAppointments.slice(0, 5).map((appointment) => (
+                      <div
+                        key={appointment.appointment_id}
+                        className="rounded-2xl border border-slate-200 bg-white p-4"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">
+                              {appointment.clinic_name}
+                            </div>
+                            <div className="mt-1 text-sm text-slate-600">
+                              {appointment.chief_complaint || appointment.service_name || "Follow-up request"}
+                            </div>
+                            {(appointment.appointment_date || appointment.appointment_time) ? (
+                              <div className="mt-1 text-xs text-slate-500">
+                                {appointment.appointment_date || "Date pending"}
+                                {appointment.appointment_time ? ` · ${appointment.appointment_time}` : ""}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              variant="outline"
+                              disabled={requestActionKey === `${appointment.appointment_id}:PRESCRIPTION`}
+                              onClick={() =>
+                                void handleCreateDocumentRequest(appointment, "PRESCRIPTION")
+                              }
+                            >
+                              Request prescription
+                            </Button>
+                            <Button
+                              variant="outline"
+                              disabled={requestActionKey === `${appointment.appointment_id}:LAB_REPORT`}
+                              onClick={() => void handleCreateDocumentRequest(appointment, "LAB_REPORT")}
+                            >
+                              Request lab report
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
+                  Once a clinic accepts or completes your visit, you can request prescriptions and lab reports here.
+                </div>
+              )}
               {requests.length ? (
                 requests.slice(0, 5).map((request) => (
                   <div key={request.request_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1419,6 +1540,19 @@ export function PatientPortalDashboard() {
                       <div>
                         <div className="text-sm font-semibold text-slate-900">{request.request_type}</div>
                         <div className="mt-1 text-sm text-slate-600">Status: {request.status}</div>
+                        {request.clinic_name ? (
+                          <div className="mt-1 text-sm text-slate-600">Clinic: {request.clinic_name}</div>
+                        ) : null}
+                        {request.patient_message || request.details ? (
+                          <div className="mt-2 text-sm text-slate-600">
+                            {request.patient_message || request.details}
+                          </div>
+                        ) : null}
+                        {request.clinic_response ? (
+                          <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                            Clinic update: {request.clinic_response}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="text-sm text-slate-500">
                         <CanadianTime value={request.created_at} fallback="Not available" />
