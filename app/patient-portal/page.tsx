@@ -161,132 +161,103 @@ export default function PatientPortalLoginPage() {
       workspaceLabel="Find care"
       contentClassName="max-w-xl"
     >
-      <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
-        <div className="rounded-[32px] border border-sky-200/70 bg-[linear-gradient(135deg,#f8fbff_0%,#e0f2fe_54%,#ecfeff_100%)] p-8 shadow-[0_32px_100px_rgba(14,116,144,0.12)]">
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            Patient access
-          </div>
-          <h1 className="mt-5 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            Secure patient login with phone, date of birth, and OTP.
-          </h1>
-          <p className="mt-4 max-w-xl text-sm leading-7 text-slate-600">
-            Patients can sign in, verify with a one-time code, and then manage appointments, profile details, requests, and family members in one place.
+      <div>
+        <div className="mb-6">
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
+            {step === "identify"
+              ? "Patient Sign In"
+              : step === "otp"
+                ? "Verify OTP"
+                : "Confirm Your Profile"}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {step === "identify"
+              ? "Enter the patient phone number to receive a one-time code."
+              : step === "otp"
+                ? "Verify the phone number with the one-time code we just sent."
+                : "Now enter the patient date of birth and PHN so we can open the correct family member profile."}
           </p>
-
-          <div className="mt-8 grid gap-4">
-            {[
-              "Book appointments directly from the profile page.",
-              "Review current and past appointment history.",
-              "Cancel or request a reschedule without calling the clinic.",
-              "Request prescriptions, lab reports, and manage family members.",
-            ].map((item) => (
-              <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/80 bg-white/80 px-4 py-3 text-sm text-slate-700">
-                <Smartphone className="mt-0.5 h-4 w-4 text-sky-700" />
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
         </div>
 
-        <div>
-          <div className="mb-6">
-            <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
-              {step === "identify"
-                ? "Patient Sign In"
-                : step === "otp"
-                  ? "Verify OTP"
-                  : "Confirm Your Profile"}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              {step === "identify"
-                ? "Enter the patient phone number to receive a one-time code."
-                : step === "otp"
-                  ? "Verify the phone number with the one-time code we just sent."
-                  : "Now enter the patient date of birth and PHN so we can open the correct family member profile."}
-            </p>
-          </div>
-
-          {step === "identify" ? (
-            <PatientLoginCard
-              phone={phone}
-              dateOfBirth={dateOfBirth}
-              showDateOfBirth={false}
-              isSubmitting={isSubmitting}
-              error={error}
-              notice={notice}
-              onPhoneChange={setPhone}
-              onDateOfBirthChange={setDateOfBirth}
-              onSubmit={() => void handleSendOtp()}
-            />
-          ) : step === "otp" ? (
-            <PatientOtpCard
-              channel={channel}
-              message={notice}
-              otpCode={otpCode}
-              isVerifying={isVerifying}
-              isResending={isResending}
-              error={error}
-              onOtpChange={setOtpCode}
-              onVerify={() => void handleVerifyOtp()}
-              onResend={() => void handleResendOtp()}
-              onBack={handleBack}
-            />
-          ) : (
-            <div className="rounded-[28px] border border-border/80 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:p-8">
-              <div className="grid gap-5">
-                {notice ? (
-                  <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
-                    {notice}
-                  </div>
-                ) : null}
-
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Date of birth
-                  <Input
-                    type="date"
-                    value={dateOfBirth}
-                    onChange={(event) => setDateOfBirth(event.target.value)}
-                    autoComplete="bday"
-                  />
-                </label>
-
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  PHN
-                  <Input
-                    value={phn}
-                    onChange={(event) => setPhn(event.target.value.replace(/\D/g, "").slice(0, 20))}
-                    inputMode="numeric"
-                    placeholder="Enter the patient PHN"
-                  />
-                </label>
-
-                {error ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                    {error}
-                  </div>
-                ) : null}
-
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button
-                    className="h-12 flex-1 rounded-2xl"
-                    onClick={() => void handleCompleteProfile()}
-                    disabled={isCompletingProfile || !dateOfBirth || !phn.trim()}
-                  >
-                    {isCompletingProfile ? "Opening profile..." : "Open patient profile"}
-                  </Button>
-                  <Button
-                    className="h-12 rounded-2xl"
-                    variant="ghost"
-                    onClick={handleBack}
-                  >
-                    Back
-                  </Button>
+        {step === "identify" ? (
+          <PatientLoginCard
+            phone={phone}
+            dateOfBirth={dateOfBirth}
+            showDateOfBirth={false}
+            isSubmitting={isSubmitting}
+            error={error}
+            notice={notice}
+            onPhoneChange={setPhone}
+            onDateOfBirthChange={setDateOfBirth}
+            onSubmit={() => void handleSendOtp()}
+          />
+        ) : step === "otp" ? (
+          <PatientOtpCard
+            channel={channel}
+            message={notice}
+            otpCode={otpCode}
+            isVerifying={isVerifying}
+            isResending={isResending}
+            error={error}
+            onOtpChange={setOtpCode}
+            onVerify={() => void handleVerifyOtp()}
+            onResend={() => void handleResendOtp()}
+            onBack={handleBack}
+          />
+        ) : (
+          <div className="rounded-[28px] border border-border/80 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:p-8">
+            <div className="grid gap-5">
+              {notice ? (
+                <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                  {notice}
                 </div>
+              ) : null}
+
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                Date of birth
+                <Input
+                  type="date"
+                  value={dateOfBirth}
+                  onChange={(event) => setDateOfBirth(event.target.value)}
+                  autoComplete="bday"
+                />
+              </label>
+
+              <label className="grid gap-2 text-sm font-medium text-slate-700">
+                PHN
+                <Input
+                  value={phn}
+                  onChange={(event) => setPhn(event.target.value.replace(/\D/g, "").slice(0, 20))}
+                  inputMode="numeric"
+                  placeholder="Enter the patient PHN"
+                />
+              </label>
+
+              {error ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {error}
+                </div>
+              ) : null}
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button
+                  className="h-12 flex-1 rounded-2xl"
+                  onClick={() => void handleCompleteProfile()}
+                  disabled={isCompletingProfile || !dateOfBirth || !phn.trim()}
+                >
+                  {isCompletingProfile ? "Opening profile..." : "Open patient profile"}
+                </Button>
+                <Button
+                  className="h-12 rounded-2xl"
+                  variant="ghost"
+                  onClick={handleBack}
+                >
+                  Back
+                </Button>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </ClinicFlowShell>
   );
