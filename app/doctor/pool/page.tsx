@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ArrowRight, CircleUserRound, Loader2, MessageSquareText, MonitorSmartphone, Sparkles } from "lucide-react";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
   fetchDoctorPool,
   type DoctorAppointment,
 } from "@/lib/api/doctor-dashboard";
+import { useRealtimeRefresh } from "@/lib/realtime";
 
 function AppointmentTypeBadge({ type }: { type: "walkin" | "virtual" }) {
   const isVirtual = type === "virtual";
@@ -41,39 +42,33 @@ export default function DoctorPoolPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      const doctorSession = readDoctorLoginSession();
-      if (!doctorSession?.accessToken) {
-        setError("You are not logged in.");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await fetchDoctorPool(doctorSession.accessToken);
-        if (!cancelled) {
-          setPool(response.appointments ?? []);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setPool([]);
-          setError(err instanceof Error ? err.message : "Failed to load pool.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+  const loadPool = useCallback(async () => {
+    const doctorSession = readDoctorLoginSession();
+    if (!doctorSession?.accessToken) {
+      setError("You are not logged in.");
+      setLoading(false);
+      return;
     }
 
-    void load();
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const response = await fetchDoctorPool(doctorSession.accessToken);
+      setPool(response.appointments ?? []);
+      setError("");
+    } catch (err) {
+      setPool([]);
+      setError(err instanceof Error ? err.message : "Failed to load pool.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadPool();
+  }, [loadPool]);
+
+  useRealtimeRefresh(loadPool, {
+    paths: ["/pool", "/appointments", "/patient-intake"],
+  });
 
   async function handleClaim(id: number) {
     const session = readDoctorLoginSession();

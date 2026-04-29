@@ -75,6 +75,7 @@ import {
   normalizePostalCode,
   normalizeProvinceCodeInput,
 } from "@/lib/form-validation";
+import { useRealtimeRefresh } from "@/lib/realtime";
 
 type ProfileDraft = {
   first_name: string;
@@ -533,6 +534,11 @@ export function PatientPortalDashboard() {
     setRequests(nextRequests);
     setFamilyMembers(nextFamilyMembers);
   }
+
+  useRealtimeRefresh(refreshPortalData, {
+    enabled: Boolean(session),
+    paths: ["/patient-portal", "/appointments", "/requests", "/pool"],
+  });
 
   function resetBookingFlow() {
     setBookingDraft(emptyBookingDraft);

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Input } from "@/components/ui/input";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import { fetchDoctorPatients, type DoctorPatient } from "@/lib/api/doctor-dashboard";
+import { useRealtimeRefresh } from "@/lib/realtime";
 
 export default function DoctorPatientsPage() {
   const [query, setQuery] = useState("");
@@ -15,46 +16,41 @@ export default function DoctorPatientsPage() {
 
   const debouncedQuery = useMemo(() => query.trim(), [query]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      const session = readDoctorLoginSession();
-      if (!session?.accessToken) {
-        setError("You are not logged in.");
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError("");
-
-      try {
-        const response = await fetchDoctorPatients(session.accessToken, debouncedQuery);
-        if (!cancelled) {
-          setPatients(response.patients ?? []);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setPatients([]);
-          setError(err instanceof Error ? err.message : "Failed to load patients.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+  const loadPatients = useCallback(async () => {
+    const session = readDoctorLoginSession();
+    if (!session?.accessToken) {
+      setError("You are not logged in.");
+      setLoading(false);
+      return;
     }
 
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetchDoctorPatients(session.accessToken, debouncedQuery);
+      setPatients(response.patients ?? []);
+    } catch (err) {
+      setPatients([]);
+      setError(err instanceof Error ? err.message : "Failed to load patients.");
+    } finally {
+      setLoading(false);
+    }
+  }, [debouncedQuery]);
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
-      void load();
+      void loadPatients();
     }, 250);
 
     return () => {
-      cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [debouncedQuery]);
+  }, [loadPatients]);
+
+  useRealtimeRefresh(loadPatients, {
+    paths: ["/appointments", "/patients", "/patient"],
+  });
 
   return (
     <DoctorPageShell eyebrow="Records" title="Patients">
