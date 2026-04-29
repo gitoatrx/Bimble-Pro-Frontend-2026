@@ -136,17 +136,14 @@ function ClinicPicker({
   clinics,
   onSelect,
   loading,
-}: {
+  }: {
   clinics: DoctorClinicOption[];
   onSelect: (slug: string) => void;
   loading: string | null; // the slug currently loading, or null
 }) {
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        You&apos;re linked to multiple clinics. Choose which one you&apos;re working at today.
-      </p>
-      <div className="space-y-2">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {clinics.map((clinic) => (
           <button
             key={clinic.clinic_slug}
@@ -487,14 +484,11 @@ export default function DoctorLoginPage() {
 
       {step === "clinic_select" && (
         <>
-          <div className="mb-6 max-w-xl">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
-              Which clinic today?
-            </h1>
-            <p className="mt-1 text-sm leading-6 text-slate-600">
-              You&apos;re linked to more than one clinic. Select where you&apos;re working right now.
-            </p>
-          </div>
+        <div className="mb-6 max-w-xl">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+            Which clinic today?
+          </h1>
+        </div>
 
           <ClinicPicker
             clinics={clinicOptions}
