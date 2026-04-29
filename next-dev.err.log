@@ -7,3 +7,11 @@
   code: [33m2[39m,
   message: [32m'Failed to query location from network service. Check the DevTools console for more information.'[39m
 } (components/homepage/homepage.tsx:283:15)
+⚠ Fast Refresh had to perform a full reload when ./lib/clinic/session.ts changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+⚠ Fast Refresh had to perform a full reload when ./lib/clinic/session.ts changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+⚠ Fast Refresh had to perform a full reload when ./lib/clinic/session.ts changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+⚠ Fast Refresh had to perform a full reload when ./lib/clinic/session.ts changed. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[browser] Homepage geolocation failed: {
+  code: [33m2[39m,
+  message: [32m'Failed to query location from network service. Check the DevTools console for more information.'[39m
+} (components/homepage/homepage.tsx:283:15)
