@@ -13,6 +13,7 @@ import {
   NotebookPen,
   Package,
   Pill,
+  Search,
   X,
   Truck,
   Users,
@@ -281,6 +282,23 @@ function SmallPill({
   );
 }
 
+function getBrowserCoordinates(): Promise<{ lat: number; lng: number } | null> {
+  if (typeof navigator === "undefined" || !navigator.geolocation) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        resolve({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        }),
+      () => resolve(null),
+      { enableHighAccuracy: false, maximumAge: 300000, timeout: 5000 },
+    );
+  });
+}
+
 export function PatientPortalDashboard() {
   const router = useRouter();
   const rescheduleDateInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -310,6 +328,7 @@ export function PatientPortalDashboard() {
   const [bookingStep, setBookingStep] = useState<BookingStep>("problem");
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(emptyBookingDraft);
   const [bimblePharmacies, setBimblePharmacies] = useState<PatientBimblePharmacy[]>([]);
+  const [pharmacySearch, setPharmacySearch] = useState("");
   const [isLoadingBimblePharmacies, setIsLoadingBimblePharmacies] = useState(false);
   const [bimblePharmacyError, setBimblePharmacyError] = useState("");
   const [availableDates, setAvailableDates] = useState<string[]>([]);
@@ -385,6 +404,11 @@ export function PatientPortalDashboard() {
     () => bimblePharmacies.find((option) => option.id === selectedNearbyPharmacyId) ?? null,
     [bimblePharmacies, selectedNearbyPharmacyId],
   );
+  const filteredBimblePharmacies = useMemo(() => {
+    const query = pharmacySearch.trim().toLowerCase();
+    if (!query) return bimblePharmacies;
+    return bimblePharmacies.filter((option) => option.name.toLowerCase().includes(query));
+  }, [bimblePharmacies, pharmacySearch]);
 
   const requestableAppointments = useMemo(() => {
     const seen = new Set<number>();
@@ -497,7 +521,9 @@ export function PatientPortalDashboard() {
       setIsLoadingBimblePharmacies(true);
 
       try {
-        const response = await fetchBimblePharmacies();
+        const coords = await getBrowserCoordinates();
+        if (cancelled) return;
+        const response = await fetchBimblePharmacies(coords?.lat, coords?.lng);
         if (cancelled) return;
         const pharmacies = response.pharmacies ?? [];
         setBimblePharmacies(pharmacies);
@@ -547,6 +573,7 @@ export function PatientPortalDashboard() {
     setBookingDraft(emptyBookingDraft);
     setBimblePharmacies([]);
     setBimblePharmacyError("");
+    setPharmacySearch("");
     setBookingStep("problem");
     setBookingMessage("");
     setAvailableDates([]);
@@ -1887,10 +1914,11 @@ export function PatientPortalDashboard() {
                             preferred_pharmacy_name: "",
                             preferred_pharmacy_address: "",
                             preferred_pharmacy_city: "",
-                            preferred_pharmacy_postal_code: "",
-                            preferred_pharmacy_phone: "",
-                          }));
-                        }}
+                              preferred_pharmacy_postal_code: "",
+                              preferred_pharmacy_phone: "",
+                            }));
+                            setPharmacySearch("");
+                          }}
                         className={cn(
                           "rounded-[24px] border p-5 text-left shadow-sm transition-all",
                           bookingDraft.pharmacy_choice === "preferred"
@@ -1920,13 +1948,22 @@ export function PatientPortalDashboard() {
                             {bimblePharmacyError}
                           </div>
                         ) : null}
-                        {bimblePharmacies.length ? (
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">Choose a pharmacy</label>
-                            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                              {bimblePharmacies.map((option) => {
-                                const selected = selectedNearbyPharmacyId === option.id;
-                                return (
+                          {bimblePharmacies.length ? (
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium text-slate-700">Choose a pharmacy</label>
+                              <div className="relative">
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <Input
+                                  value={pharmacySearch}
+                                  onChange={(event) => setPharmacySearch(event.target.value)}
+                                  placeholder="Search pharmacy by name"
+                                  className="rounded-2xl bg-white pl-9"
+                                />
+                              </div>
+                              <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                                {filteredBimblePharmacies.map((option) => {
+                                  const selected = selectedNearbyPharmacyId === option.id;
+                                  return (
                                   <button
                                     key={option.id}
                                     type="button"
@@ -1954,12 +1991,17 @@ export function PatientPortalDashboard() {
                                         {option.distance_label || "Nearby"}
                                       </div>
                                     </div>
-                                  </button>
-                                );
-                              })}
+                                    </button>
+                                  );
+                                })}
+                                {!filteredBimblePharmacies.length ? (
+                                  <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                                    No pharmacies match your search.
+                                  </div>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        ) : null}
+                          ) : null}
                       </div>
                     ) : null}
 

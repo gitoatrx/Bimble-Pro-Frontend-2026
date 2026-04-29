@@ -1,5 +1,5 @@
 import { API_ENDPOINTS } from "@/lib/api/endpoints";
-import { apiRequest } from "@/lib/api/request";
+import { ApiRequestError, apiRequest } from "@/lib/api/request";
 
 function authHeaders(accessToken: string) {
   return { Authorization: `Bearer ${accessToken}` };
@@ -57,6 +57,8 @@ export type DoctorAppointment = {
   appointment_id: number;
   patient_id: number;
   patient_name: string;
+  patient_date_of_birth?: string | null;
+  patient_age?: number | null;
   service: string;
   service_name: string | null;
   user_friendly_service_name: string;
@@ -112,6 +114,60 @@ export type DoctorDrugSearchItem = {
   brand_name: string | null;
   descriptor: string | null;
   drug_identification_number: string | null;
+  route?: string | null;
+  drug_category?: string | null;
+  is_narcotic?: boolean;
+  suggested_sig?: string | null;
+  technical_reasons?: Array<{
+    technical_reason: string;
+    sigs: string[];
+  }>;
+};
+
+type OatRxDrugSearchItem = {
+  id: number;
+  group_name: string;
+  drug_category?: string | null;
+  dosage_form?: string | null;
+  route?: string | null;
+  is_narcotic?: boolean;
+  drugs?: Array<{
+    id?: number;
+    name?: string | null;
+    din?: string | null;
+    drug_family?: string | null;
+  }>;
+  active_ingredients?: Array<{
+    ingredient_name?: string | null;
+    drug_code?: string | number | null;
+    strength?: string | number | null;
+    strength_unit?: string | null;
+  }>;
+  technical_reasons?: Array<{
+    technical_reason?: string | null;
+    sigs?: Array<{ sig?: string | null }>;
+  }>;
+};
+
+type OatRxDrugSearchResponse = {
+  success?: boolean;
+  data?: OatRxDrugSearchItem[];
+  message?: string;
+};
+
+export type DoctorPrescriptionMedicationPayload = {
+  drug_catalog_source_id?: number | null;
+  drug_code?: string | null;
+  drug_name: string;
+  ingredient?: string | null;
+  instructions?: string | null;
+  dosage?: string | null;
+  quantity?: string | null;
+  repeats?: number | null;
+  route?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  duration_days?: number | null;
 };
 
 export type DoctorPrescriptionPayload = {
@@ -120,6 +176,7 @@ export type DoctorPrescriptionPayload = {
   drug_name: string;
   ingredient?: string | null;
   instructions: string;
+  medications?: DoctorPrescriptionMedicationPayload[];
   quantity?: string | null;
   repeats?: number | null;
   no_substitution?: boolean;
@@ -145,6 +202,7 @@ export type DoctorPrescriptionRecord = DoctorPrescriptionPayload & {
   status: string;
   oscar_drug_id: number | null;
   created_at: string | null;
+  medication_items?: DoctorPrescriptionMedicationPayload[];
 };
 
 export type DoctorPrescriptionSaveResponse = {
@@ -283,11 +341,62 @@ export async function startDoctorAppointment(accessToken: string, appointmentId:
   });
 }
 
-export async function searchDoctorDrugs(accessToken: string, query: string) {
-  return apiRequest<{ drugs: DoctorDrugSearchItem[] }>({
-    endpoint: withQuery("/api/v1/doctors/me/drugs/search", { q: query, limit: "20" }),
-    headers: authHeaders(accessToken),
+function firstValue(values: Array<string | number | null | undefined>) {
+  return values.find((value) => value !== undefined && value !== null && String(value).trim()) ?? null;
+}
+
+function mapOatRxDrug(item: OatRxDrugSearchItem): DoctorDrugSearchItem {
+  const primaryDrug = item.drugs?.[0];
+  const primaryIngredient = item.active_ingredients?.[0];
+  const technicalReasons = (item.technical_reasons ?? []).map((reason) => ({
+    technical_reason: reason.technical_reason ?? "",
+    sigs: (reason.sigs ?? [])
+      .map((sig) => sig.sig?.trim())
+      .filter((sig): sig is string => Boolean(sig)),
+  }));
+
+  return {
+    source_id: item.id,
+    drug_code: firstValue([primaryIngredient?.drug_code, primaryDrug?.id])?.toString() ?? null,
+    name: item.group_name,
+    brand_name: primaryDrug?.name ?? null,
+    descriptor: firstValue([
+      item.dosage_form,
+      primaryIngredient?.ingredient_name,
+      primaryDrug?.drug_family,
+    ])?.toString() ?? null,
+    drug_identification_number: primaryDrug?.din ?? null,
+    route: item.route ?? null,
+    drug_category: item.drug_category ?? null,
+    is_narcotic: item.is_narcotic,
+    suggested_sig: technicalReasons.flatMap((reason) => reason.sigs)[0] ?? null,
+    technical_reasons: technicalReasons,
+  };
+}
+
+export async function searchDoctorDrugs(
+  _accessToken: string,
+  query: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  const search = query.trim();
+  if (search.length < 2) return { drugs: [] };
+
+  const url = new URL("/oatrx/api/fetch-drug-data", window.location.origin);
+  url.searchParams.set("search", search);
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    signal: options.signal,
   });
+
+  const data = (await response.json().catch(() => null)) as OatRxDrugSearchResponse | null;
+  if (!response.ok || data?.success === false) {
+    throw new ApiRequestError(data?.message || "Drug search failed.", response.status, data);
+  }
+
+  return { drugs: (data?.data ?? []).map(mapOatRxDrug) };
 }
 
 export async function saveDoctorPrescription(
@@ -362,6 +471,46 @@ export async function updateDoctorProfile(
     endpoint: API_ENDPOINTS.doctorMeSettingsProfile,
     method: "PATCH",
     body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export type MspSpecialtyRecord = {
+  code: string;
+  name: string;
+  category: string;
+  description: string;
+};
+
+export type DoctorSpecialtySelectionResponse = {
+  clinic_id?: number | null;
+  doctor_id?: number | null;
+  specialty_codes: string[];
+  items: MspSpecialtyRecord[];
+  missing_specialty_codes: string[];
+};
+
+export async function fetchMspSpecialties() {
+  return apiRequest<MspSpecialtyRecord[]>({
+    endpoint: API_ENDPOINTS.specialtiesCatalog,
+  });
+}
+
+export async function fetchDoctorSpecialtySelections(accessToken: string) {
+  return apiRequest<DoctorSpecialtySelectionResponse>({
+    endpoint: API_ENDPOINTS.doctorMeSpecialties,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function saveDoctorSpecialtySelections(
+  accessToken: string,
+  specialtyCodes: string[],
+) {
+  return apiRequest<DoctorSpecialtySelectionResponse, { specialty_codes: string[] }>({
+    endpoint: API_ENDPOINTS.doctorMeSpecialties,
+    method: "POST",
+    body: { specialty_codes: specialtyCodes },
     headers: authHeaders(accessToken),
   });
 }

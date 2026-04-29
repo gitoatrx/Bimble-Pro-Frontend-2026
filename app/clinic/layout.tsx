@@ -42,7 +42,6 @@ type PoolAlertState = {
 };
 
 const CLINIC_POOL_SEEN_IDS_KEY = "bimble:clinic:pool-seen-ids";
-const POOL_POLL_INTERVAL_MS = 15000;
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/clinic/dashboard",               label: "Setup",          Icon: LayoutDashboard, requiresOnboarding: false },
@@ -429,13 +428,23 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
     }
 
     void pollPool();
-    const intervalId = window.setInterval(() => {
-      void pollPool();
-    }, POOL_POLL_INTERVAL_MS);
+    function handleRealtime(event: Event) {
+      const detail = (event as CustomEvent<{ path?: string }>).detail;
+      const eventPath = detail?.path ?? "";
+      if (
+        eventPath.includes("/pool") ||
+        eventPath.includes("/appointments") ||
+        eventPath.includes("/patient-intake")
+      ) {
+        void pollPool();
+      }
+    }
+
+    window.addEventListener("bimble:realtime", handleRealtime);
 
     return () => {
       active = false;
-      window.clearInterval(intervalId);
+      window.removeEventListener("bimble:realtime", handleRealtime);
     };
   }, [pathname, resolvedOnboardingComplete, session?.accessToken]);
 

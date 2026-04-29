@@ -1139,34 +1139,7 @@ export default function DoctorsPage() {
       return;
     }
 
-    let active = true;
-
-    async function refreshInvites() {
-      const inviteRecords = await fetchClinicDoctorInvites(accessToken);
-      if (!active) return;
-      setInvites((inviteRecords as Record<string, unknown>[]).map(toInvite));
-    }
-
     loadDoctorsPage();
-
-    const handleFocus = () => {
-      refreshInvites().catch(() => {
-        // Keep the current invite list if a background refresh misses.
-      });
-    };
-
-    const refreshTimer = window.setInterval(() => {
-      refreshInvites().catch(() => {
-        // Keep the current invite list if a background refresh misses.
-      });
-    }, 10000);
-    window.addEventListener("focus", handleFocus);
-
-    return () => {
-      active = false;
-      window.clearInterval(refreshTimer);
-      window.removeEventListener("focus", handleFocus);
-    };
   }, [accessToken, hasSession, loadDoctorsPage]);
 
   useRealtimeRefresh(loadDoctorsPage, {

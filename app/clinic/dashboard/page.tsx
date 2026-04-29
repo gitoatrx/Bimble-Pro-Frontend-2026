@@ -22,10 +22,11 @@ import { cn } from "@/lib/utils";
 import {
   fetchClinicDoctors,
   fetchClinicSetupState,
+  fetchClinicSpecialtySelections,
+  fetchMspSpecialties,
   saveEmailNotifications,
   saveFaxIntegration,
-  saveClinicServiceSelections,
-  searchFeeScheduleServices,
+  saveClinicSpecialtySelections,
   saveTextMessageNotifications,
   startAcceptingAppointments,
 } from "@/lib/api/clinic-dashboard";
@@ -72,8 +73,8 @@ const STEPS: ChecklistStep[] = [
   },
   {
     key: "services",
-    label: "Map Your Services",
-    description: "Select the services your clinic offers to receive matching appointments.",
+    label: "Map Your Specialties",
+    description: "Select the MSP specialties your clinic supports for patient matching.",
     Icon: Tags,
   },
   {
@@ -486,14 +487,14 @@ function EmailStep({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-// ── Services Step ─────────────────────────────────────────────────
+// ── Specialties Step ──────────────────────────────────────────────
 
 function ServicesStep({ onComplete }: { onComplete: () => void }) {
   const session = readClinicLoginSession();
   const accessToken = session?.accessToken ?? "";
   const [selected, setSelected] = useState<string[]>([]);
-  const [services, setServices] = useState<
-    { service_code: string; service_name: string; user_friendly_service_name?: string }[]
+  const [specialties, setSpecialties] = useState<
+    { code: string; name: string; category: string; description: string }[]
   >([]);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
@@ -501,11 +502,18 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
   const [error, setError] = useState(
     accessToken ? "" : "You are not logged in. Please refresh and try again.",
   );
-  const hasSearchTerm = search.trim().length >= 2;
+  const query = search.trim().toLowerCase();
+  const visibleSpecialties = specialties.filter((specialty) => {
+    if (!query) return true;
+    return (
+      specialty.code.toLowerCase().includes(query) ||
+      specialty.name.toLowerCase().includes(query) ||
+      specialty.description.toLowerCase().includes(query)
+    );
+  });
 
   useEffect(() => {
-    if (!accessToken || !hasSearchTerm) {
-      setServices([]);
+    if (!accessToken) {
       setLoading(false);
       return;
     }
@@ -513,44 +521,31 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
     let active = true;
     setLoading(true);
 
-    const timer = window.setTimeout(() => {
-      searchFeeScheduleServices(accessToken, search.trim())
-        .then((items) => {
-          if (!active) return;
-          setServices(
-            items
-              .map((record) => ({
-                service_code: record.service_code ?? "",
-                service_name:
-                  record.user_friendly_service_name?.trim() ||
-                  record.service_name?.trim() ||
-                  "",
-                user_friendly_service_name: record.user_friendly_service_name,
-              }))
-              .filter((svc) => svc.service_code.trim() !== "" && svc.service_name.trim() !== ""),
-          );
-        })
-        .catch((err) => {
-          if (!active) return;
-          setError(err instanceof Error ? err.message : "Failed to load services.");
-          setServices([]);
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    }, 250);
+    Promise.all([fetchMspSpecialties(), fetchClinicSpecialtySelections(accessToken)])
+      .then(([catalog, currentSelection]) => {
+        if (!active) return;
+        setSpecialties(catalog);
+        setSelected(currentSelection.specialty_codes ?? []);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load specialties.");
+        setSpecialties([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
     return () => {
       active = false;
-      window.clearTimeout(timer);
     };
-  }, [accessToken, hasSearchTerm, search]);
+  }, [accessToken]);
 
-  function toggle(serviceCode: string) {
+  function toggle(specialtyCode: string) {
     setSelected((current) =>
-      current.includes(serviceCode)
-        ? current.filter((code) => code !== serviceCode)
-        : [...current, serviceCode],
+      current.includes(specialtyCode)
+        ? current.filter((code) => code !== specialtyCode)
+        : [...current, specialtyCode],
     );
   }
 
@@ -559,27 +554,27 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
     setSaving(true);
 
     try {
-      const response = await saveClinicServiceSelections(accessToken, selected);
-      if (response.missing_service_codes.length > 0) {
-        setError(`Missing service codes: ${response.missing_service_codes.join(", ")}`);
+      const response = await saveClinicSpecialtySelections(accessToken, selected);
+      if (response.missing_specialty_codes.length > 0) {
+        setError(`Missing specialty codes: ${response.missing_specialty_codes.join(", ")}`);
         return;
       }
       onComplete();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save services.");
+      setError(err instanceof Error ? err.message : "Failed to save specialties.");
     } finally {
       setSaving(false);
     }
   }
 
-  const selectedNames = services
-    .filter((s) => selected.includes(s.service_code))
-    .map((s) => s.service_name);
+  const selectedNames = specialties
+    .filter((specialty) => selected.includes(specialty.code))
+    .map((specialty) => `${specialty.code} - ${specialty.name}`);
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Select the services your clinic provides. Patients will only be matched with your clinic for the services you offer.
+        Select the MSP specialties your clinic supports. Patients will choose plain-language problems, and Bimble will match those problems to these specialties behind the scenes.
       </p>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
@@ -590,50 +585,51 @@ function ServicesStep({ onComplete }: { onComplete: () => void }) {
             disabled={loading}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Select services…"
+            placeholder="Search specialties…"
             className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
           />
           <ChevronDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
         </div>
 
-        {hasSearchTerm && (
-          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-            <div className="max-h-72 overflow-auto">
-              {loading ? (
-                <div className="px-4 py-4 text-sm text-muted-foreground">Loading services…</div>
-              ) : services.length === 0 ? (
-                <div className="px-4 py-4 text-sm text-muted-foreground">No matching services found.</div>
-              ) : (
-                services.map((svc) => (
-                  <button
-                    key={svc.service_code}
-                    onClick={() => toggle(svc.service_code)}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent"
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <div className="max-h-72 overflow-auto">
+            {loading ? (
+              <div className="px-4 py-4 text-sm text-muted-foreground">Loading specialties…</div>
+            ) : visibleSpecialties.length === 0 ? (
+              <div className="px-4 py-4 text-sm text-muted-foreground">No matching specialties found.</div>
+            ) : (
+              visibleSpecialties.map((specialty) => (
+                <button
+                  key={specialty.code}
+                  onClick={() => toggle(specialty.code)}
+                  className="flex w-full items-start gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent"
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all",
+                      selected.includes(specialty.code)
+                        ? "border-primary bg-primary"
+                        : "border-border",
+                    )}
                   >
-                    <span
-                      className={cn(
-                        "flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all",
-                        selected.includes(svc.service_code)
-                          ? "border-primary bg-primary"
-                          : "border-border",
-                      )}
-                    >
-                      {selected.includes(svc.service_code) && (
-                        <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 12 12" fill="none">
-                          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
+                    {selected.includes(specialty.code) && (
+                      <svg className="h-2.5 w-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="min-w-0">
+                    <span className={selected.includes(specialty.code) ? "block text-foreground" : "block text-muted-foreground"}>
+                      {specialty.name}
                     </span>
-                    <span className={selected.includes(svc.service_code) ? "text-foreground" : "text-muted-foreground"}>
-                      {svc.service_name}
-                    </span>
-                    <span className="ml-auto text-[11px] text-muted-foreground">{svc.service_code}</span>
-                  </button>
-                ))
-              )}
-            </div>
+                    <span className="block text-[11px] leading-4 text-muted-foreground">{specialty.description}</span>
+                  </span>
+                  <span className="ml-auto flex-shrink-0 text-[11px] text-muted-foreground">{specialty.code}</span>
+                </button>
+              ))
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {selectedNames.length > 0 && (

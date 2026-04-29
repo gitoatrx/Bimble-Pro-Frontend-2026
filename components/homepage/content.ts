@@ -47,6 +47,7 @@ export type Stat = {
 export type SymptomSuggestion = {
   label: string;
   serviceHints: string[];
+  specialtyCodes: string[];
 };
 
 export const navItems = [
@@ -54,21 +55,29 @@ export const navItems = [
 ];
 
 export const symptomSuggestions: SymptomSuggestion[] = [
-  { label: "Headache", serviceHints: ["general consultation"] },
-  { label: "Fever", serviceHints: ["general consultation"] },
-  { label: "Cold and cough", serviceHints: ["general consultation"] },
-  { label: "Flu symptoms", serviceHints: ["general consultation"] },
-  { label: "Sore throat", serviceHints: ["general consultation"] },
-  { label: "Stomach ache", serviceHints: ["general consultation"] },
-  { label: "Body pain", serviceHints: ["general consultation"] },
-  { label: "Back pain", serviceHints: ["general consultation"] },
-  { label: "Skin rash", serviceHints: ["general consultation"] },
-  { label: "Allergy symptoms", serviceHints: ["general consultation"] },
-  { label: "Urinary infection symptoms", serviceHints: ["general consultation"] },
-  { label: "Prescription renewal", serviceHints: ["prescription renewal"] },
-  { label: "Sick note", serviceHints: ["sick note"] },
-  { label: "Mental health support", serviceHints: ["mental health assessment"] },
-  { label: "Vaccination or immunization", serviceHints: ["immunization"] },
+  { label: "Cold, flu, cough, or fever", serviceHints: ["general consultation"], specialtyCodes: ["00"] },
+  { label: "Headache or migraine", serviceHints: ["general consultation"], specialtyCodes: ["00", "02"] },
+  { label: "Skin rash, acne, eczema, or mole concern", serviceHints: ["general consultation"], specialtyCodes: ["00", "01"] },
+  { label: "Anxiety, depression, ADHD, or mental health support", serviceHints: ["mental health assessment"], specialtyCodes: ["00", "03"] },
+  { label: "Pregnancy, periods, menopause, or women’s health", serviceHints: ["general consultation"], specialtyCodes: ["00", "05", "80"] },
+  { label: "Eye pain, vision change, or eye infection", serviceHints: ["general consultation"], specialtyCodes: ["39", "06", "00"] },
+  { label: "Ear, nose, throat, sinus, or hearing concern", serviceHints: ["general consultation"], specialtyCodes: ["00", "07"] },
+  { label: "Back, knee, shoulder, bone, joint, or sports injury", serviceHints: ["general consultation"], specialtyCodes: ["00", "10", "20", "32"] },
+  { label: "Stomach pain, reflux, bowel, or digestive problem", serviceHints: ["general consultation"], specialtyCodes: ["00", "56"] },
+  { label: "Urinary, bladder, kidney stone, prostate, or men’s health", serviceHints: ["general consultation"], specialtyCodes: ["00", "13"] },
+  { label: "Heart, chest pain follow-up, or blood pressure concern", serviceHints: ["general consultation"], specialtyCodes: ["00", "26", "15"] },
+  { label: "Asthma, shortness of breath, COPD, or lung concern", serviceHints: ["general consultation"], specialtyCodes: ["00", "49"] },
+  { label: "Diabetes, thyroid, hormones, or metabolism", serviceHints: ["general consultation"], specialtyCodes: ["00", "51"] },
+  { label: "Child or teen health concern", serviceHints: ["general consultation"], specialtyCodes: ["14", "00"] },
+  { label: "Falls, memory, frailty, or older adult care", serviceHints: ["general consultation"], specialtyCodes: ["24", "00"] },
+  { label: "Allergies, hives, or immune concern", serviceHints: ["general consultation"], specialtyCodes: ["00", "45"] },
+  { label: "Chronic pain or nerve pain", serviceHints: ["general consultation"], specialtyCodes: ["00", "54", "20"] },
+  { label: "Complex or recurring infection", serviceHints: ["general consultation"], specialtyCodes: ["00", "67", "29"] },
+  { label: "Blood disorder, anemia, clotting, or cancer care", serviceHints: ["general consultation"], specialtyCodes: ["74", "15", "00"] },
+  { label: "Prescription renewal", serviceHints: ["prescription renewal"], specialtyCodes: ["00"] },
+  { label: "Opioid treatment or substance-use medication support", serviceHints: ["general consultation"], specialtyCodes: ["00", "03"] },
+  { label: "Sick note", serviceHints: ["sick note"], specialtyCodes: ["00"] },
+  { label: "Vaccination or immunization", serviceHints: ["immunization"], specialtyCodes: ["00"] },
 ];
 
 export const specialties: Specialty[] = [

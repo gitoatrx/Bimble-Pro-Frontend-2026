@@ -257,30 +257,6 @@ export default function AnalyticsPage() {
     };
   }, [hasSession, loadAnalytics]);
 
-  useEffect(() => {
-    if (!hasSession) {
-      return;
-    }
-
-    const refreshTimer = window.setInterval(() => {
-      loadAnalytics().catch((err) => {
-        setError(err instanceof Error ? err.message : "Could not refresh analytics.");
-      });
-    }, 30000);
-
-    const handleFocus = () => {
-      loadAnalytics().catch((err) => {
-        setError(err instanceof Error ? err.message : "Could not refresh analytics.");
-      });
-    };
-
-    window.addEventListener("focus", handleFocus);
-    return () => {
-      window.clearInterval(refreshTimer);
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, [hasSession, loadAnalytics]);
-
   useRealtimeRefresh(() => loadAnalytics(), {
     enabled: hasSession,
     paths: ["/appointments", "/pool", "/requests", "/patient-portal", "/clinics/me"],

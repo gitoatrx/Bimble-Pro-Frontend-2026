@@ -18,53 +18,46 @@ import {
 } from "@/lib/api/doctor-dashboard";
 import { cn } from "@/lib/utils";
 
-const LONG_TERM_OPTIONS = [
-  { label: "Yes", value: "yes" },
-  { label: "No", value: "no" },
-  { label: "Unknown", value: "unknown" },
-];
-
-const FREQUENCIES = ["OD", "BID", "TID", "QID", "QHS", "PRN"];
-const ROUTES = ["PO", "SL", "TOP", "INH", "IM", "SC", "IV"];
-const METHODS = ["Take", "Apply", "Use", "Inject", "Inhale"];
-
 type PrescriptionForm = {
-  instructions: string;
-  quantity: string;
-  repeats: string;
   noSubstitution: boolean;
-  prn: boolean;
-  longTerm: string;
-  method: string;
-  route: string;
-  frequency: string;
-  takeMin: string;
-  takeMax: string;
-  duration: string;
-  durationUnit: string;
   additionalNote: string;
   signatureDataUrl: string;
   pdfSize: string;
 };
 
 const initialForm: PrescriptionForm = {
-  instructions: "",
-  quantity: "0",
-  repeats: "0",
   noSubstitution: false,
-  prn: false,
-  longTerm: "unknown",
-  method: "Take",
-  route: "PO",
-  frequency: "",
-  takeMin: "0",
-  takeMax: "0",
-  duration: "",
-  durationUnit: "",
   additionalNote: "",
   signatureDataUrl: "",
   pdfSize: "A4 page",
 };
+
+type MedicationDraft = {
+  localId: string;
+  drugCatalogSourceId: number | null;
+  drugCode: string | null;
+  drugName: string;
+  ingredient: string | null;
+  instructions: string;
+  quantity: string;
+  repeats: string;
+  startDate: string;
+  durationDays: string;
+  endDate: string;
+};
+
+const DEFAULT_DURATION_DAYS = 30;
+
+function dateInputValue(date = new Date()) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+function addDays(dateValue: string, days: number) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  date.setDate(date.getDate() + Math.max(days, 1) - 1);
+  return dateInputValue(date);
+}
 
 function SignaturePad({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -181,6 +174,10 @@ function inputClass() {
   return "h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15";
 }
 
+function withoutCommas(value: string | null | undefined) {
+  return (value || "").replace(/,/g, " ").replace(/\s+/g, " ").trim();
+}
+
 export default function DoctorAppointmentTreatmentPage() {
   const params = useParams<{ appointmentId: string }>();
   const router = useRouter();
@@ -191,6 +188,7 @@ export default function DoctorAppointmentTreatmentPage() {
   const [query, setQuery] = useState("");
   const [drugResults, setDrugResults] = useState<DoctorDrugSearchItem[]>([]);
   const [selectedDrug, setSelectedDrug] = useState<DoctorDrugSearchItem | null>(null);
+  const [medications, setMedications] = useState<MedicationDraft[]>([]);
   const [searching, setSearching] = useState(false);
   const [form, setForm] = useState<PrescriptionForm>(initialForm);
   const [saving, setSaving] = useState(false);
@@ -237,19 +235,28 @@ export default function DoctorAppointmentTreatmentPage() {
       return;
     }
 
+    const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
       setSearching(true);
       try {
-        const response = await searchDoctorDrugs(session.accessToken, trimmed);
+        const response = await searchDoctorDrugs(session.accessToken, trimmed, {
+          signal: controller.signal,
+        });
         setDrugResults(response.drugs ?? []);
-      } catch {
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         setDrugResults([]);
       } finally {
-        setSearching(false);
+        if (!controller.signal.aborted) {
+          setSearching(false);
+        }
       }
-    }, 250);
+    }, 150);
 
-    return () => window.clearTimeout(timeout);
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, [query, selectedDrug?.name]);
 
   const updateForm = <K extends keyof PrescriptionForm>(field: K, value: PrescriptionForm[K]) => {
@@ -257,40 +264,92 @@ export default function DoctorAppointmentTreatmentPage() {
   };
 
   const handleSelectDrug = (drug: DoctorDrugSearchItem) => {
+    const startDate = dateInputValue();
+    const durationDays = DEFAULT_DURATION_DAYS;
+    const suggestedInstructions = drug.suggested_sig || "";
+    const newMedication: MedicationDraft = {
+      localId: `${drug.source_id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      drugCatalogSourceId: drug.source_id,
+      drugCode: drug.drug_code,
+      drugName: drug.name,
+      ingredient: drug.brand_name || drug.descriptor,
+      instructions: suggestedInstructions,
+      quantity: String(durationDays),
+      repeats: "0",
+      startDate,
+      durationDays: String(durationDays),
+      endDate: addDays(startDate, durationDays),
+    };
     setSelectedDrug(drug);
-    setQuery(drug.name);
+    setMedications((current) => [...current, newMedication]);
+    setQuery("");
     setDrugResults([]);
-      setForm((current) => ({
-      ...current,
-      instructions: current.instructions || `${current.method || "Take"} as directed`,
-    }));
     setDocumentDownloadUrl(null);
     setReviewReady(false);
   };
 
-  const canSave = Boolean(selectedDrug && form.instructions.trim());
+  const updateMedication = <K extends keyof MedicationDraft>(localId: string, field: K, value: MedicationDraft[K]) => {
+    setMedications((current) =>
+      current.map((item) => {
+        if (item.localId !== localId) return item;
+        const next = { ...item, [field]: value };
+        if (field === "startDate" || field === "durationDays") {
+          const days = Number.parseInt(String(field === "durationDays" ? value : next.durationDays), 10);
+          next.endDate = next.startDate && Number.isFinite(days) ? addDays(next.startDate, days) : next.endDate;
+        }
+        if (field === "endDate" && next.startDate && value) {
+          const start = new Date(`${next.startDate}T00:00:00`);
+          const end = new Date(`${String(value)}T00:00:00`);
+          const diff = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+          if (Number.isFinite(diff) && diff > 0) next.durationDays = String(diff);
+        }
+        return next;
+      }),
+    );
+    setSavedPrescription(null);
+    setDocumentDownloadUrl(null);
+    setPrintMessage("");
+    setReviewReady(false);
+  };
+
+  const removeMedication = (localId: string) => {
+    setMedications((current) => current.filter((item) => item.localId !== localId));
+    setSavedPrescription(null);
+    setDocumentDownloadUrl(null);
+    setPrintMessage("");
+    setReviewReady(false);
+  };
+
+  const canSave = medications.length > 0 && medications.every((item) => item.drugName.trim() && item.instructions.trim());
   const canFinalize = canSave && Boolean(form.signatureDataUrl);
 
   const buildPrescriptionPayload = () => {
-    if (!selectedDrug) return null;
+    const primary = medications[0];
+    if (!primary) return null;
     return {
-      drug_catalog_source_id: selectedDrug.source_id,
-      drug_code: selectedDrug.drug_code,
-      drug_name: selectedDrug.name,
-      ingredient: selectedDrug.brand_name || selectedDrug.descriptor,
-      instructions: form.instructions,
-      quantity: form.quantity,
-      repeats: Number.parseInt(form.repeats || "0", 10),
+      drug_catalog_source_id: primary.drugCatalogSourceId,
+      drug_code: primary.drugCode,
+      drug_name: primary.drugName,
+      ingredient: primary.ingredient,
+      instructions: primary.instructions,
+      quantity: primary.quantity,
+      repeats: Number.parseInt(primary.repeats || "0", 10),
+      medications: medications.map((item) => ({
+        drug_catalog_source_id: item.drugCatalogSourceId,
+        drug_code: item.drugCode,
+        drug_name: item.drugName,
+        ingredient: item.ingredient,
+        instructions: item.instructions,
+        dosage: item.instructions,
+        quantity: item.quantity,
+        repeats: Number.parseInt(item.repeats || "0", 10),
+        start_date: item.startDate,
+        end_date: item.endDate,
+        duration_days: Number.parseInt(item.durationDays || "0", 10) || null,
+      })),
       no_substitution: form.noSubstitution,
-      prn: form.prn,
-      long_term: form.longTerm,
-      method: form.method,
-      route: form.route,
-      frequency: form.frequency,
-      take_min: Number.parseFloat(form.takeMin || "0"),
-      take_max: Number.parseFloat(form.takeMax || "0"),
-      duration: form.duration,
-      duration_unit: form.durationUnit,
+      duration: primary.durationDays,
+      duration_unit: "days",
       additional_note: form.additionalNote,
       signature_data_url: form.signatureDataUrl,
       signature_label: "Prescriber signature",
@@ -310,7 +369,7 @@ export default function DoctorAppointmentTreatmentPage() {
   const handleSave = async (options: { printAfterSave?: boolean } = {}) => {
     const session = readDoctorLoginSession();
     const payload = buildPrescriptionPayload();
-    if (!session?.accessToken || !appointment || !selectedDrug || !payload || !canFinalize) return;
+    if (!session?.accessToken || !appointment || !payload || !canFinalize) return;
 
     setSaving(true);
     setError("");
@@ -411,12 +470,18 @@ export default function DoctorAppointmentTreatmentPage() {
             <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-primary">Reason</p>
               <p className="mt-1 font-display text-xl font-semibold text-foreground">{reason}</p>
+              {appointment.patient_age ? (
+                <p className="mt-2 text-sm font-medium text-muted-foreground">
+                  Patient age: {appointment.patient_age} years
+                  {appointment.patient_date_of_birth ? ` · DOB ${appointment.patient_date_of_birth}` : ""}
+                </p>
+              ) : null}
             </div>
           </DoctorSection>
 
           <DoctorSection
             title="Step 2 · Medication search"
-            description="Search the same OSCAR drug catalog copied into Bimble."
+            description="Search the OatRx medication catalog."
             className="relative z-30 overflow-visible"
           >
             <div className="relative">
@@ -458,99 +523,95 @@ export default function DoctorAppointmentTreatmentPage() {
             {selectedDrug ? (
               <div className="mt-3 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
                 <CheckCircle2 className="h-4 w-4" />
-                {selectedDrug.name}
+                Added {selectedDrug.name}
               </div>
             ) : null}
           </DoctorSection>
 
           <DoctorSection title="Step 3 · Prescription details">
-            <div className={cn("grid gap-4", !selectedDrug && "pointer-events-none opacity-50")}>
-              <Field label="Instructions">
-                <textarea
-                  value={form.instructions}
-                  onChange={(event) => updateForm("instructions", event.target.value)}
-                  className="min-h-24 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-                  placeholder="Example: Take 1 tablet by mouth twice daily for 7 days"
-                />
-              </Field>
+            <div className={cn("grid gap-4", medications.length === 0 && "opacity-70")}>
+              {medications.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border/80 bg-muted/30 px-4 py-8 text-center text-sm font-medium text-muted-foreground">
+                  Search and select one or more medicines above. Each medicine will get its own quick dose and date controls here.
+                </div>
+              ) : null}
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <Field label="Qty/Mitte">
-                  <input value={form.quantity} onChange={(event) => updateForm("quantity", event.target.value)} className={inputClass()} />
-                </Field>
-                <Field label="Repeats">
-                  <input value={form.repeats} onChange={(event) => updateForm("repeats", event.target.value)} className={inputClass()} />
-                </Field>
-                <Field label="Long term">
-                  <select value={form.longTerm} onChange={(event) => updateForm("longTerm", event.target.value)} className={inputClass()}>
-                    {LONG_TERM_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
+              {medications.map((medicine, index) => (
+                <div key={medicine.localId} className="rounded-3xl border border-border bg-background p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Medicine {index + 1}</p>
+                      <h3 className="mt-1 font-display text-lg font-semibold text-foreground">{medicine.drugName}</h3>
+                      {medicine.ingredient ? <p className="text-xs text-muted-foreground">{medicine.ingredient}</p> : null}
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => removeMedication(medicine.localId)}>
+                      Remove
+                    </Button>
+                  </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+                  <div className="mt-4 grid gap-4">
+                    <Field label="Dosage / instructions">
+                      <textarea
+                        value={medicine.instructions}
+                        onChange={(event) => updateMedication(medicine.localId, "instructions", event.target.value)}
+                        className="min-h-20 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                        placeholder="Example: Take 1 tablet by mouth once daily"
+                      />
+                    </Field>
+
+                    <div className="grid gap-4 md:grid-cols-5">
+                      <Field label="Start date">
+                        <input
+                          type="date"
+                          value={medicine.startDate}
+                          onChange={(event) => updateMedication(medicine.localId, "startDate", event.target.value)}
+                          className={inputClass()}
+                        />
+                      </Field>
+                      <Field label="Days">
+                        <input
+                          value={medicine.durationDays}
+                          onChange={(event) => updateMedication(medicine.localId, "durationDays", event.target.value)}
+                          className={inputClass()}
+                        />
+                      </Field>
+                      <Field label="End date">
+                        <input
+                          type="date"
+                          value={medicine.endDate}
+                          onChange={(event) => updateMedication(medicine.localId, "endDate", event.target.value)}
+                          className={inputClass()}
+                        />
+                      </Field>
+                      <Field label="Qty/Mitte">
+                        <input
+                          value={medicine.quantity}
+                          onChange={(event) => updateMedication(medicine.localId, "quantity", event.target.value)}
+                          className={inputClass()}
+                        />
+                      </Field>
+                      <Field label="Repeats">
+                        <input
+                          value={medicine.repeats}
+                          onChange={(event) => updateMedication(medicine.localId, "repeats", event.target.value)}
+                          className={inputClass()}
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              <div className="grid gap-3">
                 <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-border bg-background px-4 text-sm font-medium text-foreground">
                   <input
                     type="checkbox"
-                    checked={form.noSubstitution}
-                    onChange={(event) => updateForm("noSubstitution", event.target.checked)}
+                    checked={!form.noSubstitution}
+                    onChange={(event) => updateForm("noSubstitution", !event.target.checked)}
                     className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
                   />
-                  No substitution
+                  Substitution allowed
                 </label>
-                <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-border bg-background px-4 text-sm font-medium text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={form.prn}
-                    onChange={(event) => updateForm("prn", event.target.checked)}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
-                  />
-                  PRN
-                </label>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <Field label="Method">
-                  <select value={form.method} onChange={(event) => updateForm("method", event.target.value)} className={inputClass()}>
-                    {METHODS.map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Route">
-                  <select value={form.route} onChange={(event) => updateForm("route", event.target.value)} className={inputClass()}>
-                    {ROUTES.map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Frequency">
-                  <select value={form.frequency} onChange={(event) => updateForm("frequency", event.target.value)} className={inputClass()}>
-                    <option value="">Select frequency</option>
-                    {FREQUENCIES.map((item) => (
-                      <option key={item}>{item}</option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-4">
-                <Field label="Min">
-                  <input value={form.takeMin} onChange={(event) => updateForm("takeMin", event.target.value)} className={inputClass()} />
-                </Field>
-                <Field label="Max">
-                  <input value={form.takeMax} onChange={(event) => updateForm("takeMax", event.target.value)} className={inputClass()} />
-                </Field>
-                <Field label="Duration">
-                  <input value={form.duration} onChange={(event) => updateForm("duration", event.target.value)} className={inputClass()} />
-                </Field>
-                <Field label="Duration unit">
-                  <input value={form.durationUnit} onChange={(event) => updateForm("durationUnit", event.target.value)} className={inputClass()} placeholder="days" />
-                </Field>
               </div>
             </div>
 
@@ -569,7 +630,7 @@ export default function DoctorAppointmentTreatmentPage() {
             {printMessage ? <p className="mt-3 text-sm font-medium text-muted-foreground">{printMessage}</p> : null}
           </DoctorSection>
 
-          {reviewReady && selectedDrug ? (
+          {reviewReady && medications.length > 0 ? (
             <DoctorSection
               title="Step 4 · Review, sign, and save"
               description="Final check before the prescription is stored in Bimble and synced to OSCAR."
@@ -579,44 +640,52 @@ export default function DoctorAppointmentTreatmentPage() {
                   <div className="flex min-h-24 border-2 border-slate-900">
                     <div className="flex w-32 items-center justify-center border-r-2 border-slate-900 font-serif text-7xl">Rx</div>
                     <div className="flex-1 p-4 text-xs leading-5">
-                      <p className="font-bold">Prescriber</p>
                       <p>Bimble</p>
                       <p>Clinic prescription workspace</p>
-                      <p>Generated inside Bimble</p>
                     </div>
                   </div>
                   <div className="border-x-2 border-b-2 border-slate-900 p-4 text-xs">
                     <div className="flex justify-between gap-4">
                       <div>
                         <p className="font-semibold">{appointment.patient_name}</p>
-                        <p>{appointment.care_location || "Patient location not recorded"}</p>
+                        <p>{withoutCommas(appointment.care_location) || "Patient location not recorded"}</p>
                         <p>Health Ins.: {appointment.patient_id}</p>
                       </div>
                       <p className="font-semibold">{new Date().toLocaleDateString()}</p>
                     </div>
                   </div>
                   <div className="min-h-[360px] border-x-2 border-b-2 border-slate-900 p-4 text-xs">
-                    <p className="font-semibold">{selectedDrug.name}</p>
-                    <p className="mt-3">
-                      Qty:{form.quantity || "0"} Repeats:{form.repeats || "0"}
-                      {form.noSubstitution ? " No substitution" : ""}
-                      {form.prn ? " PRN" : ""}
-                    </p>
-                    <p className="mt-2">
-                      {form.method} {form.route} {form.frequency ? `Frequency: ${form.frequency}` : ""}
-                      {form.duration ? ` Duration: ${form.duration} ${form.durationUnit}` : ""}
-                    </p>
-                    <p className="mt-3 border-t border-slate-400 pt-2">{form.instructions}</p>
+                    {medications.map((medicine, index) => (
+                      <div key={medicine.localId} className={cn(index > 0 && "mt-5 border-t border-slate-400 pt-4")}>
+                        <p className="font-semibold">
+                          Rx {index + 1} - {medicine.drugName}
+                        </p>
+                        <p className="mt-3">
+                          Qty:{medicine.quantity || "0"} Repeats:{medicine.repeats || "0"}
+                        </p>
+                        <p className="mt-2">{form.noSubstitution ? "No substitution" : "Substitution allowed"}</p>
+                        <p className="mt-1">
+                          Start: {medicine.startDate || "N/A"} End: {medicine.endDate || "N/A"}
+                        </p>
+                        <p className="mt-3 border-t border-slate-400 pt-2">{medicine.instructions}</p>
+                      </div>
+                    ))}
                     {form.additionalNote ? <p className="mt-28 whitespace-pre-wrap">{form.additionalNote}</p> : null}
                     <div className="mt-12">
                       {form.signatureDataUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={form.signatureDataUrl} alt="Prescriber signature" className="mb-2 h-16 max-w-64 object-contain" />
                       ) : null}
-                      <div className="border-t border-slate-900 pt-2">Signature: Prescriber</div>
+                      <div className="border-t border-slate-900 pt-2">
+                        <p className="font-semibold">Prescriber</p>
+                        <p>Provider #: N/A</p>
+                      </div>
                     </div>
                   </div>
-                  <p className="mt-2 text-center text-[10px] text-slate-600">Created by Bimble</p>
+                  <div className="mt-2 flex justify-between text-[10px] lowercase text-slate-600">
+                    <span>generated by bimble</span>
+                    <span>page 1 of 1</span>
+                  </div>
                 </div>
 
                 <div className="space-y-5 rounded-2xl border border-border bg-card p-5 print:hidden">

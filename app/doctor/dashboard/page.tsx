@@ -13,7 +13,18 @@ import {
   subscribeToDoctorSessionChanges,
 } from "@/lib/doctor/session";
 import { formatCanadaPacificDateKey } from "@/lib/time-zone";
-import { fetchDoctorSummary, fetchDoctorToday, startDoctorAppointment, type DoctorAppointment, type DoctorSummary, type DoctorTodayResponse } from "@/lib/api/doctor-dashboard";
+import {
+  fetchDoctorSpecialtySelections,
+  fetchDoctorSummary,
+  fetchDoctorToday,
+  fetchMspSpecialties,
+  saveDoctorSpecialtySelections,
+  startDoctorAppointment,
+  type DoctorAppointment,
+  type DoctorSummary,
+  type DoctorTodayResponse,
+  type MspSpecialtyRecord,
+} from "@/lib/api/doctor-dashboard";
 import { useRealtimeRefresh } from "@/lib/realtime";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -128,6 +139,10 @@ export default function DoctorDashboardPage() {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [startingAppointmentId, setStartingAppointmentId] = useState<number | null>(null);
+  const [specialtyCatalog, setSpecialtyCatalog] = useState<MspSpecialtyRecord[]>([]);
+  const [selectedSpecialtyCodes, setSelectedSpecialtyCodes] = useState<string[]>([]);
+  const [showSpecialtyPrompt, setShowSpecialtyPrompt] = useState(false);
+  const [savingSpecialties, setSavingSpecialties] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!session?.accessToken) {
@@ -155,6 +170,30 @@ export default function DoctorDashboardPage() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!session?.accessToken) return;
+    let active = true;
+
+    Promise.all([
+      fetchMspSpecialties(),
+      fetchDoctorSpecialtySelections(session.accessToken),
+    ])
+      .then(([catalog, selection]) => {
+        if (!active) return;
+        setSpecialtyCatalog(catalog);
+        setSelectedSpecialtyCodes(selection.specialty_codes ?? []);
+        setShowSpecialtyPrompt((selection.specialty_codes ?? []).length === 0);
+      })
+      .catch(() => {
+        if (!active) return;
+        setShowSpecialtyPrompt(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [session?.accessToken]);
 
   useRealtimeRefresh(loadData, {
     paths: ["/doctors/me", "/appointments", "/pool", "/patient-intake"],
@@ -203,8 +242,74 @@ export default function DoctorDashboardPage() {
     seen_today: summary?.today?.seen_today ?? 0,
   };
 
+  function toggleSpecialty(code: string) {
+    setSelectedSpecialtyCodes((current) =>
+      current.includes(code)
+        ? current.filter((item) => item !== code)
+        : [...current, code],
+    );
+  }
+
+  async function saveSpecialtyPrompt() {
+    if (!session?.accessToken || selectedSpecialtyCodes.length === 0) return;
+    setSavingSpecialties(true);
+    try {
+      await saveDoctorSpecialtySelections(session.accessToken, selectedSpecialtyCodes);
+      setShowSpecialtyPrompt(false);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save specialties.");
+    } finally {
+      setSavingSpecialties(false);
+    }
+  }
+
   return (
     <DoctorPageShell eyebrow="Today" title="Today">
+      {showSpecialtyPrompt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
+          <div className="max-h-[86vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="text-lg font-semibold text-foreground">Select your specialties</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Choose one or more MSP specialties where patients can be matched with you.
+              </p>
+            </div>
+            <div className="max-h-[55vh] overflow-auto p-5">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {specialtyCatalog.map((specialty) => (
+                  <button
+                    key={specialty.code}
+                    type="button"
+                    onClick={() => toggleSpecialty(specialty.code)}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-left transition-colors",
+                      selectedSpecialtyCodes.includes(specialty.code)
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-card hover:bg-accent",
+                    )}
+                  >
+                    <span className="block text-sm font-semibold text-foreground">
+                      {specialty.code} - {specialty.name}
+                    </span>
+                    <span className="mt-1 line-clamp-2 block text-xs text-muted-foreground">
+                      {specialty.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-4">
+              <Button
+                onClick={saveSpecialtyPrompt}
+                disabled={selectedSpecialtyCodes.length === 0 || savingSpecialties}
+              >
+                {savingSpecialties ? "Saving..." : "Save specialties"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <DoctorSection
         title={summary?.doctor_name || "Doctor summary"}
         description={summary ? `${summary.clinic_name} · ${summary.email}` : "Live doctor summary and OSCAR shortcut."}

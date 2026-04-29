@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Building2, ChevronRight, Stethoscope } from "lucide-react";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
@@ -171,7 +171,7 @@ function ClinicPicker({
 
 // ── Page ──────────────────────────────────────────────────────────
 
-export default function DoctorLoginPage() {
+function DoctorLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite_token")?.trim() ?? "";
@@ -503,5 +503,13 @@ export default function DoctorLoginPage() {
         </>
       )}
     </ClinicFlowShell>
+  );
+}
+
+export default function DoctorLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <DoctorLoginContent />
+    </Suspense>
   );
 }

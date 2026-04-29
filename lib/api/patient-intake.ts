@@ -47,6 +47,26 @@ export type PatientBimblePharmacyListResponse = {
   pharmacies: PatientBimblePharmacy[];
 };
 
+type CloudPharmacyRecord = {
+  id?: string | number | null;
+  name?: string | null;
+  pharmacy_name?: string | null;
+  address?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postal_code?: string | null;
+  zip_code?: string | null;
+  phone?: string | null;
+  fax?: string | null;
+  email?: string | null;
+  lat?: string | number | null;
+  lng?: string | number | null;
+  long?: string | number | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  distance?: string | number | null;
+};
+
 export type PatientIntakeLocationResponse = {
   location: string | null;
 };
@@ -141,16 +161,109 @@ export async function reverseGeocodePatientLocation(lat: number, lng: number) {
   });
 }
 
+const CLOUD_PHARMACY_API_URL = "https://cloud.oatrx.ca/api/fetch-all-pharmacies";
+const FALLBACK_PATIENT_LATITUDE = 28.6139;
+const FALLBACK_PATIENT_LONGITUDE = 77.209;
+
+function parseNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function distanceInKm(
+  fromLat: number,
+  fromLng: number,
+  toLat: number | null,
+  toLng: number | null,
+): number | null {
+  if (toLat == null || toLng == null) return null;
+  const earthRadiusKm = 6371;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const dLat = toRadians(toLat - fromLat);
+  const dLng = toRadians(toLng - fromLng);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(fromLat)) * Math.cos(toRadians(toLat)) * Math.sin(dLng / 2) ** 2;
+  return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistanceLabel(distanceKm: number | null) {
+  if (distanceKm == null) return null;
+  if (distanceKm < 1) return `${Math.round(distanceKm * 1000)} m`;
+  if (distanceKm < 10) return `${distanceKm.toFixed(1)} km`;
+  return `${Math.round(distanceKm)} km`;
+}
+
+function extractCloudPharmacyRecords(payload: unknown): CloudPharmacyRecord[] {
+  if (Array.isArray(payload)) return payload as CloudPharmacyRecord[];
+  if (payload && typeof payload === "object") {
+    const record = payload as {
+      pharmacies?: unknown;
+      data?: unknown;
+      results?: unknown;
+    };
+    if (Array.isArray(record.pharmacies)) return record.pharmacies as CloudPharmacyRecord[];
+    if (Array.isArray(record.data)) return record.data as CloudPharmacyRecord[];
+    if (Array.isArray(record.results)) return record.results as CloudPharmacyRecord[];
+  }
+  return [];
+}
+
 export async function fetchBimblePharmacies(lat?: number | null, lng?: number | null) {
-  return apiRequest<PatientBimblePharmacyListResponse>({
-    endpoint:
-      lat == null || lng == null
-        ? API_ENDPOINTS.patientIntakeBimblePharmacies
-        : withQuery(API_ENDPOINTS.patientIntakeBimblePharmacies, {
-            lat: String(lat),
-            lng: String(lng),
-          }),
+  const patientLat = lat ?? FALLBACK_PATIENT_LATITUDE;
+  const patientLng = lng ?? FALLBACK_PATIENT_LONGITUDE;
+  const url = new URL(CLOUD_PHARMACY_API_URL);
+  url.searchParams.set("lat", String(patientLat));
+  url.searchParams.set("long", String(patientLng));
+
+  const response = await fetch(url.toString(), {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
   });
+  if (!response.ok) {
+    throw new Error("Could not load pharmacies right now.");
+  }
+
+  const payload: unknown = await response.json();
+  const pharmacies = extractCloudPharmacyRecords(payload)
+    .map((item, index): PatientBimblePharmacy | null => {
+      const latitude = parseNumber(item.latitude ?? item.lat);
+      const longitude = parseNumber(item.longitude ?? item.lng ?? item.long);
+      const distanceKm = distanceInKm(patientLat, patientLng, latitude, longitude);
+      const name = (item.name ?? item.pharmacy_name ?? "").trim();
+      if (!name) return null;
+      return {
+        id: String(item.id ?? `${name}-${index}`),
+        name,
+        address: item.address?.trim() ?? "",
+        city: item.city?.trim() ?? "",
+        province: item.province?.trim() ?? null,
+        postal_code: (item.postal_code ?? item.zip_code)?.trim() ?? null,
+        phone: item.phone?.trim() ?? null,
+        fax: item.fax?.trim() ?? null,
+        email: item.email?.trim() ?? null,
+        latitude,
+        longitude,
+        distance_km: distanceKm,
+        distance_label: formatDistanceLabel(distanceKm),
+        drive_minutes: null,
+        delivery_eta_minutes: null,
+        delivery_eta_label: null,
+      };
+    })
+    .filter((item): item is PatientBimblePharmacy => Boolean(item))
+    .sort((a, b) => {
+      if (a.distance_km == null && b.distance_km == null) return a.name.localeCompare(b.name);
+      if (a.distance_km == null) return 1;
+      if (b.distance_km == null) return -1;
+      return a.distance_km - b.distance_km;
+    });
+
+  return { pharmacies };
 }
 
 export async function verifyPatientIntakePhone(payload: PatientIntakePhoneVerifyRequest) {

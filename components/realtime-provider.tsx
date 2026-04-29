@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import { readPatientLoginSession } from "@/lib/patient/session";
@@ -47,37 +47,23 @@ function buildRealtimeUrl(accessToken: string) {
   return url.toString();
 }
 
-function isRealtimePage(pathname: string) {
+function isPublicAuthPage(pathname: string) {
   return (
-    pathname.startsWith("/clinic") ||
-    pathname.startsWith("/doctor") ||
-    pathname.startsWith("/patient") ||
-    pathname.startsWith("/patient-portal")
-  );
-}
-
-function isEditingElementActive() {
-  const element = document.activeElement;
-  if (!element) return false;
-  const tagName = element.tagName.toLowerCase();
-  return (
-    tagName === "input" ||
-    tagName === "textarea" ||
-    tagName === "select" ||
-    element.getAttribute("contenteditable") === "true"
+    pathname === "/login" ||
+    pathname === "/doctor/login" ||
+    pathname.startsWith("/doctor/invite") ||
+    pathname === "/patient-portal"
   );
 }
 
 export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const refreshTimerRef = useRef<number | null>(null);
   const retryTimerRef = useRef<number | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const accessToken = useMemo(() => getSessionToken(pathname), [pathname]);
 
   useEffect(() => {
-    if (!accessToken || typeof window === "undefined") {
+    if (!accessToken || isPublicAuthPage(pathname) || typeof window === "undefined") {
       return;
     }
 
@@ -98,22 +84,11 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
         if (event.type !== "data.changed") return;
 
-        const handledByPage = !window.dispatchEvent(
+        window.dispatchEvent(
           new CustomEvent<BimbleRealtimeEvent>(BIMBLE_REALTIME_EVENT, {
             detail: event,
-            cancelable: true,
           }),
         );
-
-        if (!handledByPage && isRealtimePage(pathname) && !isEditingElementActive()) {
-          if (refreshTimerRef.current !== null) {
-            window.clearTimeout(refreshTimerRef.current);
-          }
-          refreshTimerRef.current = window.setTimeout(() => {
-            router.refresh();
-            window.location.reload();
-          }, 400);
-        }
       };
 
       socket.onclose = () => {
@@ -131,13 +106,10 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (retryTimerRef.current !== null) {
         window.clearTimeout(retryTimerRef.current);
       }
-      if (refreshTimerRef.current !== null) {
-        window.clearTimeout(refreshTimerRef.current);
-      }
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [accessToken, pathname, router]);
+  }, [accessToken, pathname]);
 
   return <>{children}</>;
 }

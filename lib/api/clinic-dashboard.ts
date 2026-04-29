@@ -641,6 +641,46 @@ export type FeeScheduleServiceRecord = {
   source_file_name?: string | null;
 };
 
+export type MspSpecialtyRecord = {
+  code: string;
+  name: string;
+  category: "medical" | "other_health" | string;
+  description: string;
+};
+
+export type SpecialtySelectionResponse = {
+  clinic_id?: number | null;
+  doctor_id?: number | null;
+  specialty_codes: string[];
+  items: MspSpecialtyRecord[];
+  missing_specialty_codes: string[];
+};
+
+export async function fetchMspSpecialties() {
+  return apiRequest<MspSpecialtyRecord[]>({
+    endpoint: API_ENDPOINTS.specialtiesCatalog,
+  });
+}
+
+export async function fetchClinicSpecialtySelections(accessToken: string) {
+  return apiRequest<SpecialtySelectionResponse>({
+    endpoint: API_ENDPOINTS.clinicMeSpecialties,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function saveClinicSpecialtySelections(
+  accessToken: string,
+  specialtyCodes: string[],
+) {
+  return apiRequest<SpecialtySelectionResponse, { specialty_codes: string[] }>({
+    endpoint: API_ENDPOINTS.clinicMeSpecialties,
+    method: "POST",
+    body: { specialty_codes: specialtyCodes },
+    headers: authHeaders(accessToken),
+  });
+}
+
 function normalizeFeeScheduleResponse(response: unknown): FeeScheduleServiceRecord[] {
   if (Array.isArray(response)) {
     return response as FeeScheduleServiceRecord[];

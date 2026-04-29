@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async rewrites() {
+    return [
+      {
+        source: "/oatrx/api/fetch-drug-data",
+        destination: "https://oatrx.ca/api/fetch-drug-data",
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

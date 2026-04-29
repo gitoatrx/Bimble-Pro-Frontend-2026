@@ -26,8 +26,6 @@ export function useRealtimeRefresh(
         return;
       }
 
-      event.preventDefault();
-
       if (timer !== null) {
         window.clearTimeout(timer);
       }

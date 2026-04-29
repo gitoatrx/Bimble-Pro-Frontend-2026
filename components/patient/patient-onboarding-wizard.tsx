@@ -13,6 +13,7 @@ import {
   MapPin,
   Package,
   Pill,
+  Search,
   Sparkles,
   Truck,
   Video,
@@ -209,6 +210,7 @@ export function PatientOnboardingWizard() {
   const [intakeToken, setIntakeToken] = useState<string | null>(() => readPatientIntakeAccessToken());
   const [intakeSessionId, setIntakeSessionId] = useState<number | null>(() => readPatientIntakeSessionId());
   const [bimblePharmacies, setBimblePharmacies] = useState<PatientBimblePharmacy[]>([]);
+  const [pharmacySearch, setPharmacySearch] = useState("");
   const [isLoadingBimblePharmacies, setIsLoadingBimblePharmacies] = useState(false);
   const [bimblePharmacyError, setBimblePharmacyError] = useState("");
   const [dobMonth, setDobMonth] = useState(() => splitDateOfBirth(readPatientOnboardingDraft().dateOfBirth).month);
@@ -262,6 +264,11 @@ export function PatientOnboardingWizard() {
     () => bimblePharmacies.find((option) => option.id === selectedNearbyPharmacyId) ?? null,
     [bimblePharmacies, selectedNearbyPharmacyId],
   );
+  const filteredBimblePharmacies = useMemo(() => {
+    const query = pharmacySearch.trim().toLowerCase();
+    if (!query) return bimblePharmacies;
+    return bimblePharmacies.filter((option) => option.name.toLowerCase().includes(query));
+  }, [bimblePharmacies, pharmacySearch]);
 
   function setField<K extends keyof PatientOnboardingDraft>(key: K, value: PatientOnboardingDraft[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -349,7 +356,7 @@ export function PatientOnboardingWizard() {
       setIsLoadingBimblePharmacies(true);
 
       try {
-        const response = await fetchBimblePharmacies();
+        const response = await fetchBimblePharmacies(draft.careLatitude, draft.careLongitude);
         if (cancelled) return;
         const pharmacies = response.pharmacies ?? [];
         setBimblePharmacies(pharmacies);
@@ -373,7 +380,7 @@ export function PatientOnboardingWizard() {
     return () => {
       cancelled = true;
     };
-  }, [draft.pharmacyChoice, step]);
+  }, [draft.careLatitude, draft.careLongitude, draft.pharmacyChoice, step]);
 
   useEffect(() => {
     const dob = splitDateOfBirth(draft.dateOfBirth);
@@ -1216,6 +1223,7 @@ export function PatientOnboardingWizard() {
                   pharmacyChoice: "bimble",
                 }));
                 setBimblePharmacyError("");
+                setPharmacySearch("");
               }}
               className={cn(
                 "flex flex-col items-start gap-3 rounded-[1.5rem] border p-6 text-left shadow-sm transition-all",
@@ -1269,8 +1277,17 @@ export function PatientOnboardingWizard() {
               {bimblePharmacies.length ? (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Choose a pharmacy</label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={pharmacySearch}
+                      onChange={(event) => setPharmacySearch(event.target.value)}
+                      placeholder="Search pharmacy by name"
+                      className="rounded-2xl bg-white pl-9"
+                    />
+                  </div>
                   <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-                    {bimblePharmacies.map((option) => {
+                    {filteredBimblePharmacies.map((option) => {
                       const selected = selectedNearbyPharmacyId === option.id;
                       return (
                         <button
@@ -1301,6 +1318,11 @@ export function PatientOnboardingWizard() {
                         </button>
                       );
                     })}
+                    {!filteredBimblePharmacies.length ? (
+                      <div className="rounded-2xl border border-dashed border-border bg-white px-4 py-3 text-sm text-muted-foreground">
+                        No pharmacies match your search.
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
