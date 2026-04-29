@@ -1,13 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, RefreshCw, Stethoscope, UserRoundCheck } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { ExternalLink, RefreshCw } from "lucide-react";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
-import { readDoctorLoginSession } from "@/lib/doctor/session";
+import {
+  readDoctorLoginSession,
+  readDoctorSessionSnapshot,
+  subscribeToDoctorSessionChanges,
+} from "@/lib/doctor/session";
 import { formatCanadaPacificDateKey } from "@/lib/time-zone";
 import { fetchDoctorSummary, fetchDoctorToday, startDoctorAppointment, type DoctorAppointment, type DoctorSummary, type DoctorTodayResponse } from "@/lib/api/doctor-dashboard";
 import { useRealtimeRefresh } from "@/lib/realtime";
@@ -108,7 +111,15 @@ function QueueRow({
 }
 
 export default function DoctorDashboardPage() {
-  const router = useRouter();
+  const sessionRaw = useSyncExternalStore(
+    subscribeToDoctorSessionChanges,
+    readDoctorSessionSnapshot,
+    () => null,
+  );
+  const session = useMemo(() => {
+    if (!sessionRaw) return null;
+    return readDoctorLoginSession();
+  }, [sessionRaw]);
   const [summary, setSummary] = useState<DoctorSummary | null>(null);
   const [today, setToday] = useState<DoctorTodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,7 +128,6 @@ export default function DoctorDashboardPage() {
   const [startingAppointmentId, setStartingAppointmentId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
-    const session = readDoctorLoginSession();
     if (!session?.accessToken) {
       setError("You are not logged in.");
       setLoading(false);
@@ -138,7 +148,7 @@ export default function DoctorDashboardPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [session?.accessToken]);
 
   useEffect(() => {
     void loadData();

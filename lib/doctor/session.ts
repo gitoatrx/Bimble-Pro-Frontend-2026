@@ -153,6 +153,34 @@ export function readDoctorOnboardingStage(doctorId?: number | null): DoctorOnboa
   return null;
 }
 
+export function subscribeToDoctorSessionChanges(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+
+  function handleStorage(event: StorageEvent) {
+    if (
+      event.key === DOCTOR_LOGIN_SESSION_KEY ||
+      event.key === DOCTOR_UI_PREVIEW_OFF_KEY ||
+      event.key === null
+    ) {
+      onStoreChange();
+    }
+  }
+
+  window.addEventListener("storage", handleStorage);
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+  };
+}
+
+export function readDoctorSessionSnapshot() {
+  if (typeof window === "undefined") return null;
+
+  const rawSession = localStorage.getItem(DOCTOR_LOGIN_SESSION_KEY);
+  if (rawSession) return rawSession;
+
+  return getDoctorUiPreviewSessionRaw();
+}
+
 export function storeDoctorOnboardingStage(doctorId: number, stage: DoctorOnboardingStage) {
   if (typeof window === "undefined") return;
   localStorage.setItem(onboardingStageStorageKey(doctorId), stage);
