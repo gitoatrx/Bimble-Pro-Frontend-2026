@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { appointmentLabel } from "@/lib/doctor/types";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import { formatCanadaPacificDateKey } from "@/lib/time-zone";
 import { fetchDoctorSummary, fetchDoctorToday, type DoctorAppointment, type DoctorSummary, type DoctorTodayResponse } from "@/lib/api/doctor-dashboard";
+import { useRealtimeRefresh } from "@/lib/realtime";
 
 const STATUS_COLORS: Record<string, string> = {
   IN_PROGRESS: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
@@ -89,7 +90,7 @@ export default function DoctorDashboardPage() {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const session = readDoctorLoginSession();
     if (!session?.accessToken) {
       setError("You are not logged in.");
@@ -111,11 +112,15 @@ export default function DoctorDashboardPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [loadData]);
+
+  useRealtimeRefresh(loadData, {
+    paths: ["/doctors/me", "/appointments", "/pool", "/patient-intake"],
+  });
 
   const active = (today?.appointments ?? []).filter(
     (appointment) => appointment.status === "IN_PROGRESS" || appointment.status === "ASSIGNED",

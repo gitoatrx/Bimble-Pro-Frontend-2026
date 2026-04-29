@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Clock,
   Eye,
@@ -29,6 +29,7 @@ import {
   updateClinicDoctorStatus,
   resendClinicDoctorInvite,
 } from "@/lib/api/clinic-dashboard";
+import { useRealtimeRefresh } from "@/lib/realtime";
 
 type DoctorStatus = "ACTIVE" | "ON_LEAVE" | "INACTIVE";
 
@@ -52,7 +53,7 @@ type DoctorDetailsRecord = Record<string, unknown> & {
 type PendingInvite = {
   inviteId: number;
   email: string;
-  status: "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "REVOKED";
   sentAt: string;
 };
 
@@ -170,7 +171,10 @@ function toInvite(record: Record<string, unknown>): PendingInvite {
       (typeof record.doctor_email === "string" && record.doctor_email) ||
       "unknown@example.com",
     status:
-      rawStatus === "ACCEPTED" || rawStatus === "EXPIRED" || rawStatus === "REVOKED"
+      rawStatus === "ACCEPTED" ||
+      rawStatus === "REJECTED" ||
+      rawStatus === "EXPIRED" ||
+      rawStatus === "REVOKED"
         ? rawStatus
         : "PENDING",
     sentAt:
@@ -233,27 +237,29 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
     setError("");
     try {
       const prefill = await fetchClinicDoctorInvitePrefill(session.accessToken, trimmed);
-      if (prefill.form_drafts?.HLTH_2870) {
+      const hlth2870Draft = prefill.form_drafts?.HLTH_2870;
+      const hlth2950Draft = prefill.form_drafts?.HLTH_2950;
+      if (hlth2870Draft) {
         setClinicPaidDraft((current) => ({
           ...current,
-          ...prefill.form_drafts.HLTH_2870,
+          ...hlth2870Draft,
           pay_signature_label:
-            prefill.form_drafts.HLTH_2870.pay_signature_label ||
+            hlth2870Draft.pay_signature_label ||
             current.pay_signature_label,
           pay_signature_data_url:
-            prefill.form_drafts.HLTH_2870.pay_signature_data_url ||
+            hlth2870Draft.pay_signature_data_url ||
             current.pay_signature_data_url,
         }));
       }
-      if (prefill.form_drafts?.HLTH_2950) {
+      if (hlth2950Draft) {
         setFacilityDraft((current) => ({
           ...current,
-          ...prefill.form_drafts.HLTH_2950,
+          ...hlth2950Draft,
           attachment_action:
-            prefill.form_drafts.HLTH_2950.attachment_action || current.attachment_action,
+            hlth2950Draft.attachment_action || current.attachment_action,
           confirm_declarations:
-            typeof prefill.form_drafts.HLTH_2950.confirm_declarations === "boolean"
-              ? prefill.form_drafts.HLTH_2950.confirm_declarations
+            typeof hlth2950Draft.confirm_declarations === "boolean"
+              ? hlth2950Draft.confirm_declarations
               : current.confirm_declarations,
         }));
       }
@@ -646,6 +652,29 @@ function InviteRow({
   onResend: (inviteId: number) => void;
   showActions?: boolean;
 }) {
+  const statusConfig = {
+    ACCEPTED: {
+      label: "Accepted",
+      className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+    },
+    REJECTED: {
+      label: "Rejected",
+      className: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
+    },
+    EXPIRED: {
+      label: "Expired",
+      className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+    },
+    REVOKED: {
+      label: "Cancelled",
+      className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+    },
+    PENDING: {
+      label: "Awaiting",
+      className: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
+    },
+  }[invite.status];
+
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-dashed border-border bg-card px-5 py-4">
       <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
@@ -657,9 +686,9 @@ function InviteRow({
           {invite.sentAt ? `Invited ${invite.sentAt}` : "Pending invite"}
         </p>
       </div>
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+      <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium", statusConfig.className)}>
         <Clock className="h-3 w-3" />
-        {invite.status === "ACCEPTED" ? "Accepted" : "Awaiting"}
+        {statusConfig.label}
       </span>
       {showActions && (
         <>
@@ -1084,6 +1113,27 @@ export default function DoctorsPage() {
     hasSession ? "" : "You are not logged in. Please sign in again.",
   );
 
+  const loadDoctorsPage = useCallback(async () => {
+    if (!hasSession) return;
+    try {
+      const [doctorRecords, inviteRecords] = await Promise.all([
+        fetchClinicDoctors(accessToken),
+        fetchClinicDoctorInvites(accessToken),
+      ]);
+
+      const doctorList = (doctorRecords as Record<string, unknown>[]).map(toDoctor);
+      const inviteList = (inviteRecords as Record<string, unknown>[]).map(toInvite);
+
+      setDoctors(doctorList);
+      setInvites(inviteList);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load doctors.");
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken, hasSession]);
+
   useEffect(() => {
     if (!hasSession) {
       return;
@@ -1091,36 +1141,44 @@ export default function DoctorsPage() {
 
     let active = true;
 
-    Promise.all([
-      fetchClinicDoctors(accessToken),
-      fetchClinicDoctorInvites(accessToken),
-    ])
-      .then(([doctorRecords, inviteRecords]) => {
-        if (!active) return;
+    async function refreshInvites() {
+      const inviteRecords = await fetchClinicDoctorInvites(accessToken);
+      if (!active) return;
+      setInvites((inviteRecords as Record<string, unknown>[]).map(toInvite));
+    }
 
-        const doctorList = (doctorRecords as Record<string, unknown>[]).map(toDoctor);
-        const inviteList = (inviteRecords as Record<string, unknown>[]).map(toInvite);
+    loadDoctorsPage();
 
-        setDoctors(doctorList);
-        setInvites(inviteList);
-      })
-      .catch((err) => {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : "Could not load doctors.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+    const handleFocus = () => {
+      refreshInvites().catch(() => {
+        // Keep the current invite list if a background refresh misses.
       });
+    };
+
+    const refreshTimer = window.setInterval(() => {
+      refreshInvites().catch(() => {
+        // Keep the current invite list if a background refresh misses.
+      });
+    }, 10000);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       active = false;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", handleFocus);
     };
-  }, [accessToken, hasSession]);
+  }, [accessToken, hasSession, loadDoctorsPage]);
+
+  useRealtimeRefresh(loadDoctorsPage, {
+    enabled: hasSession,
+    paths: ["/doctors", "/doctor-auth", "/doctor/invite"],
+  });
 
   const activeCount = doctors.filter((d) => d.status === "ACTIVE").length;
   const seatsUsed = doctors.filter((d) => d.status !== "INACTIVE").length;
   const pendingInvites = invites.filter((invite) => invite.status === "PENDING");
   const acceptedInvites = invites.filter((invite) => invite.status === "ACCEPTED");
+  const rejectedInvites = invites.filter((invite) => invite.status === "REJECTED");
   const inactiveDoctors = doctors.filter((d) => d.status === "INACTIVE");
 
   function handleInvite(email: string) {
@@ -1304,6 +1362,25 @@ export default function DoctorsPage() {
               </h2>
               <div className="space-y-2">
                 {acceptedInvites.map((invite) => (
+                  <InviteRow
+                    key={invite.inviteId}
+                    invite={invite}
+                    onDelete={handleDeleteInvite}
+                    onResend={handleResendInvite}
+                    showActions={false}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {rejectedInvites.length > 0 && (
+            <section className="mb-6">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Rejected invites
+              </h2>
+              <div className="space-y-2">
+                {rejectedInvites.map((invite) => (
                   <InviteRow
                     key={invite.inviteId}
                     invite={invite}

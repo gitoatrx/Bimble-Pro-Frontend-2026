@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Building2, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Building2, CheckCircle2, Eye, EyeOff, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { DoctorInviteDetailsResponse } from "@/lib/doctor/types";
+import type { DoctorInviteDetailsResponse, DoctorRejectInviteResponse } from "@/lib/doctor/types";
 
 export default function DoctorInviteAcceptPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const token = typeof params.token === "string" ? params.token : "";
+  const wantsReject = searchParams.get("decision") === "reject";
 
   const [invite, setInvite] = useState<DoctorInviteDetailsResponse | null>(null);
   const [loadingInvite, setLoadingInvite] = useState(true);
@@ -22,8 +24,11 @@ export default function DoctorInviteAcceptPage() {
     pin: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [rejected, setRejected] = useState(false);
+  const [rejectMessage, setRejectMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showPin, setShowPin] = useState(false);
 
@@ -139,6 +144,41 @@ export default function DoctorInviteAcceptPage() {
     }
   }
 
+  async function handleRejectInvite() {
+    if (!token) return;
+    setRejecting(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/v1/doctor-auth/invite-reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invite_token: token }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as
+        | DoctorRejectInviteResponse
+        | { message?: string };
+
+      if (!res.ok) {
+        setError(
+          (data as { message?: string }).message ||
+            "Failed to reject invite. The link may have expired.",
+        );
+        return;
+      }
+
+      setRejectMessage(
+        (data as DoctorRejectInviteResponse).message || "You rejected this clinic invite.",
+      );
+      setRejected(true);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setRejecting(false);
+    }
+  }
+
   if (done) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -159,12 +199,69 @@ export default function DoctorInviteAcceptPage() {
     );
   }
 
+  if (rejected || invite?.status === "REJECTED") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-rose-100">
+            <XCircle className="h-7 w-7 text-rose-600" />
+          </div>
+          <h1 className="mb-2 text-xl font-bold text-foreground">Invite rejected</h1>
+          <p className="mb-6 text-sm text-muted-foreground">
+            {rejectMessage || `You have rejected the invite from ${invite?.clinic_name || "this clinic"}.`}
+          </p>
+          <Button variant="outline" className="w-full" onClick={() => router.push("/doctor/login")}>
+            Back to Doctor Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (loadingInvite) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-5 py-4 text-sm text-muted-foreground shadow-sm">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading invite…
+        </div>
+      </div>
+    );
+  }
+
+  if (wantsReject && invite) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-rose-100">
+              <XCircle className="h-6 w-6 text-rose-600" />
+            </div>
+            <h1 className="text-xl font-bold text-foreground">Reject clinic invite?</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This will let {invite.clinic_name} know that you rejected their invitation.
+            </p>
+          </div>
+
+          {error && (
+            <p className="mb-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button variant="outline" onClick={() => router.push(`/doctor/invite/${token}`)}>
+              Go back
+            </Button>
+            <Button
+              variant="outline"
+              className="border-rose-200 text-rose-700 hover:bg-rose-50"
+              onClick={handleRejectInvite}
+              disabled={rejecting}
+            >
+              {rejecting ? "Rejecting..." : "Reject invite"}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -202,6 +299,16 @@ export default function DoctorInviteAcceptPage() {
           >
             Continue to Doctor Login
           </Button>
+          {!invite.already_member ? (
+            <Button
+              variant="outline"
+              className="mt-3 w-full border-rose-200 text-rose-700 hover:bg-rose-50"
+              onClick={handleRejectInvite}
+              disabled={rejecting}
+            >
+              {rejecting ? "Rejecting invite..." : "Reject invite"}
+            </Button>
+          ) : null}
         </div>
       </div>
     );
@@ -325,6 +432,15 @@ export default function DoctorInviteAcceptPage() {
 
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? "Setting up account…" : "Accept invite & create account"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full border-rose-200 text-rose-700 hover:bg-rose-50"
+            onClick={handleRejectInvite}
+            disabled={rejecting || submitting}
+          >
+            {rejecting ? "Rejecting invite..." : "Reject invite"}
           </Button>
         </form>
       </div>

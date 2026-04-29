@@ -14,6 +14,7 @@ import {
   Stethoscope,
   Tags,
   Mail,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -663,8 +664,8 @@ function DoctorInviteStep({
   onDoctorInvited,
 }: {
   onComplete: () => void;
-  invitedDoctors: { email: string; status: "pending" | "accepted" }[];
-  onDoctorInvited: (email: string, status?: "pending" | "accepted") => void;
+  invitedDoctors: { email: string; status: "pending" | "accepted" | "rejected" }[];
+  onDoctorInvited: (email: string, status?: "pending" | "accepted" | "rejected") => void;
 }) {
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
@@ -973,6 +974,10 @@ function DoctorInviteStep({
                 <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
                   <CheckCircle2 className="h-3 w-3" /> Joined
                 </span>
+              ) : status === "rejected" ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700">
+                  <XCircle className="h-3 w-3" /> Rejected
+                </span>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                   <Clock className="h-3 w-3" /> Invite sent
@@ -1128,7 +1133,7 @@ export default function ClinicDashboardPage() {
   const session = readClinicLoginSession();
   const [completedSteps, setCompletedSteps] = useState<Set<StepKey>>(new Set());
   const [invitedDoctors, setInvitedDoctors] = useState<
-    { email: string; status: "pending" | "accepted" }[]
+    { email: string; status: "pending" | "accepted" | "rejected" }[]
   >([]);
   const [setupComplete, setSetupComplete] = useState(false);
   const [loadingSetupState, setLoadingSetupState] = useState(Boolean(session?.accessToken));
@@ -1193,9 +1198,10 @@ export default function ClinicDashboardPage() {
 
         const mapped = records.map((r) => ({
           email: r.email,
-          status: (r.status === "ACCEPTED" ? "accepted" : "pending") as
+          status: (r.status === "ACCEPTED" ? "accepted" : r.status === "REJECTED" ? "rejected" : "pending") as
             | "pending"
-            | "accepted",
+            | "accepted"
+            | "rejected",
         }));
         if (mapped.length > 0) setInvitedDoctors(mapped);
 
@@ -1219,7 +1225,7 @@ export default function ClinicDashboardPage() {
     setCompletedSteps((s) => new Set([...s, key]));
   }
 
-  function handleDoctorInvited(email: string, status: "pending" | "accepted" = "pending") {
+  function handleDoctorInvited(email: string, status: "pending" | "accepted" | "rejected" = "pending") {
     setInvitedDoctors((d) => {
       // Update existing entry if present, otherwise append
       const exists = d.find((x) => x.email === email);

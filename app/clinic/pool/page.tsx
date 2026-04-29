@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Check,
   CircleUserRound,
@@ -20,6 +20,7 @@ import {
   rejectClinicPoolAppointment,
   type ClinicPoolAppointment,
 } from "@/lib/api/clinic-dashboard";
+import { useRealtimeRefresh } from "@/lib/realtime";
 
 function AppointmentTypeBadge({ type }: { type: "walkin" | "virtual" }) {
   const isVirtual = type === "virtual";
@@ -60,6 +61,25 @@ export default function ClinicPoolPage() {
   const [actionSuccess, setActionSuccess] = useState("");
   const [pendingId, setPendingId] = useState<number | null>(null);
 
+  const loadPool = useCallback(async () => {
+    const session = readClinicLoginSession();
+    if (!session?.accessToken) {
+      setError("You are not logged in.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetchClinicPool(session.accessToken);
+      setAppointments(response.appointments ?? []);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load clinic pool.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   async function handlePoolAction(
     appointmentId: number,
     action: "accept" | "reject",
@@ -98,37 +118,12 @@ export default function ClinicPoolPage() {
   }
 
   useEffect(() => {
-    let cancelled = false;
+    void loadPool();
+  }, [loadPool]);
 
-    async function load() {
-      const session = readClinicLoginSession();
-      if (!session?.accessToken) {
-        setError("You are not logged in.");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await fetchClinicPool(session.accessToken);
-        if (!cancelled) {
-          setAppointments(response.appointments ?? []);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load clinic pool.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useRealtimeRefresh(loadPool, {
+    paths: ["/pool", "/appointments", "/patient-intake"],
+  });
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">

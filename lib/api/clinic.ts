@@ -149,7 +149,7 @@ export async function submitClinicResendOtp(
 export type DoctorInviteRecord = {
   invite_id: number;
   email: string;
-  status: "PENDING" | "ACCEPTED" | "EXPIRED" | "REVOKED";
+  status: "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "REVOKED";
   sent_at: string;
   accepted_at: string | null;
 };

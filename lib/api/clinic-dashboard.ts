@@ -87,6 +87,14 @@ export type ClinicPortalRequest = {
   appointment_status?: string | null;
   appointment_date?: string | null;
   appointment_time?: string | null;
+  current_appointment_date?: string | null;
+  current_appointment_time?: string | null;
+  assigned_doctor_id?: number | null;
+  assigned_doctor_name?: string | null;
+  requested_appointment_date?: string | null;
+  requested_appointment_time?: string | null;
+  requested_doctor_id?: number | null;
+  requested_doctor_name?: string | null;
   created_at: string | null;
   updated_at: string | null;
 };

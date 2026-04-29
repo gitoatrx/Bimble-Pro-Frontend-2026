@@ -106,6 +106,13 @@ export type DoctorAcceptExistingInviteResponse = {
   clinic_name: string;
 };
 
+export type DoctorRejectInviteResponse = {
+  message: string;
+  clinic_slug: string;
+  clinic_name: string;
+  status: string;
+};
+
 // Persisted after full login
 export type DoctorLoginSession = {
   doctorId: number;

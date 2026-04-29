@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { CheckCircle2, ClipboardList, Loader2, TestTube2 } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { CalendarClock, CheckCircle2, ClipboardList, Loader2, Stethoscope, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { readClinicLoginSession } from "@/lib/clinic/session";
@@ -11,6 +11,7 @@ import {
   updateClinicRequestStatus,
   type ClinicPortalRequest,
 } from "@/lib/api/clinic-dashboard";
+import { useRealtimeRefresh } from "@/lib/realtime";
 
 function requestLabel(requestType: string) {
   if (requestType === "PRESCRIPTION") return "Prescription";
@@ -23,6 +24,11 @@ function requestSupportsDocumentUpload(requestType: string) {
   return requestType === "PRESCRIPTION" || requestType === "LAB_REPORT";
 }
 
+function formatSlot(date?: string | null, time?: string | null) {
+  if (!date && !time) return "Not available";
+  return [date || "Date pending", time || "Time pending"].join(" · ");
+}
+
 export default function ClinicRequestsPage() {
   const [requests, setRequests] = useState<ClinicPortalRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,49 +36,51 @@ export default function ClinicRequestsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [pendingKey, setPendingKey] = useState("");
   const [responseDrafts, setResponseDrafts] = useState<Record<number, string>>({});
-  const [selectedFiles, setSelectedFiles] = useState<Record<number, File | null>>({});
+
+  const loadRequests = useCallback(async () => {
+    const session = readClinicLoginSession();
+    if (!session?.accessToken) {
+      setError("You are not logged in.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetchClinicRequests(session.accessToken);
+      setRequests(response.requests ?? []);
+      setResponseDrafts(
+        Object.fromEntries(
+          (response.requests ?? []).map((request) => [request.request_id, request.clinic_response ?? ""]),
+        ),
+      );
+      setError("");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to load clinic requests.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      const session = readClinicLoginSession();
-      if (!session?.accessToken) {
-        setError("You are not logged in.");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await fetchClinicRequests(session.accessToken);
-        if (!cancelled) {
-          setRequests(response.requests ?? []);
-          setResponseDrafts(
-            Object.fromEntries(
-              (response.requests ?? []).map((request) => [request.request_id, request.clinic_response ?? ""]),
-            ),
-          );
-        }
-      } catch (nextError) {
-        if (!cancelled) {
-          setError(nextError instanceof Error ? nextError.message : "Failed to load clinic requests.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+      if (!cancelled) await loadRequests();
     }
 
     void load();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadRequests]);
+
+  useRealtimeRefresh(loadRequests, {
+    paths: ["/requests", "/patient-portal", "/appointments"],
+  });
 
   async function handleUpdateRequest(
     requestId: number,
-    status: "IN_REVIEW" | "FULFILLED",
+    status: "IN_REVIEW" | "FULFILLED" | "REJECTED",
   ) {
     const session = readClinicLoginSession();
     if (!session?.accessToken) {
@@ -95,8 +103,10 @@ export default function ClinicRequestsPage() {
       );
       setSuccessMessage(
         status === "FULFILLED"
-          ? "Request marked fulfilled and the patient can now see your update."
-          : "Request marked in review.",
+          ? "Request accepted and the patient can now see your update."
+          : status === "REJECTED"
+            ? "Request rejected and the patient can now see your update."
+            : "Request marked in review.",
       );
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to update the request.");
@@ -105,16 +115,14 @@ export default function ClinicRequestsPage() {
     }
   }
 
-  async function handleUploadAttachment(requestId: number) {
+  async function handleUploadAttachment(requestId: number, file: File | null) {
     const session = readClinicLoginSession();
     if (!session?.accessToken) {
       setError("You are not logged in.");
       return;
     }
 
-    const file = selectedFiles[requestId];
     if (!file) {
-      setError("Please choose a file to upload first.");
       return;
     }
 
@@ -128,8 +136,7 @@ export default function ClinicRequestsPage() {
       setRequests((current) =>
         current.map((request) => (request.request_id === requestId ? response.request : request)),
       );
-      setSelectedFiles((current) => ({ ...current, [requestId]: null }));
-      setSuccessMessage("Document uploaded. The patient can now access it from the request history.");
+      setSuccessMessage("Document uploaded and the request has been accepted.");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to upload the document.");
     } finally {
@@ -177,6 +184,7 @@ export default function ClinicRequestsPage() {
           ) : null}
           {requests.map((request) => {
             const canUploadDocument = requestSupportsDocumentUpload(request.request_type);
+            const isReschedule = request.request_type === "RESCHEDULE";
             return (
             <div key={request.request_id} className="rounded-2xl border border-border bg-card p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -199,14 +207,46 @@ export default function ClinicRequestsPage() {
                       {request.appointment_time ? ` · ${request.appointment_time}` : ""}
                     </div>
                   ) : null}
-                  {request.patient_message ? (
-                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                      Patient note: {request.patient_message}
+                  {isReschedule ? (
+                    <div className="mt-4 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-slate-700 sm:grid-cols-3">
+                      <div className="flex gap-2">
+                        <CalendarClock className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Current appointment
+                          </p>
+                          <p className="mt-1 font-medium text-slate-900">
+                            {formatSlot(
+                              request.current_appointment_date || request.appointment_date,
+                              request.current_appointment_time || request.appointment_time,
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <CalendarClock className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600" />
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Requested appointment
+                          </p>
+                          <p className="mt-1 font-medium text-slate-900">
+                            {formatSlot(request.requested_appointment_date, request.requested_appointment_time)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Stethoscope className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-500" />
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Current doctor
+                          </p>
+                          <p className="mt-1 font-medium text-slate-900">
+                            {request.assigned_doctor_name || "Not assigned"}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   ) : null}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {request.created_at ? new Date(request.created_at).toLocaleString() : "Date unavailable"}
                 </div>
               </div>
 
@@ -236,14 +276,20 @@ export default function ClinicRequestsPage() {
                     Upload requested document
                     <input
                       type="file"
+                      disabled={pendingKey === `${request.request_id}:UPLOAD`}
                       className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-sky-700"
-                      onChange={(event) =>
-                        setSelectedFiles((current) => ({
-                          ...current,
-                          [request.request_id]: event.target.files?.[0] ?? null,
-                        }))
-                      }
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        void handleUploadAttachment(request.request_id, file);
+                        event.currentTarget.value = "";
+                      }}
                     />
+                    {pendingKey === `${request.request_id}:UPLOAD` ? (
+                      <span className="inline-flex items-center text-xs text-muted-foreground">
+                        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                        Uploading document...
+                      </span>
+                    ) : null}
                   </label>
                 ) : null}
 
@@ -266,41 +312,32 @@ export default function ClinicRequestsPage() {
                 ) : null}
 
                 <div className="flex flex-wrap gap-2">
-                  {canUploadDocument ? (
-                    <Button
-                      variant="outline"
-                      disabled={!selectedFiles[request.request_id] || pendingKey === `${request.request_id}:UPLOAD`}
-                      onClick={() => void handleUploadAttachment(request.request_id)}
-                    >
-                      {pendingKey === `${request.request_id}:UPLOAD` ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Upload document
-                    </Button>
-                  ) : null}
                   <Button
                     variant="outline"
-                    disabled={pendingKey === `${request.request_id}:IN_REVIEW`}
-                    onClick={() => void handleUpdateRequest(request.request_id, "IN_REVIEW")}
+                    className="border-rose-200 text-rose-700 hover:bg-rose-50"
+                    disabled={pendingKey === `${request.request_id}:REJECTED`}
+                    onClick={() => void handleUpdateRequest(request.request_id, "REJECTED")}
                   >
-                    {pendingKey === `${request.request_id}:IN_REVIEW` ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {pendingKey === `${request.request_id}:REJECTED` ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <TestTube2 className="mr-2 h-4 w-4" />
+                      <XCircle className="h-4 w-4" />
                     )}
-                    Mark in review
+                    Reject request
                   </Button>
-                  <Button
-                    disabled={pendingKey === `${request.request_id}:FULFILLED`}
-                    onClick={() => void handleUpdateRequest(request.request_id, "FULFILLED")}
-                  >
-                    {pendingKey === `${request.request_id}:FULFILLED` ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                    )}
-                    Mark fulfilled
-                  </Button>
+                  {isReschedule ? (
+                    <Button
+                      disabled={pendingKey === `${request.request_id}:FULFILLED`}
+                      onClick={() => void handleUpdateRequest(request.request_id, "FULFILLED")}
+                    >
+                      {pendingKey === `${request.request_id}:FULFILLED` ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                      )}
+                      Accept reschedule
+                    </Button>
+                  ) : null}
                 </div>
 
                 {request.clinic_response ? (
