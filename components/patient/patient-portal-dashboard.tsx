@@ -334,6 +334,9 @@ export function PatientPortalDashboard() {
   const [rescheduleMessage, setRescheduleMessage] = useState("");
   const [rescheduleActionKey, setRescheduleActionKey] = useState("");
 
+  const showProfileEmail = Boolean(profile?.email?.trim());
+  const showProfilePhn = Boolean(profile?.phn?.trim());
+
   const navigation: PortalNavItem[] = [
     {
       id: "profile",
@@ -659,11 +662,11 @@ export function PatientPortalDashboard() {
         last_name: profileDraft.last_name.trim(),
         phone: limitDigits(profileDraft.phone, 10),
         date_of_birth: profileDraft.date_of_birth,
-        phn: limitDigits(profileDraft.phn, 10),
-        email: profileDraft.email.trim(),
         city: normalizeCityInput(profileDraft.city),
         province: normalizeProvinceCodeInput(profileDraft.province),
         postal_code: normalizePostalCode(profileDraft.postal_code),
+        ...(showProfilePhn ? { phn: limitDigits(profileDraft.phn, 10) } : {}),
+        ...(showProfileEmail ? { email: profileDraft.email.trim() } : {}),
       });
       setProfile(updated);
       setProfileDraft({
@@ -1053,16 +1056,20 @@ export function PatientPortalDashboard() {
       );
     }
 
-    if (!profileDraft.phn.trim()) {
-      nextErrors.phn = "PHN is required.";
-    } else {
-      nextErrors.phn = getLiveTenDigitError(profileDraft.phn, "PHN");
+    if (showProfilePhn) {
+      if (!profileDraft.phn.trim()) {
+        nextErrors.phn = "PHN is required.";
+      } else {
+        nextErrors.phn = getLiveTenDigitError(profileDraft.phn, "PHN");
+      }
     }
 
-    if (!profileDraft.email.trim()) {
-      nextErrors.email = "Email is required.";
-    } else {
-      nextErrors.email = getLiveEmailError(profileDraft.email, "email address");
+    if (showProfileEmail) {
+      if (!profileDraft.email.trim()) {
+        nextErrors.email = "Email is required.";
+      } else {
+        nextErrors.email = getLiveEmailError(profileDraft.email, "email address");
+      }
     }
 
     if (!profileDraft.city.trim()) {
@@ -1175,9 +1182,7 @@ export function PatientPortalDashboard() {
             <h1 className="truncate text-base font-semibold tracking-tight text-slate-950">
               {profile?.first_name || "Patient"} {profile?.last_name || "Portal"}
             </h1>
-            <p className="mt-1 text-xs text-slate-500">
-              PHN: {profile?.phn || "Not available"}
-            </p>
+            {showProfilePhn ? <p className="mt-1 text-xs text-slate-500">PHN: {profile?.phn}</p> : null}
           </div>
 
           <nav className="mt-4 space-y-2">
@@ -1265,17 +1270,19 @@ export function PatientPortalDashboard() {
                   <div className="text-xs text-rose-600">{profileFormErrors.phone}</div>
                 ) : null}
               </label>
-              <label className="grid gap-2 text-sm text-slate-700">
-                Email
-                <Input
-                  type="email"
-                  value={profileDraft.email}
-                  onChange={(event) => updateProfileField("email", event.target.value)}
-                />
-                {profileFormErrors.email ? (
-                  <div className="text-xs text-rose-600">{profileFormErrors.email}</div>
-                ) : null}
-              </label>
+              {showProfileEmail ? (
+                <label className="grid gap-2 text-sm text-slate-700">
+                  Email
+                  <Input
+                    type="email"
+                    value={profileDraft.email}
+                    onChange={(event) => updateProfileField("email", event.target.value)}
+                  />
+                  {profileFormErrors.email ? (
+                    <div className="text-xs text-rose-600">{profileFormErrors.email}</div>
+                  ) : null}
+                </label>
+              ) : null}
               <label className="grid gap-2 text-sm text-slate-700">
                 Date of birth
                 <Input
@@ -1288,18 +1295,20 @@ export function PatientPortalDashboard() {
                   <div className="text-xs text-rose-600">{profileFormErrors.date_of_birth}</div>
                 ) : null}
               </label>
-              <label className="grid gap-2 text-sm text-slate-700">
-                PHN
-                <Input
-                  value={profileDraft.phn}
-                  onChange={(event) => updateProfileField("phn", event.target.value)}
-                  inputMode="numeric"
-                  maxLength={10}
-                />
-                {profileFormErrors.phn ? (
-                  <div className="text-xs text-rose-600">{profileFormErrors.phn}</div>
-                ) : null}
-              </label>
+              {showProfilePhn ? (
+                <label className="grid gap-2 text-sm text-slate-700">
+                  PHN
+                  <Input
+                    value={profileDraft.phn}
+                    onChange={(event) => updateProfileField("phn", event.target.value)}
+                    inputMode="numeric"
+                    maxLength={10}
+                  />
+                  {profileFormErrors.phn ? (
+                    <div className="text-xs text-rose-600">{profileFormErrors.phn}</div>
+                  ) : null}
+                </label>
+              ) : null}
               <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
                 <label className="grid gap-2 text-sm text-slate-700">
                   Address

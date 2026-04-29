@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { ExternalLink, RefreshCw, Stethoscope, UserRoundCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -111,6 +112,7 @@ function QueueRow({
 }
 
 export default function DoctorDashboardPage() {
+  const router = useRouter();
   const sessionRaw = useSyncExternalStore(
     subscribeToDoctorSessionChanges,
     readDoctorSessionSnapshot,
