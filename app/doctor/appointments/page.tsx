@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import {
   shiftCanadaPacificDateKey,
 } from "@/lib/time-zone";
 import { fetchDoctorAppointments, type DoctorAppointment } from "@/lib/api/doctor-dashboard";
+import { useRealtimeRefresh } from "@/lib/realtime";
 
 function todayKey() {
   return getCanadaPacificDateKey();
@@ -41,44 +42,37 @@ export default function DoctorAppointmentsPage() {
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => offsetKey(weekStart, index)), [weekStart]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      const session = readDoctorLoginSession();
-      if (!session?.accessToken) {
-        setError("You are not logged in.");
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError("");
-
-      try {
-        const from = weekStart;
-        const to = offsetKey(weekStart, 6);
-        const response = await fetchDoctorAppointments(session.accessToken, { from, to });
-        if (!cancelled) {
-          setAppointments(response.appointments ?? []);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setAppointments([]);
-          setError(err instanceof Error ? err.message : "Failed to load appointments.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+  const loadAppointments = useCallback(async () => {
+    const session = readDoctorLoginSession();
+    if (!session?.accessToken) {
+      setError("You are not logged in.");
+      setLoading(false);
+      return;
     }
 
-    void load();
-    return () => {
-      cancelled = true;
-    };
+    setLoading(true);
+    setError("");
+
+    try {
+      const from = weekStart;
+      const to = offsetKey(weekStart, 6);
+      const response = await fetchDoctorAppointments(session.accessToken, { from, to });
+      setAppointments(response.appointments ?? []);
+    } catch (err) {
+      setAppointments([]);
+      setError(err instanceof Error ? err.message : "Failed to load appointments.");
+    } finally {
+      setLoading(false);
+    }
   }, [weekStart]);
+
+  useEffect(() => {
+    void loadAppointments();
+  }, [loadAppointments]);
+
+  useRealtimeRefresh(loadAppointments, {
+    paths: ["/appointments", "/pool", "/requests"],
+  });
 
   const byDate = useMemo(() => {
     const map = new Map<string, DoctorAppointment[]>();
