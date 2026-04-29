@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { DoctorHlth2832Editor } from "@/components/doctor/doctor-hlth2832-editor";
@@ -43,6 +44,7 @@ function SaveButton({ onSave, label = "Save changes" }: { onSave: () => Promise<
 }
 
 export default function DoctorSettingsPage() {
+  const router = useRouter();
   const [profileDraft, setProfileDraft] = useState({
     first_name: "",
     last_name: "",
@@ -212,7 +214,9 @@ export default function DoctorSettingsPage() {
         <DoctorSection title="Onboarding forms">
           <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-muted-foreground">open the doctor onboarding forms</p>
+              <p className="text-sm text-muted-foreground">
+                Review clinic-prefilled forms or complete optional forms when needed.
+              </p>
               <Button
                 type="button"
                 variant={showFormsHub ? "outline" : "default"}
@@ -236,6 +240,34 @@ export default function DoctorSettingsPage() {
 
             {showFormsHub ? (
               <div className="grid gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="!flex h-auto !w-full !justify-between gap-4 px-4 py-4 text-left"
+                  onClick={() => router.push("/doctor/onboarding?stage=hlth_2870&optional=1")}
+                >
+                  <span className="flex flex-1 flex-col items-start space-y-1 text-left">
+                    <span className="block font-medium text-foreground">HLTH 2870</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Review clinic-paid assignment details and sign
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm font-medium text-foreground">Open</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="!flex h-auto !w-full !justify-between gap-4 px-4 py-4 text-left"
+                  onClick={() => router.push("/doctor/onboarding?stage=hlth_2950&optional=1")}
+                >
+                  <span className="flex flex-1 flex-col items-start space-y-1 text-left">
+                    <span className="block font-medium text-foreground">HLTH 2950</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Review facility attachment details and sign
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm font-medium text-foreground">Open</span>
+                </Button>
                 <Button
                   type="button"
                   variant="outline"

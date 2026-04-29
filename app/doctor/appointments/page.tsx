@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Stethoscope, UserRoundCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
@@ -11,7 +12,11 @@ import {
   getCanadaPacificDateKey,
   shiftCanadaPacificDateKey,
 } from "@/lib/time-zone";
-import { fetchDoctorAppointments, type DoctorAppointment } from "@/lib/api/doctor-dashboard";
+import {
+  fetchDoctorAppointments,
+  startDoctorAppointment,
+  type DoctorAppointment,
+} from "@/lib/api/doctor-dashboard";
 import { useRealtimeRefresh } from "@/lib/realtime";
 
 function todayKey() {
@@ -34,11 +39,13 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function DoctorAppointmentsPage() {
+  const router = useRouter();
   const [weekStart, setWeekStart] = useState(TODAY);
   const [selectedKey, setSelectedKey] = useState(TODAY);
   const [appointments, setAppointments] = useState<DoctorAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [startingAppointmentId, setStartingAppointmentId] = useState<number | null>(null);
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => offsetKey(weekStart, index)), [weekStart]);
 
@@ -83,6 +90,31 @@ export default function DoctorAppointmentsPage() {
   }, [appointments]);
 
   const dayAppts = byDate.get(selectedKey) ?? [];
+
+  const handleSeePatient = useCallback(
+    async (appointment: DoctorAppointment) => {
+      const session = readDoctorLoginSession();
+      if (!session?.accessToken) {
+        setError("You are not logged in.");
+        return;
+      }
+
+      setStartingAppointmentId(appointment.id);
+      setError("");
+      try {
+        const response = await startDoctorAppointment(session.accessToken, appointment.id);
+        setAppointments((current) =>
+          current.map((item) => (item.id === appointment.id ? response.appointment : item)),
+        );
+        router.push(response.treatment_url || `/doctor/appointments/${appointment.id}`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not open the patient record.");
+      } finally {
+        setStartingAppointmentId(null);
+      }
+    },
+    [router],
+  );
 
   return (
     <DoctorPageShell eyebrow="Schedule" title="Appointments">
@@ -195,18 +227,33 @@ export default function DoctorAppointmentsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 self-start">
-                    <span className="inline-flex items-center rounded-full bg-muted/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      {appointment.time}
-                    </span>
-                    <span
-                      className={cn(
-                        "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium",
-                        STATUS_COLORS[appointment.status] ?? "bg-muted text-muted-foreground",
-                      )}
+                  <div className="flex flex-wrap items-center gap-2 self-start sm:justify-end">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center rounded-full bg-muted/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {appointment.time}
+                      </span>
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium",
+                          STATUS_COLORS[appointment.status] ?? "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {appointmentLabel(appointment.status)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleSeePatient(appointment)}
+                      disabled={startingAppointmentId === appointment.id}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {appointmentLabel(appointment.status)}
-                    </span>
+                      {startingAppointmentId === appointment.id ? (
+                        <Stethoscope className="h-3.5 w-3.5 animate-pulse" />
+                      ) : (
+                        <UserRoundCheck className="h-3.5 w-3.5" />
+                      )}
+                      See patient
+                    </button>
                   </div>
                 </div>
               ))}

@@ -1,14 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { ExternalLink, RefreshCw, Stethoscope, UserRoundCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import { formatCanadaPacificDateKey } from "@/lib/time-zone";
-import { fetchDoctorSummary, fetchDoctorToday, type DoctorAppointment, type DoctorSummary, type DoctorTodayResponse } from "@/lib/api/doctor-dashboard";
+import { fetchDoctorSummary, fetchDoctorToday, startDoctorAppointment, type DoctorAppointment, type DoctorSummary, type DoctorTodayResponse } from "@/lib/api/doctor-dashboard";
 import { useRealtimeRefresh } from "@/lib/realtime";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -49,7 +50,17 @@ function StatCard({
   );
 }
 
-function QueueRow({ appointment, highlight = false }: { appointment: DoctorAppointment; highlight?: boolean }) {
+function QueueRow({
+  appointment,
+  highlight = false,
+  isStarting = false,
+  onSeePatient,
+}: {
+  appointment: DoctorAppointment;
+  highlight?: boolean;
+  isStarting?: boolean;
+  onSeePatient: (appointment: DoctorAppointment) => void;
+}) {
   return (
     <div
       className={cn(
@@ -78,17 +89,32 @@ function QueueRow({ appointment, highlight = false }: { appointment: DoctorAppoi
         >
           {appointmentLabel(appointment.status)}
         </span>
+        <Button
+          size="sm"
+          onClick={() => onSeePatient(appointment)}
+          disabled={isStarting}
+          className="h-8 rounded-full px-3 text-xs"
+        >
+          {isStarting ? (
+            <Stethoscope className="h-3.5 w-3.5 animate-pulse" />
+          ) : (
+            <UserRoundCheck className="h-3.5 w-3.5" />
+          )}
+          See patient
+        </Button>
       </div>
     </div>
   );
 }
 
 export default function DoctorDashboardPage() {
+  const router = useRouter();
   const [summary, setSummary] = useState<DoctorSummary | null>(null);
   const [today, setToday] = useState<DoctorTodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [startingAppointmentId, setStartingAppointmentId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     const session = readDoctorLoginSession();
@@ -121,6 +147,38 @@ export default function DoctorDashboardPage() {
   useRealtimeRefresh(loadData, {
     paths: ["/doctors/me", "/appointments", "/pool", "/patient-intake"],
   });
+
+  const handleSeePatient = useCallback(
+    async (appointment: DoctorAppointment) => {
+      const session = readDoctorLoginSession();
+      if (!session?.accessToken) {
+        setError("You are not logged in.");
+        return;
+      }
+
+      setStartingAppointmentId(appointment.id);
+      setError("");
+      try {
+        const response = await startDoctorAppointment(session.accessToken, appointment.id);
+        setToday((current) =>
+          current
+            ? {
+                ...current,
+                appointments: current.appointments.map((item) =>
+                  item.id === appointment.id ? response.appointment : item,
+                ),
+              }
+            : current,
+        );
+        router.push(response.treatment_url || `/doctor/appointments/${appointment.id}`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not open the patient record.");
+      } finally {
+        setStartingAppointmentId(null);
+      }
+    },
+    [router],
+  );
 
   const active = (today?.appointments ?? []).filter(
     (appointment) => appointment.status === "IN_PROGRESS" || appointment.status === "ASSIGNED",
@@ -177,7 +235,13 @@ export default function DoctorDashboardPage() {
         ) : active.length > 0 ? (
           <div className="space-y-2.5">
             {active.map((appointment, index) => (
-              <QueueRow key={appointment.id} appointment={appointment} highlight={index === 0} />
+              <QueueRow
+                key={appointment.id}
+                appointment={appointment}
+                highlight={index === 0}
+                isStarting={startingAppointmentId === appointment.id}
+                onSeePatient={handleSeePatient}
+              />
             ))}
           </div>
         ) : (

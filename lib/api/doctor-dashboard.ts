@@ -95,6 +95,69 @@ export type DoctorAppointmentsResponse = {
   appointments: DoctorAppointment[];
 };
 
+export type DoctorAppointmentStartResponse = {
+  appointment: DoctorAppointment;
+  treatment_url: string;
+  oscar: {
+    appointment_no: number | null;
+    demographic_no: number;
+    provider_no: string;
+  };
+};
+
+export type DoctorDrugSearchItem = {
+  source_id: number;
+  drug_code: string | null;
+  name: string;
+  brand_name: string | null;
+  descriptor: string | null;
+  drug_identification_number: string | null;
+};
+
+export type DoctorPrescriptionPayload = {
+  drug_catalog_source_id?: number | null;
+  drug_code?: string | null;
+  drug_name: string;
+  ingredient?: string | null;
+  instructions: string;
+  quantity?: string | null;
+  repeats?: number | null;
+  no_substitution?: boolean;
+  prn?: boolean;
+  long_term?: string | null;
+  method?: string | null;
+  route?: string | null;
+  frequency?: string | null;
+  take_min?: number | null;
+  take_max?: number | null;
+  duration?: string | null;
+  duration_unit?: string | null;
+  additional_note?: string | null;
+  signature_data_url?: string | null;
+  signature_label?: string | null;
+  pdf_size?: string | null;
+};
+
+export type DoctorPrescriptionRecord = DoctorPrescriptionPayload & {
+  prescription_id: number;
+  appointment_id: number;
+  patient_id: number;
+  status: string;
+  oscar_drug_id: number | null;
+  created_at: string | null;
+};
+
+export type DoctorPrescriptionSaveResponse = {
+  prescription: DoctorPrescriptionRecord;
+  appointment: DoctorAppointment;
+  print_url: string;
+  document?: {
+    document_id: number;
+    document_name: string;
+    download_url: string;
+  };
+};
+
 export type DoctorPoolResponse = {
   appointments: DoctorAppointment[];
 };
@@ -192,6 +255,41 @@ export async function fetchDoctorAppointments(
   return apiRequest<DoctorAppointmentsResponse>({
     endpoint: withQuery(API_ENDPOINTS.doctorMeAppointments, options),
     headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchDoctorAppointment(accessToken: string, appointmentId: number) {
+  return apiRequest<{ appointment: DoctorAppointment }>({
+    endpoint: `${API_ENDPOINTS.doctorMeAppointments}/${appointmentId}`,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function startDoctorAppointment(accessToken: string, appointmentId: number) {
+  return apiRequest<DoctorAppointmentStartResponse, never>({
+    endpoint: `${API_ENDPOINTS.doctorMeAppointments}/${appointmentId}/start`,
+    method: "POST",
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function searchDoctorDrugs(accessToken: string, query: string) {
+  return apiRequest<{ drugs: DoctorDrugSearchItem[] }>({
+    endpoint: withQuery("/api/v1/doctors/me/drugs/search", { q: query, limit: "20" }),
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function saveDoctorPrescription(
+  accessToken: string,
+  appointmentId: number,
+  payload: DoctorPrescriptionPayload,
+) {
+  return apiRequest<DoctorPrescriptionSaveResponse, DoctorPrescriptionPayload>({
+    endpoint: `${API_ENDPOINTS.doctorMeAppointments}/${appointmentId}/prescriptions`,
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: payload,
   });
 }
 

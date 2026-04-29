@@ -14,7 +14,6 @@ import {
   storeDoctorSelectionToken,
   clearDoctorSelectionToken,
   clearDoctorOtpToken,
-  isDoctorOnboardingComplete,
 } from "@/lib/doctor/session";
 import type {
   DoctorAcceptExistingInviteResponse,
@@ -231,11 +230,7 @@ export default function DoctorLoginPage() {
       emrLaunchUrl: finalResponse.emr_launch_url ?? undefined,
     });
 
-    router.replace(
-      isDoctorOnboardingComplete(finalResponse.doctor_id)
-        ? "/doctor/dashboard"
-        : "/doctor/onboarding",
-    );
+    router.replace("/doctor/dashboard");
   }
 
   function updateField(field: keyof DoctorLoginFormData, value: string) {

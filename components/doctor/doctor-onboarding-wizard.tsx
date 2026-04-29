@@ -61,6 +61,12 @@ import {
 } from "@/lib/api/doctor-onboarding";
 
 type OnboardingStage = "hlth_2870" | "hlth_2950" | "hlth_2832" | "hlth_2991" | "hlth_2820" | "complete";
+type EditableOnboardingStage = Exclude<OnboardingStage, "complete">;
+
+type DoctorOnboardingWizardProps = {
+  initialStage?: EditableOnboardingStage;
+  optionalMode?: boolean;
+};
 
 type DoctorHlth2870FormState = Omit<DoctorHlth2870Request, "signature"> & {
   signature_label: string;
@@ -912,9 +918,12 @@ function SignaturePad({
   );
 }
 
-export function DoctorOnboardingWizard() {
+export function DoctorOnboardingWizard({
+  initialStage = "hlth_2870",
+  optionalMode = false,
+}: DoctorOnboardingWizardProps = {}) {
   const router = useRouter();
-  const [stage, setStage] = useState<OnboardingStage>("hlth_2870");
+  const [stage, setStage] = useState<OnboardingStage>(initialStage);
   const [step1Form, setStep1Form] = useState<DoctorHlth2870FormState>(initialStep1FormState);
   const [step1SignatureDataUrl, setStep1SignatureDataUrl] = useState("");
   const [step1Errors, setStep1Errors] = useState<FieldErrorState<keyof DoctorHlth2870FormState | "signature">>({});
@@ -954,6 +963,10 @@ export function DoctorOnboardingWizard() {
 
   useEffect(() => {
     if (!doctorId) return;
+    if (optionalMode) {
+      setStage(initialStage);
+      return;
+    }
     if (isDoctorOnboardingComplete(doctorId)) {
       setStage("complete");
       router.replace("/doctor/dashboard");
@@ -964,13 +977,13 @@ export function DoctorOnboardingWizard() {
     if (storedStage) {
       setStage(storedStage);
     }
-  }, [doctorId, router]);
+  }, [doctorId, initialStage, optionalMode, router]);
 
   useEffect(() => {
-    if (stage === "complete") {
+    if (stage === "complete" && !optionalMode) {
       router.replace("/doctor/dashboard");
     }
-  }, [router, stage]);
+  }, [optionalMode, router, stage]);
 
   useEffect(() => {
     if (stage !== "hlth_2870" || !accessToken) {
@@ -1473,7 +1486,7 @@ export function DoctorOnboardingWizard() {
 
   function completeOnboarding() {
     setStage("complete");
-    if (doctorId) {
+    if (doctorId && !optionalMode) {
       clearDoctorOnboardingStage(doctorId);
       markDoctorOnboardingComplete(doctorId);
     }
@@ -1520,13 +1533,17 @@ export function DoctorOnboardingWizard() {
       }
 
       setStep1Response(response);
-    setStep2Form((current) => ({
-      ...current,
-      msp_practitioner_number: step1Form.msp_billing_number.trim(),
-      facility_or_practice_name: step1Form.principal_practitioner_name.trim(),
-    }));
-    setStep2SignatureDataUrl(step1SignatureDataUrl);
-    setStep3Form((current) => ({
+      if (optionalMode) {
+        setStage("complete");
+        return;
+      }
+      setStep2Form((current) => ({
+        ...current,
+        msp_practitioner_number: step1Form.msp_billing_number.trim(),
+        facility_or_practice_name: step1Form.principal_practitioner_name.trim(),
+      }));
+      setStep2SignatureDataUrl(step1SignatureDataUrl);
+      setStep3Form((current) => ({
         ...current,
         msp_billing_number: step1Form.msp_billing_number.trim(),
         payment_number: step1Form.msp_billing_number.trim(),
@@ -1609,6 +1626,10 @@ export function DoctorOnboardingWizard() {
       }
 
       setStep2Response(response);
+      if (optionalMode) {
+        setStage("complete");
+        return;
+      }
       setStage("hlth_2832");
       if (doctorId) {
         storeDoctorOnboardingStage(doctorId, "hlth_2832");
@@ -1670,6 +1691,10 @@ export function DoctorOnboardingWizard() {
       }
 
       setStep3Response(response);
+      if (optionalMode) {
+        setStage("complete");
+        return;
+      }
       setStep4Form((current) => ({
         ...current,
         given_name: splitDisplayName(step3Form.payee_name.trim()).givenName,
@@ -1773,8 +1798,8 @@ export function DoctorOnboardingWizard() {
         );
       }
 
-      setStage("hlth_2820");
-      if (doctorId) {
+      setStage(optionalMode ? "complete" : "hlth_2820");
+      if (doctorId && !optionalMode) {
         storeDoctorOnboardingStage(doctorId, "hlth_2820");
       }
     } catch (error) {
@@ -1790,10 +1815,17 @@ export function DoctorOnboardingWizard() {
 
   if (stage === "complete") {
     return (
-      <DoctorPageShell eyebrow="Onboarding complete" title="Redirecting to dashboard">
+      <DoctorPageShell
+        eyebrow={optionalMode ? "Form saved" : "Onboarding complete"}
+        title={optionalMode ? "Submission received" : "Redirecting to dashboard"}
+      >
         <DoctorSection
           title="Submission received"
-          description="All onboarding steps are complete. Taking you to the doctor dashboard now."
+          description={
+            optionalMode
+              ? "Your signed form has been sent back to the clinic."
+              : "All onboarding steps are complete. Taking you to the doctor dashboard now."
+          }
         >
           <div className="space-y-6">
             <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
@@ -1801,14 +1833,26 @@ export function DoctorOnboardingWizard() {
                 <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-emerald-900">
-                    Onboarding complete
+                    {optionalMode ? "Form submitted" : "Onboarding complete"}
                   </p>
                   <p className="text-sm text-emerald-800">
-                    Redirecting to the dashboard...
+                    {optionalMode
+                      ? "You can return to settings or continue working from the dashboard."
+                      : "Redirecting to the dashboard..."}
                   </p>
                 </div>
               </div>
             </div>
+            {optionalMode ? (
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button type="button" variant="outline" onClick={() => router.push("/doctor/settings")}>
+                  Back to settings
+                </Button>
+                <Button type="button" onClick={() => router.push("/doctor/dashboard")}>
+                  Go to dashboard
+                </Button>
+              </div>
+            ) : null}
           </div>
         </DoctorSection>
       </DoctorPageShell>
@@ -2004,7 +2048,7 @@ export function DoctorOnboardingWizard() {
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button type="submit" className="h-12 flex-1" disabled={step1Submitting}>
-                {step1Submitting ? "Submitting..." : "Continue to step 2"}
+                {step1Submitting ? "Submitting..." : optionalMode ? "Submit form" : "Continue to step 2"}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
