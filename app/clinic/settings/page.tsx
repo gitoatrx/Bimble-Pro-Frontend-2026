@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Eye, EyeOff, FileText, KeyRound, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { normalizeProvinceCodeInput, stripCountrySuffix } from "@/lib/form-validation";
 import { cn } from "@/lib/utils";
 import { AdditionalPaymentNumberApplicationSection } from "@/components/clinic/additional-payment-number-application";
 import { ExcellerisAcceptableUseSection } from "@/components/clinic/excelleris-acceptable-use-form";
@@ -479,13 +480,19 @@ function ClinicProfileSettings() {
             (typeof record.contact_email === "string" && record.contact_email) ||
             "",
           address:
-            (typeof record.address === "string" && record.address) ||
-            (typeof record.street_address === "string" && record.street_address) ||
+            stripCountrySuffix(
+              (typeof record.address === "string" && record.address) ||
+                (typeof record.street_address === "string" && record.street_address) ||
+                "",
+            ) ||
             "",
           city: (typeof record.city === "string" && record.city) || "",
           province:
-            (typeof record.province === "string" && record.province) ||
-            (typeof record.state === "string" && record.state) ||
+            normalizeProvinceCodeInput(
+              (typeof record.province === "string" && record.province) ||
+                (typeof record.state === "string" && record.state) ||
+                "",
+            ) ||
             "",
         });
       })
@@ -529,7 +536,9 @@ function ClinicProfileSettings() {
         <Input
           placeholder="Street address"
           value={fields.address}
-          onChange={(e) => setFields((f) => ({ ...f, address: e.target.value }))}
+          onChange={(e) =>
+            setFields((f) => ({ ...f, address: stripCountrySuffix(e.target.value) }))
+          }
         />
         <div className="flex gap-3">
           <Input
@@ -541,7 +550,12 @@ function ClinicProfileSettings() {
             placeholder="Province"
             className="w-24"
             value={fields.province}
-            onChange={(e) => setFields((f) => ({ ...f, province: e.target.value }))}
+            onChange={(e) =>
+              setFields((f) => ({
+                ...f,
+                province: normalizeProvinceCodeInput(e.target.value),
+              }))
+            }
           />
         </div>
       </div>

@@ -1,5 +1,5 @@
 import type { ClinicAddressSelection } from "@/lib/clinic/types";
-import { provinceOptions } from "@/lib/clinic/onboarding";
+import { normalizeProvinceCodeInput, stripCountrySuffix } from "@/lib/form-validation";
 
 type AddressComponent = {
   long_name?: string;
@@ -91,22 +91,6 @@ function getAddressComponent(
   );
 }
 
-const provinceShortNameMap: Record<string, string> = {
-  AB: "Alberta",
-  BC: "British Columbia",
-  MB: "Manitoba",
-  NB: "New Brunswick",
-  NL: "Newfoundland and Labrador",
-  NT: "Northwest Territories",
-  NS: "Nova Scotia",
-  NU: "Nunavut",
-  ON: "Ontario",
-  PE: "Prince Edward Island",
-  QC: "Quebec",
-  SK: "Saskatchewan",
-  YT: "Yukon",
-};
-
 export function parseClinicAddressSelection(
   place: GooglePlaceDetails,
 ): ClinicAddressSelection | null {
@@ -137,12 +121,7 @@ export function parseClinicAddressSelection(
     "administrative_area_level_1",
     true,
   );
-  const province =
-    (provinceLong && provinceOptions.includes(provinceLong)
-      ? provinceLong
-      : provinceShort
-        ? provinceShortNameMap[provinceShort.toUpperCase()]
-        : undefined) ?? provinceLong ?? "";
+  const province = normalizeProvinceCodeInput(provinceLong ?? provinceShort ?? "");
   const postalCode = getAddressComponent(components, "postal_code") ?? "";
 
   if (!addressParts && !city && !province && !postalCode) {
@@ -152,10 +131,10 @@ export function parseClinicAddressSelection(
   return {
     address:
       addressParts ||
-      place.formattedAddress ||
-      place.formatted_address ||
-      place.displayName ||
-      place.name ||
+      stripCountrySuffix(place.formattedAddress) ||
+      stripCountrySuffix(place.formatted_address) ||
+      stripCountrySuffix(place.displayName) ||
+      stripCountrySuffix(place.name) ||
       "",
     city,
     province,
@@ -189,12 +168,9 @@ export function parseClinicAddressPrediction(
 
   return address
     ? {
-        address,
+        address: stripCountrySuffix(address),
         city,
-        province:
-          provinceMatch && provinceShortNameMap[provinceMatch[1].toUpperCase()]
-            ? provinceShortNameMap[provinceMatch[1].toUpperCase()]
-            : provinceMatch?.[1].toUpperCase() ?? "",
+        province: normalizeProvinceCodeInput(provinceMatch?.[1] ?? ""),
         postalCode: postalMatch
           ? `${postalMatch[1].toUpperCase()} ${postalMatch[2].toUpperCase()}`
           : "",

@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { normalizeProvinceCodeInput } from "@/lib/form-validation";
 import { doctorStatusLabel } from "@/lib/doctor/types";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { SignaturePad } from "@/components/doctor/doctor-form-shared";
@@ -993,7 +994,10 @@ function DoctorProfileModal({
                           <SimpleField label="Phone" value={firstString(businessContact.phone_number, "—")} />
                           <SimpleField label="Email" value={firstString(businessContact.email, "—")} />
                           <SimpleField label="City" value={firstString(businessContact.city, "—")} />
-                          <SimpleField label="Province" value={firstString(businessContact.province, "—")} />
+        <SimpleField
+          label="Province"
+          value={normalizeProvinceCodeInput(firstString(businessContact.province, "—")) || "—"}
+        />
                           <SimpleField label="Postal code" value={firstString(businessContact.postal_code, "—")} />
                           <SimpleField label="Mailing address" value={firstString(businessContact.mailing_address, "—")} />
                         </div>

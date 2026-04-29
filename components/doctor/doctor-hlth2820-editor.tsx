@@ -11,7 +11,7 @@ import {
   digitsOnly,
   normalizePostalCode,
 } from "@/components/doctor/doctor-form-shared";
-import { getLiveTenDigitError, hasExactDigits } from "@/lib/form-validation";
+import { getLiveTenDigitError, hasExactDigits, stripCountrySuffix } from "@/lib/form-validation";
 import {
   fetchDoctorHlth2820Onboarding,
   submitDoctorHlth2820Onboarding,
@@ -154,7 +154,7 @@ export function DoctorHlth2820Editor({
         const savedValues = response.saved_values;
         setForm({
           name: savedValues.name ?? "",
-          address: savedValues.address ?? "",
+          address: stripCountrySuffix(savedValues.address ?? ""),
           city: savedValues.city ?? "",
           postal_code: savedValues.postal_code ?? "",
           phone_number: savedValues.phone_number ?? "",

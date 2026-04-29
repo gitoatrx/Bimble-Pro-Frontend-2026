@@ -17,6 +17,7 @@ import {
 import {
   capitalizeLeadingLetter,
   hasExactDigits,
+  stripCountrySuffix,
   validateEmail,
 } from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
@@ -164,7 +165,7 @@ function parseResponseState(response: ClinicHl7HealthCareProviderSetupResponse) 
     clinicName: asString(sourceRecord.clinicName) || asString(fallbackRecord["Clinic Name"]),
     primaryContact:
       asString(sourceRecord.primaryContact) || asString(fallbackRecord["Primary Contact"]),
-    address: asString(sourceRecord.address) || asString(fallbackRecord.Address),
+    address: stripCountrySuffix(asString(sourceRecord.address) || asString(fallbackRecord.Address)),
     telephoneNumber:
       asString(sourceRecord.telephoneNumber) || asString(fallbackRecord["Telephone Number"]),
     email: asString(sourceRecord.email) || asString(fallbackRecord.Email),

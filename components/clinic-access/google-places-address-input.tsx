@@ -15,6 +15,7 @@ import type {
   GooglePlacesService,
 } from "@/lib/clinic/google-places";
 import type { ClinicAddressSelection } from "@/lib/clinic/types";
+import { stripCountrySuffix } from "@/lib/form-validation";
 
 type GooglePlacesAddressInputProps = {
   id: string;
@@ -183,7 +184,7 @@ export function GooglePlacesAddressInput({
     setIsLoading(false);
 
     const placesService = placesServiceRef.current;
-    const selectedAddress = prediction.description;
+    const selectedAddress = stripCountrySuffix(prediction.description);
     skipSearchForValueRef.current = selectedAddress;
 
     latestChangeHandler.current(selectedAddress);
@@ -208,9 +209,9 @@ export function GooglePlacesAddressInput({
         if (status === "OK" && place) {
           const selection = parseClinicAddressSelection(place);
           const resolvedAddress =
-            place.formatted_address ||
+            stripCountrySuffix(place.formatted_address) ||
             selection?.address ||
-            prediction.description;
+            stripCountrySuffix(prediction.description);
 
           skipSearchForValueRef.current = resolvedAddress;
           latestChangeHandler.current(resolvedAddress);

@@ -74,6 +74,7 @@ import {
   normalizeCityInput,
   normalizePostalCode,
   normalizeProvinceCodeInput,
+  stripCountrySuffix,
 } from "@/lib/form-validation";
 import { useRealtimeRefresh } from "@/lib/realtime";
 
@@ -444,7 +445,7 @@ export function PatientPortalDashboard() {
         date_of_birth: nextProfile.date_of_birth ?? "",
         phn: limitDigits(nextProfile.phn ?? "", 10),
         email: nextProfile.email ?? "",
-        address_line_1: nextProfile.address_line_1 ?? "",
+        address_line_1: stripCountrySuffix(nextProfile.address_line_1 ?? ""),
         city: normalizeCityInput(nextProfile.city ?? ""),
         province: normalizeProvinceCodeInput(nextProfile.province ?? ""),
         postal_code: normalizePostalCode(nextProfile.postal_code ?? ""),
@@ -582,7 +583,7 @@ export function PatientPortalDashboard() {
     setBookingDraft((current) => ({
       ...current,
       preferred_pharmacy_name: option.name,
-      preferred_pharmacy_address: option.address,
+      preferred_pharmacy_address: stripCountrySuffix(option.address),
       preferred_pharmacy_city: option.city,
       preferred_pharmacy_postal_code: option.postal_code || "",
       preferred_pharmacy_phone: option.phone || "",
@@ -989,6 +990,8 @@ export function PatientPortalDashboard() {
           ? rawValue
           : field === "phn"
             ? limitDigits(rawValue, 10)
+            : field === "address_line_1"
+              ? stripCountrySuffix(rawValue)
         : field === "city"
           ? normalizeCityInput(rawValue)
           : field === "phone"
@@ -1753,12 +1756,16 @@ export function PatientPortalDashboard() {
                         {(availableDates.length ? availableDates : nextDates(14)).map((value) => {
                           const selected = bookingDraft.appointment_date === value;
                           return (
-                            <button
-                              key={value}
-                              type="button"
-                              onClick={() =>
-                                setBookingDraft((current) => ({ ...current, appointment_date: value }))
-                              }
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() =>
+                              setBookingDraft((current) => ({
+                                ...current,
+                                appointment_date: value,
+                                appointment_time: "",
+                              }))
+                            }
                               className={cn(
                                 "min-w-[6rem] rounded-2xl border px-3 py-2 text-xs font-semibold transition-all",
                                 selected
@@ -1780,6 +1787,11 @@ export function PatientPortalDashboard() {
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                         Choose a time
                       </p>
+                      {!bookingDraft.appointment_date ? (
+                        <p className="mt-3 text-sm text-slate-500">
+                          Please choose a date before selecting a time.
+                        </p>
+                      ) : null}
                       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {availableTimes.map((value) => {
                           const selected = bookingDraft.appointment_time === value;
@@ -1787,11 +1799,13 @@ export function PatientPortalDashboard() {
                             <button
                               key={value}
                               type="button"
+                              disabled={!bookingDraft.appointment_date}
                               onClick={() =>
                                 setBookingDraft((current) => ({ ...current, appointment_time: value }))
                               }
                               className={cn(
                                 "rounded-2xl border px-3 py-2 text-sm font-medium transition-all",
+                                !bookingDraft.appointment_date && "cursor-not-allowed opacity-50",
                                 selected
                                   ? "border-sky-300 bg-sky-50 text-sky-700"
                                   : "border-slate-200 bg-white text-slate-700 hover:border-sky-200",
@@ -1942,7 +1956,7 @@ export function PatientPortalDashboard() {
                                       <div>
                                         <div className="text-sm font-semibold text-slate-900">{option.name}</div>
                                         <div className="mt-1 text-sm text-slate-600">
-                                          {[option.address, option.city, option.postal_code]
+                                          {[stripCountrySuffix(option.address), option.city, option.postal_code]
                                             .filter(Boolean)
                                             .join(", ")}
                                         </div>
@@ -1980,7 +1994,7 @@ export function PatientPortalDashboard() {
                             </div>
                             <div className="mt-1 text-slate-600">
                               {[
-                                bookingDraft.preferred_pharmacy_address,
+                                stripCountrySuffix(bookingDraft.preferred_pharmacy_address),
                                 bookingDraft.preferred_pharmacy_city,
                                 bookingDraft.preferred_pharmacy_postal_code,
                               ]

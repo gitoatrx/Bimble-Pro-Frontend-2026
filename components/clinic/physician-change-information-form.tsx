@@ -13,6 +13,7 @@ import {
   type ClinicPhysicianChangeOfficeHourSlot,
 } from "@/lib/api/clinic-dashboard";
 import { hasExactDigits } from "@/lib/form-validation";
+import { stripCountrySuffix } from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import {
   capitalizeLeadingLetter,
@@ -276,7 +277,7 @@ function parseResponseState(response: ClinicPhysicianChangeInformationResponse) 
     name: asString(sourceRecord.name) || asString(fallbackRecord.Name),
     mohBillingNumber:
       asString(sourceRecord.mohBillingNumber) || asString(fallbackRecord["MOH Billing Number"]),
-    address: asString(sourceRecord.address) || asString(fallbackRecord.Address),
+    address: stripCountrySuffix(asString(sourceRecord.address) || asString(fallbackRecord.Address)),
     specialty: asString(sourceRecord.specialty) || asString(fallbackRecord.Specialty),
     officeContactName:
       asString(sourceRecord.officeContactName) || asString(fallbackRecord["Office Contact Name"]),
