@@ -11,11 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import {
-  hasExactDigits,
-  updateLiveFutureDateField,
-  updateLiveTenDigitField,
-} from "@/lib/form-validation";
+import { hasExactDigits } from "@/lib/form-validation";
 import {
   fetchClinicPayment2876Form,
   submitClinicPayment2876Form,
@@ -25,7 +21,7 @@ import {
   type ClinicPayment2876UiContent,
 } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
-import { SignaturePad, digitsOnly } from "@/components/doctor/doctor-form-shared";
+import { SignaturePad, digitsOnly, useLiveFormValidation } from "@/components/doctor/doctor-form-shared";
 
 const FORM_TITLE = "Application for Additional Payment Number";
 
@@ -376,6 +372,7 @@ function Payment2876Dialog({
   });
   const [formState, setFormState] = useState<Payment2876FormState>(() => createEmptyState());
   const [fieldErrors, setFieldErrors] = useState<Payment2876FieldErrors>({});
+  const liveValidation = useLiveFormValidation(setFormState, setFieldErrors);
   const signatureDataUrlRef = useRef("");
 
   useEffect(() => {
@@ -820,9 +817,7 @@ function Payment2876Dialog({
                       type="date"
                       value={formState.effectiveDate}
                       onChange={(event) =>
-                        updateLiveFutureDateField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateFutureDateField(
                           "effectiveDate",
                           event.target.value,
                           "Effective date",
@@ -879,9 +874,7 @@ function Payment2876Dialog({
                       type="tel"
                       value={formState.telephoneNumber}
                       onChange={(event) =>
-                        updateLiveTenDigitField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateTenDigitField(
                           "telephoneNumber",
                           event.target.value,
                           "Telephone number",
@@ -898,9 +891,7 @@ function Payment2876Dialog({
                       type="tel"
                       value={formState.faxNumber}
                       onChange={(event) =>
-                        updateLiveTenDigitField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateTenDigitField(
                           "faxNumber",
                           event.target.value,
                           "Fax number",

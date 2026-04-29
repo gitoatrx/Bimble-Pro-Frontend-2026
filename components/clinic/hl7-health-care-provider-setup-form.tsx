@@ -17,12 +17,10 @@ import {
 import {
   capitalizeLeadingLetter,
   hasExactDigits,
-  updateLiveFutureDateField,
-  updateLiveTenDigitField,
   validateEmail,
 } from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
-import { digitsOnly } from "@/components/doctor/doctor-form-shared";
+import { digitsOnly, useLiveFormValidation } from "@/components/doctor/doctor-form-shared";
 
 const FORM_TITLE = "HL7 Health Care Provider Setup Form";
 
@@ -215,6 +213,7 @@ function Hl7SetupDialog({
   });
   const [formState, setFormState] = useState<Hl7SetupFormState>(() => createEmptyState());
   const [fieldErrors, setFieldErrors] = useState<Hl7SetupFieldErrors>({});
+  const liveValidation = useLiveFormValidation(setFormState, setFieldErrors);
 
   useEffect(() => {
     if (!open) return;
@@ -457,9 +456,7 @@ function Hl7SetupDialog({
                       type="tel"
                       value={formState.telephoneNumber}
                       onChange={(event) =>
-                        updateLiveTenDigitField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateTenDigitField(
                           "telephoneNumber",
                           event.target.value,
                           "Telephone number",
@@ -660,9 +657,7 @@ function Hl7SetupDialog({
                       type="tel"
                       value={formState.emrTelephoneNumber}
                       onChange={(event) =>
-                        updateLiveTenDigitField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateTenDigitField(
                           "emrTelephoneNumber",
                           event.target.value,
                           "EMR telephone number",
@@ -692,9 +687,7 @@ function Hl7SetupDialog({
                       type="date"
                       value={formState.implementationDate}
                       onChange={(event) =>
-                        updateLiveFutureDateField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateFutureDateField(
                           "implementationDate",
                           event.target.value,
                           "Implementation date",
@@ -715,9 +708,7 @@ function Hl7SetupDialog({
                       type="tel"
                       value={formState.fallbackFaxNumber}
                       onChange={(event) =>
-                        updateLiveTenDigitField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateTenDigitField(
                           "fallbackFaxNumber",
                           event.target.value,
                           "Fax number for unsupported lab content",

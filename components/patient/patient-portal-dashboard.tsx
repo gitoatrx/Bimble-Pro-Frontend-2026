@@ -80,16 +80,28 @@ type ProfileDraft = {
   first_name: string;
   last_name: string;
   phone: string;
+  date_of_birth: string;
+  phn: string;
   email: string;
   address_line_1: string;
-  address_line_2: string;
   city: string;
   province: string;
   postal_code: string;
 };
 
 type ProfileFormErrors = Partial<
-  Record<"first_name" | "last_name" | "phone" | "email" | "city" | "province" | "postal_code", string>
+  Record<
+    | "first_name"
+    | "last_name"
+    | "phone"
+    | "date_of_birth"
+    | "phn"
+    | "email"
+    | "city"
+    | "province"
+    | "postal_code",
+    string
+  >
 >;
 
 type PortalNavItem = {
@@ -133,9 +145,10 @@ const emptyProfileDraft: ProfileDraft = {
   first_name: "",
   last_name: "",
   phone: "",
+  date_of_birth: "",
+  phn: "",
   email: "",
   address_line_1: "",
-  address_line_2: "",
   city: "",
   province: "",
   postal_code: "",
@@ -193,13 +206,6 @@ function formatCalendarDate(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return value;
   return `${match[2]}/${match[3]}/${match[1]}`;
-}
-
-function formatPhoneInput(raw: string) {
-  const digits = raw.replace(/\D/g, "").slice(0, 10);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 function normalizeServiceName(value: string) {
@@ -431,9 +437,10 @@ export function PatientPortalDashboard() {
         first_name: normalizeNameInput(nextProfile.first_name ?? ""),
         last_name: normalizeNameInput(nextProfile.last_name ?? ""),
         phone: limitDigits(nextProfile.phone ?? "", 10),
+        date_of_birth: nextProfile.date_of_birth ?? "",
+        phn: limitDigits(nextProfile.phn ?? "", 10),
         email: nextProfile.email ?? "",
         address_line_1: nextProfile.address_line_1 ?? "",
-        address_line_2: nextProfile.address_line_2 ?? "",
         city: normalizeCityInput(nextProfile.city ?? ""),
         province: normalizeProvinceCodeInput(nextProfile.province ?? ""),
         postal_code: normalizePostalCode(nextProfile.postal_code ?? ""),
@@ -596,14 +603,10 @@ export function PatientPortalDashboard() {
       if (!bookingDraft.pharmacy_choice) {
         return "Please choose Bimble pharmacy or your preferred pharmacy.";
       }
-      if (!bookingDraft.preferred_pharmacy_name) {
-        return bookingDraft.pharmacy_choice === "bimble"
-          ? "Please choose your preferred pharmacy for this test flow."
-          : "Please choose a pharmacy from the list.";
-      }
       if (
         bookingDraft.pharmacy_choice === "preferred" &&
-        (!bookingDraft.preferred_pharmacy_address ||
+        (!bookingDraft.preferred_pharmacy_name ||
+          !bookingDraft.preferred_pharmacy_address ||
           !bookingDraft.preferred_pharmacy_city ||
           !bookingDraft.preferred_pharmacy_postal_code ||
           !bookingDraft.preferred_pharmacy_phone)
@@ -649,6 +652,8 @@ export function PatientPortalDashboard() {
         first_name: profileDraft.first_name.trim(),
         last_name: profileDraft.last_name.trim(),
         phone: limitDigits(profileDraft.phone, 10),
+        date_of_birth: profileDraft.date_of_birth,
+        phn: limitDigits(profileDraft.phn, 10),
         email: profileDraft.email.trim(),
         city: normalizeCityInput(profileDraft.city),
         province: normalizeProvinceCodeInput(profileDraft.province),
@@ -659,9 +664,10 @@ export function PatientPortalDashboard() {
         first_name: normalizeNameInput(updated.first_name ?? ""),
         last_name: normalizeNameInput(updated.last_name ?? ""),
         phone: limitDigits(updated.phone ?? "", 10),
+        date_of_birth: updated.date_of_birth ?? "",
+        phn: limitDigits(updated.phn ?? "", 10),
         email: updated.email ?? "",
         address_line_1: updated.address_line_1 ?? "",
-        address_line_2: updated.address_line_2 ?? "",
         city: normalizeCityInput(updated.city ?? ""),
         province: normalizeProvinceCodeInput(updated.province ?? ""),
         postal_code: normalizePostalCode(updated.postal_code ?? ""),
@@ -960,13 +966,17 @@ export function PatientPortalDashboard() {
 
   function handleSignOut() {
     clearPatientLoginSession();
-    router.replace("/patient-portal");
+    router.replace("/patient-portal?mode=login");
   }
 
   function updateProfileField(field: keyof ProfileDraft, rawValue: string) {
     const nextValue =
       field === "first_name" || field === "last_name"
         ? normalizeNameInput(rawValue)
+        : field === "date_of_birth"
+          ? rawValue
+          : field === "phn"
+            ? limitDigits(rawValue, 10)
         : field === "city"
           ? normalizeCityInput(rawValue)
           : field === "phone"
@@ -989,6 +999,10 @@ export function PatientPortalDashboard() {
         nextErrors[field] = getLiveAlphabeticError(nextValue, field.replaceAll("_", " "));
       } else if (field === "phone") {
         nextErrors.phone = getLiveTenDigitError(nextValue, "phone number");
+      } else if (field === "date_of_birth") {
+        nextErrors.date_of_birth = getLiveFutureDateError(nextValue, "Date of birth");
+      } else if (field === "phn") {
+        nextErrors.phn = getLiveTenDigitError(nextValue, "PHN");
       } else if (field === "email") {
         nextErrors.email = getLiveEmailError(nextValue, "email address");
       } else if (field === "city") {
@@ -1022,6 +1036,21 @@ export function PatientPortalDashboard() {
       nextErrors.phone = "Phone number is required.";
     } else {
       nextErrors.phone = getLiveTenDigitError(profileDraft.phone, "phone number");
+    }
+
+    if (!profileDraft.date_of_birth.trim()) {
+      nextErrors.date_of_birth = "Date of birth is required.";
+    } else {
+      nextErrors.date_of_birth = getLiveFutureDateError(
+        profileDraft.date_of_birth,
+        "Date of birth",
+      );
+    }
+
+    if (!profileDraft.phn.trim()) {
+      nextErrors.phn = "PHN is required.";
+    } else {
+      nextErrors.phn = getLiveTenDigitError(profileDraft.phn, "PHN");
     }
 
     if (!profileDraft.email.trim()) {
@@ -1241,9 +1270,33 @@ export function PatientPortalDashboard() {
                   <div className="text-xs text-rose-600">{profileFormErrors.email}</div>
                 ) : null}
               </label>
+              <label className="grid gap-2 text-sm text-slate-700">
+                Date of birth
+                <Input
+                  type="date"
+                  value={profileDraft.date_of_birth}
+                  max={getCanadaPacificDateKey()}
+                  onChange={(event) => updateProfileField("date_of_birth", event.target.value)}
+                />
+                {profileFormErrors.date_of_birth ? (
+                  <div className="text-xs text-rose-600">{profileFormErrors.date_of_birth}</div>
+                ) : null}
+              </label>
+              <label className="grid gap-2 text-sm text-slate-700">
+                PHN
+                <Input
+                  value={profileDraft.phn}
+                  onChange={(event) => updateProfileField("phn", event.target.value)}
+                  inputMode="numeric"
+                  maxLength={10}
+                />
+                {profileFormErrors.phn ? (
+                  <div className="text-xs text-rose-600">{profileFormErrors.phn}</div>
+                ) : null}
+              </label>
               <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
                 <label className="grid gap-2 text-sm text-slate-700">
-                  Address line 1
+                  Address
                   <Input
                     value={profileDraft.address_line_1}
                     onChange={(event) =>
@@ -1255,56 +1308,42 @@ export function PatientPortalDashboard() {
                   />
                 </label>
                 <label className="grid gap-2 text-sm text-slate-700">
-                  Address line 2
+                  City
                   <Input
-                    value={profileDraft.address_line_2}
-                    onChange={(event) =>
-                      setProfileDraft((current) => ({
-                        ...current,
-                        address_line_2: event.target.value,
-                      }))
-                    }
+                    value={profileDraft.city}
+                    onChange={(event) => updateProfileField("city", event.target.value)}
+                    autoCapitalize="words"
                   />
+                  {profileFormErrors.city ? (
+                    <div className="text-xs text-rose-600">{profileFormErrors.city}</div>
+                  ) : null}
                 </label>
               </div>
-              <label className="grid gap-2 text-sm text-slate-700">
-                City
-                <Input
-                  value={profileDraft.city}
-                  onChange={(event) => updateProfileField("city", event.target.value)}
-                  autoCapitalize="words"
-                />
-                {profileFormErrors.city ? (
-                  <div className="text-xs text-rose-600">{profileFormErrors.city}</div>
-                ) : null}
-              </label>
-              <label className="grid gap-2 text-sm text-slate-700">
-                Province
-                <Input
-                  value={profileDraft.province}
-                  onChange={(event) => updateProfileField("province", event.target.value)}
-                  maxLength={2}
-                />
-                {profileFormErrors.province ? (
-                  <div className="text-xs text-rose-600">{profileFormErrors.province}</div>
-                ) : null}
-              </label>
-              <label className="grid gap-2 text-sm text-slate-700">
-                Postal code
-                <Input
-                  value={profileDraft.postal_code}
-                  onChange={(event) => updateProfileField("postal_code", event.target.value)}
-                  autoCapitalize="characters"
-                  maxLength={7}
-                />
-                {profileFormErrors.postal_code ? (
-                  <div className="text-xs text-rose-600">{profileFormErrors.postal_code}</div>
-                ) : null}
-              </label>
-              <label className="grid gap-2 text-sm text-slate-700">
-                Status
-                <Input value={profile?.status ?? ""} disabled />
-              </label>
+              <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
+                <label className="grid gap-2 text-sm text-slate-700">
+                  Province
+                  <Input
+                    value={profileDraft.province}
+                    onChange={(event) => updateProfileField("province", event.target.value)}
+                    maxLength={2}
+                  />
+                  {profileFormErrors.province ? (
+                    <div className="text-xs text-rose-600">{profileFormErrors.province}</div>
+                  ) : null}
+                </label>
+                <label className="grid gap-2 text-sm text-slate-700">
+                  Postal code
+                  <Input
+                    value={profileDraft.postal_code}
+                    onChange={(event) => updateProfileField("postal_code", event.target.value)}
+                    autoCapitalize="characters"
+                    maxLength={7}
+                  />
+                  {profileFormErrors.postal_code ? (
+                    <div className="text-xs text-rose-600">{profileFormErrors.postal_code}</div>
+                  ) : null}
+                </label>
+              </div>
             </div>
 
             {profileMessage ? (

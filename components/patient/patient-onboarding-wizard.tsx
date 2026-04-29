@@ -521,9 +521,19 @@ export function PatientOnboardingWizard() {
 
     setSubmitting(true);
     try {
+      const isPreferredPharmacy = pharmacyChoice === "preferred";
       const response = await completePatientIntake(intakeToken, {
         fulfillment,
         pharmacyChoice,
+        preferredPharmacyName: isPreferredPharmacy ? draft.preferredPharmacyName.trim() : undefined,
+        preferredPharmacyAddress: isPreferredPharmacy
+          ? draft.preferredPharmacyAddress.trim()
+          : undefined,
+        preferredPharmacyCity: isPreferredPharmacy ? draft.preferredPharmacyCity.trim() : undefined,
+        preferredPharmacyPostalCode: isPreferredPharmacy
+          ? draft.preferredPharmacyPostalCode.trim()
+          : undefined,
+        preferredPharmacyPhone: isPreferredPharmacy ? draft.preferredPharmacyPhone.trim() : undefined,
       });
       const completionData: PatientIntakeCompletion = {
         appointmentId: response.appointment_id,
@@ -1350,7 +1360,7 @@ export function PatientOnboardingWizard() {
               disabled={
                 !draft.pharmacyChoice ||
                 submitting ||
-                !draft.preferredPharmacyName.trim()
+                (draft.pharmacyChoice === "preferred" && !draft.preferredPharmacyName.trim())
               }
               onClick={() => {
                 if (!draft.pharmacyChoice) return;

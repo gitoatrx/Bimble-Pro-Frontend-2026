@@ -12,16 +12,14 @@ import {
   type ClinicPhysicianChangeInformationResponse,
   type ClinicPhysicianChangeOfficeHourSlot,
 } from "@/lib/api/clinic-dashboard";
-import {
-  hasExactDigits,
-  updateLiveTenDigitField,
-} from "@/lib/form-validation";
+import { hasExactDigits } from "@/lib/form-validation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import {
   capitalizeLeadingLetter,
   digitsOnly,
   normalizeNameInput,
   validateEmail,
+  useLiveFormValidation,
 } from "@/components/doctor/doctor-form-shared";
 
 const FORM_TITLE = "Physician Change Information Form";
@@ -332,6 +330,7 @@ function PhysicianChangeDialog({
   });
   const [formState, setFormState] = useState<PhysicianChangeFormState>(() => createEmptyState());
   const [fieldErrors, setFieldErrors] = useState<PhysicianChangeFieldErrors>({});
+  const liveValidation = useLiveFormValidation(setFormState, setFieldErrors);
 
   function updatePhoneField(
     field: PhysicianChangePhoneField,
@@ -339,7 +338,7 @@ function PhysicianChangeDialog({
     label: string,
     kind: "phone number" | "fax number" = "phone number",
   ) {
-    updateLiveTenDigitField(setFormState, setFieldErrors, field, nextValue, label, kind);
+    liveValidation.updateTenDigitField(field, nextValue, label, kind);
   }
 
   useEffect(() => {

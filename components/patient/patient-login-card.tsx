@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 
 type PatientLoginCardProps = {
   phone: string;
+  phoneError?: string;
   dateOfBirth: string;
   showDateOfBirth?: boolean;
   dateOfBirthLabel?: string;
@@ -18,6 +19,7 @@ type PatientLoginCardProps = {
 
 export function PatientLoginCard({
   phone,
+  phoneError,
   dateOfBirth,
   showDateOfBirth = true,
   dateOfBirthLabel = "Date of birth",
@@ -38,7 +40,9 @@ export function PatientLoginCard({
             onChange={(event) => onPhoneChange(event.target.value)}
             placeholder="Enter the phone on file"
             autoComplete="tel"
+            inputMode="numeric"
           />
+          {phoneError ? <span className="text-xs font-normal text-destructive">{phoneError}</span> : null}
         </label>
 
         {showDateOfBirth ? (

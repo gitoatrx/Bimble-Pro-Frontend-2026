@@ -4,7 +4,7 @@ import { PatientPortalDashboard } from "@/components/patient/patient-portal-dash
 export default function PatientPortalProfilePage() {
   return (
     <ClinicFlowShell
-      backHref="/patient-portal"
+      backHref="/patient-portal?mode=login"
       backLabel="Back to patient login"
       contentClassName="max-w-6xl"
     >

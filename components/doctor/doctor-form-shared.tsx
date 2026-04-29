@@ -1,9 +1,13 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  updateLiveFutureDateField,
+  updateLiveTenDigitField,
+} from "@/lib/form-validation";
 export {
   capitalizeLeadingLetter,
   digitsOnly,
@@ -309,4 +313,26 @@ export function SignaturePad({
       ) : null}
     </div>
   );
+}
+
+export function useLiveFormValidation<
+  TState extends Record<string, unknown>,
+  TField extends string,
+>(
+  setFormState: Dispatch<SetStateAction<TState>>,
+  setFieldErrors: Dispatch<SetStateAction<Partial<Record<TField, string>>>>,
+) {
+  return {
+    updateTenDigitField(
+      field: TField,
+      rawValue: string | null | undefined,
+      label: string,
+      kind: "phone number" | "fax number" = "phone number",
+    ) {
+      updateLiveTenDigitField(setFormState, setFieldErrors, field, rawValue, label, kind);
+    },
+    updateFutureDateField(field: TField, rawValue: string | null | undefined, label: string) {
+      updateLiveFutureDateField(setFormState, setFieldErrors, field, rawValue, label);
+    },
+  };
 }

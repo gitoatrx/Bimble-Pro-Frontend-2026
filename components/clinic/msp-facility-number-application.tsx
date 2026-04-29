@@ -15,8 +15,6 @@ import { cn } from "@/lib/utils";
 import {
   capitalizeLeadingLetter,
   hasExactDigits,
-  updateLiveFutureDateField,
-  updateLiveTenDigitField,
   normalizeCityInput,
   normalizeNameInput,
   validateEmail,
@@ -30,6 +28,7 @@ import {
   type ClinicFacilityFormUiContent,
 } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
+import { useLiveFormValidation } from "@/components/doctor/doctor-form-shared";
 
 const FORM_CODE = "hlth-2948";
 const FORM_TITLE = "Application for MSP Facility Number";
@@ -599,6 +598,7 @@ function MSPApplicationDialog({
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<keyof FacilityFormState, string | undefined>>
   >({});
+  const liveValidation = useLiveFormValidation(setFormState, setFieldErrors);
 
   useEffect(() => {
     if (!open) {
@@ -972,9 +972,7 @@ function MSPApplicationDialog({
                       type="date"
                       value={formState.facilityEffectiveDate}
                       onChange={(event) =>
-                        updateLiveFutureDateField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateFutureDateField(
                           "facilityEffectiveDate",
                           event.target.value,
                           "Facility effective date",
@@ -991,9 +989,7 @@ function MSPApplicationDialog({
                       type="date"
                       value={formState.dateSigned}
                       onChange={(event) =>
-                        updateLiveFutureDateField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateFutureDateField(
                           "dateSigned",
                           event.target.value,
                           "Date signed",
@@ -1031,9 +1027,7 @@ function MSPApplicationDialog({
                       type="tel"
                       value={formState.contactPhoneNumber}
                       onChange={(event) =>
-                        updateLiveTenDigitField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateTenDigitField(
                           "contactPhoneNumber",
                           event.target.value,
                           "Contact phone number",
@@ -1051,9 +1045,7 @@ function MSPApplicationDialog({
                       placeholder="Optional"
                       value={formState.contactFaxNumber}
                       onChange={(event) =>
-                        updateLiveTenDigitField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateTenDigitField(
                           "contactFaxNumber",
                           event.target.value,
                           "Contact fax number",

@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { PatientLoginCard } from "@/components/patient/patient-login-card";
 import { PatientOtpCard } from "@/components/patient/patient-otp-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  getLiveDigitCountError,
+  getLiveFutureDateError,
+  getLiveTenDigitError,
+} from "@/lib/form-validation";
 import {
   submitPatientPhoneLogin,
   submitPatientPhoneProfileLogin,
@@ -18,14 +24,19 @@ type LoginStep = "identify" | "otp" | "profile";
 
 export default function PatientPortalLoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const mode = searchParams.get("mode");
   const [step, setStep] = useState<LoginStep>("identify");
   const [phone, setPhone] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [phn, setPhn] = useState("");
+  const [dateOfBirthError, setDateOfBirthError] = useState("");
+  const [phnError, setPhnError] = useState("");
   const [otpToken, setOtpToken] = useState("");
   const [channel, setChannel] = useState("SMS");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -34,19 +45,28 @@ export default function PatientPortalLoginPage() {
 
   useEffect(() => {
     const storedSession = readPatientLoginSession();
-    if (storedSession) {
+    if (storedSession && mode !== "login") {
       router.replace("/patient-portal/profile");
     }
-  }, [router]);
+  }, [mode, router]);
 
   async function handleSendOtp() {
+    const normalizedPhone = phone.replace(/\D/g, "").slice(0, 10);
+    const nextPhoneError = getLiveTenDigitError(normalizedPhone, "phone number");
+    setPhoneError(nextPhoneError);
+
+    if (nextPhoneError || normalizedPhone.length !== 10) {
+      setError("Enter a valid 10-digit phone number.");
+      return;
+    }
+
     setIsSubmitting(true);
     setError("");
     setNotice("");
 
     try {
       const response = await submitPatientPhoneLogin({
-        phone: phone.trim(),
+        phone: normalizedPhone,
       });
       setOtpToken(response.otp_token);
       setChannel(response.channel);
@@ -99,7 +119,7 @@ export default function PatientPortalLoginPage() {
 
     try {
       const response = await submitPatientPhoneLogin({
-        phone: phone.trim(),
+        phone: phone.replace(/\D/g, "").slice(0, 10),
       });
       setOtpToken(response.otp_token);
       setChannel(response.channel);
@@ -128,6 +148,16 @@ export default function PatientPortalLoginPage() {
 
   async function handleCompleteProfile() {
     if (!otpToken) return;
+
+    const nextDateOfBirthError = getLiveFutureDateError(dateOfBirth, "Date of birth");
+    const nextPhnError = getLiveDigitCountError(phn, "PHN", 10);
+    setDateOfBirthError(nextDateOfBirthError);
+    setPhnError(nextPhnError);
+
+    if (!dateOfBirth || !phn.trim() || nextDateOfBirthError || nextPhnError) {
+      setError("Enter a valid date of birth and 10-digit PHN.");
+      return;
+    }
 
     setIsCompletingProfile(true);
     setError("");
@@ -181,12 +211,18 @@ export default function PatientPortalLoginPage() {
         {step === "identify" ? (
           <PatientLoginCard
             phone={phone}
+            phoneError={phoneError}
             dateOfBirth={dateOfBirth}
             showDateOfBirth={false}
             isSubmitting={isSubmitting}
             error={error}
             notice={notice}
-            onPhoneChange={setPhone}
+            onPhoneChange={(value) => {
+              const nextPhone = value.replace(/\D/g, "").slice(0, 10);
+              setPhone(nextPhone);
+              setPhoneError(getLiveTenDigitError(nextPhone, "phone number"));
+              setError("");
+            }}
             onDateOfBirthChange={setDateOfBirth}
             onSubmit={() => void handleSendOtp()}
           />
@@ -217,19 +253,35 @@ export default function PatientPortalLoginPage() {
                 <Input
                   type="date"
                   value={dateOfBirth}
-                  onChange={(event) => setDateOfBirth(event.target.value)}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    setDateOfBirth(nextValue);
+                    setDateOfBirthError(getLiveFutureDateError(nextValue, "Date of birth"));
+                    setError("");
+                  }}
                   autoComplete="bday"
                 />
+                {dateOfBirthError ? (
+                  <span className="text-xs font-normal text-destructive">{dateOfBirthError}</span>
+                ) : null}
               </label>
 
               <label className="grid gap-2 text-sm font-medium text-slate-700">
                 PHN
                 <Input
                   value={phn}
-                  onChange={(event) => setPhn(event.target.value.replace(/\D/g, "").slice(0, 20))}
+                  onChange={(event) => {
+                    const nextValue = event.target.value.replace(/\D/g, "").slice(0, 10);
+                    setPhn(nextValue);
+                    setPhnError(getLiveDigitCountError(nextValue, "PHN", 10));
+                    setError("");
+                  }}
                   inputMode="numeric"
                   placeholder="Enter the patient PHN"
                 />
+                {phnError ? (
+                  <span className="text-xs font-normal text-destructive">{phnError}</span>
+                ) : null}
               </label>
 
               {error ? (
@@ -242,7 +294,12 @@ export default function PatientPortalLoginPage() {
                 <Button
                   className="h-12 flex-1 rounded-2xl"
                   onClick={() => void handleCompleteProfile()}
-                  disabled={isCompletingProfile || !dateOfBirth || !phn.trim()}
+                  disabled={
+                    isCompletingProfile ||
+                    !dateOfBirth ||
+                    !phn.trim() ||
+                    Boolean(dateOfBirthError || phnError)
+                  }
                 >
                   {isCompletingProfile ? "Opening profile..." : "Open patient profile"}
                 </Button>

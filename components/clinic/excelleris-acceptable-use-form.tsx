@@ -5,11 +5,7 @@ import { AlertCircle, ArrowRight, FileText, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import {
-  hasExactDigits,
-  updateLiveFutureDateField,
-  updateLiveTenDigitField,
-} from "@/lib/form-validation";
+import { hasExactDigits } from "@/lib/form-validation";
 import {
   fetchClinicExcellerisAcceptableUseForm,
   submitClinicExcellerisAcceptableUseForm,
@@ -19,7 +15,7 @@ import {
   type ClinicExcellerisUiContent,
 } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
-import { SignaturePad, digitsOnly } from "@/components/doctor/doctor-form-shared";
+import { SignaturePad, digitsOnly, useLiveFormValidation } from "@/components/doctor/doctor-form-shared";
 
 const FORM_TITLE = "Excelleris Electronic Distribution Application";
 
@@ -270,6 +266,7 @@ function ExcellerisDialog({
   });
   const [formState, setFormState] = useState<ExcellerisFormState>(() => createEmptyState());
   const [fieldErrors, setFieldErrors] = useState<ExcellerisFieldErrors>({});
+  const liveValidation = useLiveFormValidation(setFormState, setFieldErrors);
   const signatureDataUrlRef = useRef("");
 
   useEffect(() => {
@@ -553,9 +550,7 @@ function ExcellerisDialog({
                       type="date"
                       value={formState.dateSigned}
                       onChange={(event) =>
-                        updateLiveFutureDateField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateFutureDateField(
                           "dateSigned",
                           event.target.value,
                           "Date signed",
@@ -572,9 +567,7 @@ function ExcellerisDialog({
                       type="tel"
                       value={formState.telephoneNumber}
                       onChange={(event) =>
-                        updateLiveTenDigitField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateTenDigitField(
                           "telephoneNumber",
                           event.target.value,
                           "Telephone number",
@@ -600,9 +593,7 @@ function ExcellerisDialog({
                       type="tel"
                       value={formState.faxNumber}
                       onChange={(event) =>
-                        updateLiveTenDigitField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateTenDigitField(
                           "faxNumber",
                           event.target.value,
                           "Fax number",
@@ -704,9 +695,7 @@ function ExcellerisDialog({
                         type="tel"
                         value={formState.emrFaxNumber}
                         onChange={(event) =>
-                          updateLiveTenDigitField(
-                            setFormState,
-                            setFieldErrors,
+                          liveValidation.updateTenDigitField(
                             "emrFaxNumber",
                             event.target.value,
                             "EMR fax number",
@@ -729,9 +718,7 @@ function ExcellerisDialog({
                         type="tel"
                         value={formState.reportFaxNumber}
                         onChange={(event) =>
-                          updateLiveTenDigitField(
-                            setFormState,
-                            setFieldErrors,
+                          liveValidation.updateTenDigitField(
                             "reportFaxNumber",
                             event.target.value,
                             "Report fax number",

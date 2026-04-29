@@ -561,7 +561,7 @@ export function Homepage() {
               {loginMenuOpen && (
                 <div className="hp-login-menu">
                   <Link
-                    href="/patient-portal"
+                    href="/patient-portal?mode=login"
                     className="hp-login-menu-item"
                     onClick={() => setLoginMenuOpen(false)}
                   >

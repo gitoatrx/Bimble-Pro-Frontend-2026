@@ -21,12 +21,9 @@ import {
   normalizeCityInput,
   normalizeNameInput,
   normalizePostalCode,
+  useLiveFormValidation,
 } from "@/components/doctor/doctor-form-shared";
-import {
-  hasExactDigits,
-  updateLiveFutureDateField,
-  updateLiveTenDigitField,
-} from "@/lib/form-validation";
+import { hasExactDigits } from "@/lib/form-validation";
 
 const FORM_TITLE = "Application for Teleplan Service";
 const TELEPLAN_SIGNATURE_CACHE_KEY = "bimble.clinic.teleplan2820.signature_data_url";
@@ -351,6 +348,7 @@ function Teleplan2820Dialog({
     createEmptyState(),
   );
   const [fieldErrors, setFieldErrors] = useState<Teleplan2820FieldErrors>({});
+  const liveValidation = useLiveFormValidation(setFormState, setFieldErrors);
   const signatureDataUrlRef = React.useRef("");
   const signatureExportPromiseRef = useRef<Promise<void> | null>(null);
 
@@ -724,9 +722,7 @@ function Teleplan2820Dialog({
                     <Input
                       value={formState.phoneNumber}
                       onChange={(event) =>
-                        updateLiveTenDigitField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateTenDigitField(
                           "phoneNumber",
                           event.target.value,
                           "Phone number",
@@ -1015,9 +1011,7 @@ function Teleplan2820Dialog({
                       type="date"
                       value={formState.signatureDate}
                       onChange={(event) =>
-                        updateLiveFutureDateField(
-                          setFormState,
-                          setFieldErrors,
+                        liveValidation.updateFutureDateField(
                           "signatureDate",
                           event.target.value,
                           "Date signed",
