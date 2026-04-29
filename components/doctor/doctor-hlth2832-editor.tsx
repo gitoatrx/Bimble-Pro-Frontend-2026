@@ -11,7 +11,12 @@ import {
   digitsOnly,
   normalizePostalCode,
 } from "@/components/doctor/doctor-form-shared";
-import { getLiveTenDigitError, hasExactDigits } from "@/lib/form-validation";
+import {
+  getLiveTenDigitError,
+  hasExactDigits,
+  normalizeProvinceCodeInput,
+  stripCountrySuffix,
+} from "@/lib/form-validation";
 import {
   fetchDoctorHlth2832Onboarding,
   submitDoctorHlth2832Onboarding,
@@ -142,9 +147,9 @@ export function DoctorHlth2832Editor() {
           account_number: savedValues.account_number ?? "",
           institution_bank_name: savedValues.institution_bank_name ?? "",
           branch_name: savedValues.branch_name ?? "",
-          street_address: savedValues.street_address ?? "",
+          street_address: stripCountrySuffix(savedValues.street_address ?? ""),
           city: savedValues.city ?? "",
-          province: savedValues.province ?? "",
+          province: normalizeProvinceCodeInput(savedValues.province ?? ""),
           postal_code: savedValues.postal_code ?? "",
           telephone: savedValues.telephone ?? "",
           telephone2: savedValues.telephone2 ?? "",
@@ -374,7 +379,7 @@ export function DoctorHlth2832Editor() {
               <Input
                 id="province"
                 value={form.province}
-                onChange={(event) => setField("province", event.target.value)}
+                onChange={(event) => setField("province", normalizeProvinceCodeInput(event.target.value))}
                 placeholder="BC"
               />
               {errors.province ? <p className="text-xs text-destructive">{errors.province}</p> : null}

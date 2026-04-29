@@ -45,7 +45,7 @@ export function normalizeCityInput(value: string | null | undefined) {
 }
 
 export function normalizeProvinceInput(value: string | null | undefined) {
-  return capitalizeLeadingLetter((value ?? "").replace(/[^\p{L}\s.'’-]/gu, ""));
+  return normalizeProvinceCodeInput(value);
 }
 
 const canadianProvinceCodeMap: Record<string, string> = {
@@ -78,6 +78,16 @@ export function normalizeProvinceCodeInput(value: string | null | undefined) {
   }
 
   return canadianProvinceCodeMap[normalized.toLowerCase()] ?? compact;
+}
+
+export function stripCountrySuffix(value: string | null | undefined, country = "Canada") {
+  const normalized = (value ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  const escapedCountry = country.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return normalized.replace(new RegExp(`(?:,\\s*|\\s+)${escapedCountry}\\s*$`, "i"), "").trim();
 }
 
 export function isValidCanadianProvinceCode(value: string | null | undefined) {

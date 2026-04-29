@@ -36,6 +36,7 @@ import {
   normalizeNameInput,
   normalizeProvinceInput,
   normalizeProvinceCodeInput,
+  stripCountrySuffix,
   validateEmail,
 } from "@/lib/form-validation";
 import {
@@ -278,7 +279,7 @@ export function PatientOnboardingWizard() {
   function handleAddressSelected(selection: ClinicAddressSelection) {
     setDraft((current) => ({
       ...current,
-      addressLine: selection.address || current.addressLine,
+      addressLine: stripCountrySuffix(selection.address) || current.addressLine,
       city: selection.city ? normalizeCityInput(selection.city) : current.city,
       province: selection.province
         ? normalizeProvinceInput(selection.province)
@@ -494,10 +495,10 @@ export function PatientOnboardingWizard() {
     }
     if (!draft.city.trim()) e.city = "City is required.";
     else if (!isValidCity(draft.city)) e.city = "Use letters only for the city.";
-    if (!draft.province.trim()) e.province = "Province is required.";
-    else if (!/^[\p{L}][\p{L}\s.'’-]*$/u.test(draft.province.trim())) {
-      e.province = "Use letters only for the province.";
-    }
+  if (!draft.province.trim()) e.province = "Province is required.";
+  else if (!/^[\p{L}][\p{L}\s.'’-]*$/u.test(draft.province.trim())) {
+    e.province = "Enter a valid Canadian province code like BC.";
+  }
     if (!draft.postalCode.trim()) e.postalCode = "Postal code is required.";
     if (!draft.gender) e.gender = "Please select a gender option.";
     setErrors(e);
@@ -878,7 +879,7 @@ export function PatientOnboardingWizard() {
             <GooglePlacesAddressInput
               id="patient-street-address"
               value={draft.addressLine}
-              onChange={(value) => setField("addressLine", capitalizeLeadingLetter(value))}
+              onChange={(value) => setField("addressLine", stripCountrySuffix(capitalizeLeadingLetter(value)))}
               onAddressSelected={handleAddressSelected}
               placeholder="Start typing your address"
             />
@@ -1073,7 +1074,10 @@ export function PatientOnboardingWizard() {
                   <button
                     key={key}
                     type="button"
-                    onClick={() => setField("appointmentDate", key)}
+                    onClick={() => {
+                      setField("appointmentDate", key);
+                      setField("appointmentTime", "");
+                    }}
                     className={cn(
                       "min-w-[5.5rem] shrink-0 rounded-xl border px-3 py-2 text-center text-xs font-semibold transition-all",
                       sel ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:border-primary/40",
@@ -1087,6 +1091,9 @@ export function PatientOnboardingWizard() {
           </div>
           <div className="space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Time</p>
+            {!draft.appointmentDate ? (
+              <p className="text-sm text-muted-foreground">Select a date first to see available times.</p>
+            ) : null}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {availableTimes.map((t) => {
                 const sel = draft.appointmentTime === t;
@@ -1094,9 +1101,11 @@ export function PatientOnboardingWizard() {
                   <button
                     key={t}
                     type="button"
+                    disabled={!draft.appointmentDate}
                     onClick={() => setField("appointmentTime", t)}
                     className={cn(
                       "rounded-xl border px-3 py-2.5 text-sm font-medium transition-all",
+                      !draft.appointmentDate && "cursor-not-allowed opacity-50",
                       sel ? "border-primary bg-primary/10 text-primary" : "border-border bg-card hover:border-primary/30",
                     )}
                   >

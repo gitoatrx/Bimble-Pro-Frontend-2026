@@ -4,6 +4,7 @@ import type {
   PatientOnboardingStep,
 } from "@/lib/patient/types";
 import { initialPatientOnboardingDraft } from "@/lib/patient/types";
+import { normalizeProvinceCodeInput, stripCountrySuffix } from "@/lib/form-validation";
 
 const DRAFT_KEY = "bimble:patient:onboarding-draft";
 const STEP_KEY = "bimble:patient:onboarding-step";
@@ -51,9 +52,9 @@ function parseDraft(raw: string | null): PatientOnboardingDraft {
       emailIfNoPhn: typeof p.emailIfNoPhn === "string" ? p.emailIfNoPhn : "",
       firstName: typeof p.firstName === "string" ? p.firstName : "",
       lastName: typeof p.lastName === "string" ? p.lastName : "",
-      addressLine: typeof p.addressLine === "string" ? p.addressLine : "",
+      addressLine: stripCountrySuffix(typeof p.addressLine === "string" ? p.addressLine : ""),
       city: typeof p.city === "string" ? p.city : "",
-      province: typeof p.province === "string" ? p.province : "",
+      province: normalizeProvinceCodeInput(typeof p.province === "string" ? p.province : ""),
       postalCode: typeof p.postalCode === "string" ? p.postalCode : "",
       gender: typeof p.gender === "string" ? p.gender : "",
       visitType: p.visitType === "virtual" || p.visitType === "walk_in" ? p.visitType : "",
@@ -65,8 +66,9 @@ function parseDraft(raw: string | null): PatientOnboardingDraft {
       // Preserve older sessions by folding the removed step back into the pharmacy step.
       preferredPharmacyName:
         typeof p.preferredPharmacyName === "string" ? p.preferredPharmacyName : "",
-      preferredPharmacyAddress:
+      preferredPharmacyAddress: stripCountrySuffix(
         typeof p.preferredPharmacyAddress === "string" ? p.preferredPharmacyAddress : "",
+      ),
       preferredPharmacyCity:
         typeof p.preferredPharmacyCity === "string" ? p.preferredPharmacyCity : "",
       preferredPharmacyPostalCode:

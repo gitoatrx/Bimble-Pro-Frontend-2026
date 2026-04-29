@@ -4,6 +4,7 @@ import type {
   FieldErrors,
   OnboardingStepKey,
 } from "@/lib/clinic/types";
+import { normalizeProvinceCodeInput } from "@/lib/form-validation";
 
 export const onboardingStepOrder: OnboardingStepKey[] = [
   "clinic",
@@ -13,19 +14,19 @@ export const onboardingStepOrder: OnboardingStepKey[] = [
 ];
 
 export const provinceOptions = [
-  "Alberta",
-  "British Columbia",
-  "Manitoba",
-  "New Brunswick",
-  "Newfoundland and Labrador",
-  "Northwest Territories",
-  "Nova Scotia",
-  "Nunavut",
-  "Ontario",
-  "Prince Edward Island",
-  "Quebec",
-  "Saskatchewan",
-  "Yukon",
+  "AB",
+  "BC",
+  "MB",
+  "NB",
+  "NL",
+  "NT",
+  "NS",
+  "NU",
+  "ON",
+  "PE",
+  "QC",
+  "SK",
+  "YT",
 ];
 
 export const clinicTypeOptions = [
@@ -120,7 +121,7 @@ export function buildClinicRegisterPayload(
     phone: formData.phoneNumber.replace(/\D/g, ""),
     address: formData.address.trim() || undefined,
     city: formData.city.trim() || undefined,
-    province: formData.province.trim() || undefined,
+    province: normalizeProvinceCodeInput(formData.province) || undefined,
     postal_code: formData.postalCode.trim().toUpperCase() || undefined,
     clinic_type: formData.clinicType ? mapClinicTypeToApiValue(formData.clinicType) : undefined,
     established_year: formData.establishedYear ? Number(formData.establishedYear) : undefined,

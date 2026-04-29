@@ -5,6 +5,7 @@ import type {
   ClinicSignupResult,
   OnboardingStepKey,
 } from "@/lib/clinic/types";
+import { normalizeProvinceCodeInput, stripCountrySuffix } from "@/lib/form-validation";
 
 const CLINIC_ONBOARDING_STATE_KEY = "bimble:clinic:onboarding-state";
 const CLINIC_SELECTED_PLAN_KEY = "bimble:clinic:selected-plan";
@@ -181,7 +182,18 @@ export function readClinicOnboardingState() {
 
   try {
     const parsedState: unknown = JSON.parse(rawState);
-    return isStoredClinicOnboardingState(parsedState) ? parsedState : null;
+    if (!isStoredClinicOnboardingState(parsedState)) {
+      return null;
+    }
+
+    return {
+      ...parsedState,
+      formData: {
+        ...parsedState.formData,
+        address: stripCountrySuffix(parsedState.formData.address),
+        province: normalizeProvinceCodeInput(parsedState.formData.province),
+      },
+    };
   } catch {
     return null;
   }
