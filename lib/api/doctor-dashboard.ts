@@ -158,6 +158,16 @@ export type DoctorPrescriptionSaveResponse = {
   };
 };
 
+export type DoctorPrescriptionPrintResponse = {
+  ok: boolean;
+  message: string;
+  document_id?: number;
+  document_name?: string;
+  method?: string | null;
+  printer?: string | null;
+  reader_path?: string | null;
+};
+
 export type DoctorPoolResponse = {
   appointments: DoctorAppointment[];
 };
@@ -290,6 +300,14 @@ export async function saveDoctorPrescription(
     method: "POST",
     headers: authHeaders(accessToken),
     body: payload,
+  });
+}
+
+export async function printDoctorPrescription(accessToken: string, prescriptionId: number) {
+  return apiRequest<DoctorPrescriptionPrintResponse, never>({
+    endpoint: `/api/v1/doctors/me/prescriptions/${prescriptionId}/print`,
+    method: "POST",
+    headers: authHeaders(accessToken),
   });
 }
 

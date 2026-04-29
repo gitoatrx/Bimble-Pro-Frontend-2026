@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, BarChart3, Clock, TrendingUp, Users, Zap } from "lucide-react";
 import { readClinicLoginSession } from "@/lib/clinic/session";
+import { useRealtimeRefresh } from "@/lib/realtime";
 import {
   fetchClinicAnalyticsAppointments,
   fetchClinicAnalyticsDoctors,
@@ -43,7 +44,14 @@ function normalizeStatCards(data: Record<string, unknown> | null) {
     {
       label: "Patients seen",
       value: String(
-        firstNumber(summary.patients_seen, summary.patients, summary.seen, summary.total_patients),
+        firstNumber(
+          summary.patients_seen,
+          summary.active_patients,
+          summary.total_patients,
+          summary.patients,
+          summary.seen,
+          summary.appointments_total,
+        ),
       ),
       sub: "Last 30 days",
       Icon: Users,
@@ -99,6 +107,14 @@ function normalizeMonthlySeries(data: unknown): MonthBar[] {
     .filter(Boolean) as MonthBar[];
 }
 
+function formatChartLabel(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [, month, day] = value.split("-");
+    return `${month}/${day}`;
+  }
+  return value;
+}
+
 function normalizeDoctorStats(data: unknown): DoctorStat[] {
   if (!Array.isArray(data)) return [];
 
@@ -110,7 +126,7 @@ function normalizeDoctorStats(data: unknown): DoctorStat[] {
       if (!name) return null;
       return {
         name,
-        seen: firstNumber(record.seen, record.patients, record.total),
+        seen: firstNumber(record.seen, record.patients, record.completed, record.appointments, record.total),
         pool: firstNumber(record.pool, record.pool_claimed, record.claimed),
         avgTime: formatMinutes(firstNumber(record.avg_time_minutes, record.avg_time_to_claim_minutes, record.avgTimeMinutes)),
       };
@@ -125,20 +141,22 @@ function MonthlyChart({ data }: { data: MonthBar[] }) {
     <div className="rounded-2xl border border-border bg-card p-6">
       <div className="mb-5 flex items-center gap-2">
         <BarChart3 className="h-4 w-4 text-muted-foreground" />
-        <p className="text-sm font-semibold text-foreground">Appointments per month</p>
+        <p className="text-sm font-semibold text-foreground">Appointments trend</p>
       </div>
-      <div className="flex items-end gap-2" style={{ height: 120 }}>
+      <div className="grid min-h-40 grid-cols-[repeat(auto-fit,minmax(42px,1fr))] items-end gap-2">
         {data.length > 0 ? (
           data.map(({ month, count }) => {
             const pct = (count / maxCount) * 100;
             return (
-              <div key={month} className="flex flex-1 flex-col items-center gap-1.5">
+              <div key={month} className="flex min-w-0 flex-col items-center gap-1.5">
                 <span className="text-[10px] font-semibold text-primary">{count}</span>
-                <div
-                  className="w-full rounded-t-md bg-primary/60 transition-all"
-                  style={{ height: `${pct}%` }}
-                />
-                <span className="text-[10px] text-muted-foreground">{month}</span>
+                <div className="flex h-28 w-full items-end rounded-lg bg-primary/5 px-1">
+                  <div
+                    className="w-full rounded-t-md bg-primary/70 transition-all"
+                    style={{ height: `${Math.max(pct, count > 0 ? 8 : 0)}%` }}
+                  />
+                </div>
+                <span className="truncate text-[10px] text-muted-foreground">{formatChartLabel(month)}</span>
               </div>
             );
           })
@@ -164,6 +182,57 @@ export default function AnalyticsPage() {
     hasSession ? "" : "You are not logged in. Please sign in again.",
   );
 
+  const loadAnalytics = useCallback(async () => {
+    if (!hasSession) {
+      return;
+    }
+
+    setError("");
+
+    const [overviewData, appointmentsData, doctorData, patientsData, poolData] = await Promise.all([
+      fetchClinicAnalyticsOverview(accessToken, "30d"),
+      fetchClinicAnalyticsAppointments(accessToken, "30d", "day"),
+      fetchClinicAnalyticsDoctors(accessToken, "30d"),
+      fetchClinicAnalyticsPatients(accessToken, "30d"),
+      fetchClinicAnalyticsPool(accessToken, "30d"),
+    ]);
+
+    const overviewRecord = overviewData as Record<string, unknown>;
+    const appointmentsRecord = appointmentsData as Record<string, unknown>;
+    const doctorRecords = doctorData as unknown;
+    const patientsRecord = patientsData as Record<string, unknown>;
+    const poolRecord = poolData as Record<string, unknown>;
+    const appointmentsTotal = firstNumber(overviewRecord.appointments_total);
+    const poolClaimed = firstNumber(poolRecord.pool, poolRecord.total, poolRecord.pool_claimed);
+
+    setOverview({
+      ...overviewRecord,
+      patients_seen:
+        overviewRecord.patients_seen ??
+        overviewRecord.active_patients ??
+        patientsRecord.total_patients ??
+        patientsRecord.total ??
+        appointmentsTotal,
+      pool_claimed:
+        overviewRecord.pool_claimed ??
+        overviewRecord.pool ??
+        poolClaimed,
+      pool_pickup_rate:
+        overviewRecord.pool_pickup_rate ??
+        overviewRecord.pickup_rate ??
+        (appointmentsTotal > 0 ? (poolClaimed / appointmentsTotal) * 100 : 0),
+    });
+    setMonthly(
+      normalizeMonthlySeries(
+        appointmentsRecord.months ??
+          appointmentsRecord.data ??
+          appointmentsRecord.series ??
+          appointmentsRecord.results,
+      ),
+    );
+    setDoctors(normalizeDoctorStats(doctorRecords));
+  }, [accessToken, hasSession]);
+
   useEffect(() => {
     if (!hasSession) {
       return;
@@ -171,55 +240,51 @@ export default function AnalyticsPage() {
 
     let active = true;
 
-    Promise.all([
-      fetchClinicAnalyticsOverview(accessToken, "30d"),
-      fetchClinicAnalyticsAppointments(accessToken, "30d", "month"),
-      fetchClinicAnalyticsDoctors(accessToken, "30d"),
-      fetchClinicAnalyticsPatients(accessToken, "30d"),
-      fetchClinicAnalyticsPool(accessToken, "30d"),
-    ])
-      .then(([overviewData, appointmentsData, doctorData, patientsData, poolData]) => {
-        if (!active) return;
-
-        const overviewRecord = overviewData as Record<string, unknown>;
-        const appointmentsRecord = appointmentsData as Record<string, unknown>;
-        const doctorRecords = doctorData as unknown;
-        const patientsRecord = patientsData as Record<string, unknown>;
-        const poolRecord = poolData as Record<string, unknown>;
-
-        setOverview({
-          ...overviewRecord,
-          patients_seen:
-            overviewRecord.patients_seen ??
-            patientsRecord.total ??
-            patientsRecord.patients_seen,
-          pool:
-            overviewRecord.pool ??
-            poolRecord.total ??
-            poolRecord.pool_claimed,
+    const initialTimer = window.setTimeout(() => {
+      loadAnalytics()
+        .catch((err) => {
+          if (!active) return;
+          setError(err instanceof Error ? err.message : "Could not load analytics.");
+        })
+        .finally(() => {
+          if (active) setLoading(false);
         });
-        setMonthly(
-          normalizeMonthlySeries(
-            appointmentsRecord.months ??
-              appointmentsRecord.data ??
-              appointmentsRecord.series ??
-              appointmentsRecord.results,
-          ),
-        );
-        setDoctors(normalizeDoctorStats(doctorRecords));
-      })
-      .catch((err) => {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : "Could not load analytics.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    }, 0);
 
     return () => {
       active = false;
+      window.clearTimeout(initialTimer);
     };
-  }, [accessToken, hasSession]);
+  }, [hasSession, loadAnalytics]);
+
+  useEffect(() => {
+    if (!hasSession) {
+      return;
+    }
+
+    const refreshTimer = window.setInterval(() => {
+      loadAnalytics().catch((err) => {
+        setError(err instanceof Error ? err.message : "Could not refresh analytics.");
+      });
+    }, 30000);
+
+    const handleFocus = () => {
+      loadAnalytics().catch((err) => {
+        setError(err instanceof Error ? err.message : "Could not refresh analytics.");
+      });
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [hasSession, loadAnalytics]);
+
+  useRealtimeRefresh(() => loadAnalytics(), {
+    enabled: hasSession,
+    paths: ["/appointments", "/pool", "/requests", "/patient-portal", "/clinics/me"],
+  });
 
   const stats = useMemo(() => normalizeStatCards(overview), [overview]);
 

@@ -659,8 +659,9 @@ export function PatientPortalDashboard() {
         last_name: profileDraft.last_name.trim(),
         phone: limitDigits(profileDraft.phone, 10),
         date_of_birth: profileDraft.date_of_birth,
-        phn: limitDigits(profileDraft.phn, 10),
-        email: profileDraft.email.trim(),
+        phn: limitDigits(profileDraft.phn, 10) || null,
+        email: profileDraft.email.trim() || null,
+        address_line_1: profileDraft.address_line_1.trim(),
         city: normalizeCityInput(profileDraft.city),
         province: normalizeProvinceCodeInput(profileDraft.province),
         postal_code: normalizePostalCode(profileDraft.postal_code),
@@ -1053,16 +1054,17 @@ export function PatientPortalDashboard() {
       );
     }
 
-    if (!profileDraft.phn.trim()) {
-      nextErrors.phn = "PHN is required.";
-    } else {
+    if (profileDraft.phn.trim()) {
       nextErrors.phn = getLiveTenDigitError(profileDraft.phn, "PHN");
     }
 
-    if (!profileDraft.email.trim()) {
-      nextErrors.email = "Email is required.";
-    } else {
+    if (profileDraft.email.trim()) {
       nextErrors.email = getLiveEmailError(profileDraft.email, "email address");
+    }
+
+    if (!profileDraft.phn.trim() && !profileDraft.email.trim()) {
+      nextErrors.phn = "Enter a PHN or email.";
+      nextErrors.email = "Enter a PHN or email.";
     }
 
     if (!profileDraft.city.trim()) {

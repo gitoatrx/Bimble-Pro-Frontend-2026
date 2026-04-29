@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import {
   fetchDoctorAppointment,
+  printDoctorPrescription,
   saveDoctorPrescription,
   searchDoctorDrugs,
   type DoctorAppointment,
@@ -196,6 +197,7 @@ export default function DoctorAppointmentTreatmentPage() {
   const [savedPrescription, setSavedPrescription] = useState<DoctorPrescriptionRecord | null>(null);
   const [documentDownloadUrl, setDocumentDownloadUrl] = useState<string | null>(null);
   const [reviewReady, setReviewReady] = useState(false);
+  const [printMessage, setPrintMessage] = useState("");
 
   const loadAppointment = useCallback(async () => {
     const session = readDoctorLoginSession();
@@ -300,6 +302,7 @@ export default function DoctorAppointmentTreatmentPage() {
     if (!canSave) return;
     setSavedPrescription(null);
     setDocumentDownloadUrl(null);
+    setPrintMessage("");
     setReviewReady(true);
     window.setTimeout(() => document.getElementById("prescription-review")?.scrollIntoView({ behavior: "smooth" }), 50);
   };
@@ -317,7 +320,10 @@ export default function DoctorAppointmentTreatmentPage() {
       setDocumentDownloadUrl(response.document?.download_url ?? null);
       setAppointment(response.appointment);
       if (options.printAfterSave) {
-        window.setTimeout(() => void handlePrintDocument(response.document?.download_url ?? null), 100);
+        window.setTimeout(
+          () => void handlePrintDocument(response.document?.download_url ?? null, response.prescription.prescription_id),
+          100,
+        );
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save prescription.");
@@ -326,14 +332,34 @@ export default function DoctorAppointmentTreatmentPage() {
     }
   };
 
-  async function handlePrintDocument(downloadUrl = documentDownloadUrl) {
+  async function handlePrintDocument(downloadUrl = documentDownloadUrl, prescriptionId = savedPrescription?.prescription_id) {
     const session = readDoctorLoginSession();
-    if (!session?.accessToken || !downloadUrl) {
+    if (!session?.accessToken) {
       window.print();
       return;
     }
 
     setError("");
+    setPrintMessage("");
+    if (prescriptionId) {
+      try {
+        const response = await printDoctorPrescription(session.accessToken, prescriptionId);
+        setPrintMessage(response.printer ? `${response.message} Printer: ${response.printer}` : response.message);
+        return;
+      } catch (err) {
+        setPrintMessage(
+          err instanceof Error
+            ? `Server print was not available: ${err.message}. Opening the PDF instead.`
+            : "Server print was not available. Opening the PDF instead.",
+        );
+      }
+    }
+
+    if (!downloadUrl) {
+      window.print();
+      return;
+    }
+
     try {
       const response = await fetch(downloadUrl, {
         headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -402,6 +428,7 @@ export default function DoctorAppointmentTreatmentPage() {
                   setSelectedDrug(null);
                   setSavedPrescription(null);
                   setDocumentDownloadUrl(null);
+                  setPrintMessage("");
                   setReviewReady(false);
                 }}
                 className="h-12 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
@@ -539,6 +566,7 @@ export default function DoctorAppointmentTreatmentPage() {
                 Print saved PDF
               </Button>
             </div>
+            {printMessage ? <p className="mt-3 text-sm font-medium text-muted-foreground">{printMessage}</p> : null}
           </DoctorSection>
 
           {reviewReady && selectedDrug ? (
@@ -604,13 +632,23 @@ export default function DoctorAppointmentTreatmentPage() {
                           <option>Letter page</option>
                         </select>
                       </div>
-                      <Button type="button" variant="outline" onClick={() => void handleSave({ printAfterSave: true })} disabled={!canFinalize || saving}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => (savedPrescription ? void handlePrintDocument() : void handleSave({ printAfterSave: true }))}
+                        disabled={!canFinalize || saving}
+                      >
                         Print
                       </Button>
                       <Button type="button" variant="outline" onClick={() => void handleSave()} disabled={!canFinalize || saving}>
                         Paste into EMR
                       </Button>
-                      <Button type="button" variant="outline" onClick={() => void handleSave({ printAfterSave: true })} disabled={!canFinalize || saving}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => (savedPrescription ? void handlePrintDocument() : void handleSave({ printAfterSave: true }))}
+                        disabled={!canFinalize || saving}
+                      >
                         Print & Paste into EMR
                       </Button>
                       <Button type="button" variant="outline" disabled>
@@ -627,6 +665,7 @@ export default function DoctorAppointmentTreatmentPage() {
                           setReviewReady(false);
                           setSavedPrescription(null);
                           setDocumentDownloadUrl(null);
+                          setPrintMessage("");
                         }}
                       >
                         Create New Prescription
@@ -652,6 +691,7 @@ export default function DoctorAppointmentTreatmentPage() {
                   </div>
 
                   {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
+                  {printMessage ? <p className="text-sm font-medium text-muted-foreground">{printMessage}</p> : null}
                   {savedPrescription ? (
                     <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
                       Prescription saved and document created.
