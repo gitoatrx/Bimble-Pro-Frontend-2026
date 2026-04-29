@@ -97,7 +97,9 @@ export function normalizePostalCode(value: string | null | undefined) {
 }
 
 export function isValidCanadianPostalCode(value: string | null | undefined) {
-  return /^[A-Z]\d[A-Z] ?\d[A-Z]\d$/.test(formatPostalCodeInput(value));
+  return /^[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z] ?\d[ABCEGHJ-NPRSTV-Z]\d$/i.test(
+    formatPostalCodeInput(value),
+  );
 }
 
 export function getLiveTenDigitError(
