@@ -113,6 +113,7 @@ export type DoctorDrugSearchItem = {
   name: string;
   brand_name: string | null;
   descriptor: string | null;
+  dosage_form?: string | null;
   drug_identification_number: string | null;
   route?: string | null;
   drug_category?: string | null;
@@ -170,6 +171,17 @@ export type DoctorPrescriptionMedicationPayload = {
   duration_days?: number | null;
 };
 
+export type DoctorSigAbbreviation = {
+  code: string;
+  meaning: string;
+  plain_language: string;
+  category: "dose" | "route" | "frequency" | "timing" | "duration" | "form" | "modifier" | "eye_ear" | "other";
+  oscar_field: string | null;
+  oscar_supported: boolean;
+  discouraged: boolean;
+  notes: string | null;
+};
+
 export type DoctorPrescriptionPayload = {
   drug_catalog_source_id?: number | null;
   drug_code?: string | null;
@@ -199,6 +211,8 @@ export type DoctorPrescriptionRecord = DoctorPrescriptionPayload & {
   prescription_id: number;
   appointment_id: number;
   patient_id: number;
+  specialty_code?: string | null;
+  specialty_name?: string | null;
   status: string;
   oscar_drug_id: number | null;
   created_at: string | null;
@@ -365,6 +379,7 @@ function mapOatRxDrug(item: OatRxDrugSearchItem): DoctorDrugSearchItem {
       primaryIngredient?.ingredient_name,
       primaryDrug?.drug_family,
     ])?.toString() ?? null,
+    dosage_form: item.dosage_form ?? null,
     drug_identification_number: primaryDrug?.din ?? null,
     route: item.route ?? null,
     drug_category: item.drug_category ?? null,
@@ -397,6 +412,12 @@ export async function searchDoctorDrugs(
   }
 
   return { drugs: (data?.data ?? []).map(mapOatRxDrug) };
+}
+
+export async function fetchDoctorSigAbbreviations(options: { q?: string; category?: string } = {}) {
+  return apiRequest<DoctorSigAbbreviation[]>({
+    endpoint: withQuery("/api/v1/prescriptions/sig-abbreviations", options),
+  });
 }
 
 export async function saveDoctorPrescription(

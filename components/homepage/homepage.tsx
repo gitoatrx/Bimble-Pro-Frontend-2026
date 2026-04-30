@@ -613,8 +613,27 @@ export function Homepage() {
   const filteredServices = serviceOptions.filter((service) => {
     if (!careQuery.trim()) return true;
     const query = careQuery.trim().toLowerCase();
-    return service.service_name.toLowerCase().includes(query);
+    return (
+      service.service_name.toLowerCase().includes(query) ||
+      (service.description ?? "").toLowerCase().includes(query)
+    );
   });
+
+  const careSuggestions = filteredServices
+    .map((service) => ({
+      service,
+      label: service.display_reasons?.[0]?.reason_label || service.service_name,
+    }))
+    .sort((a, b) => {
+      const query = careQuery.trim().toLowerCase();
+      if (!query) return a.label.localeCompare(b.label);
+      const aLabel = a.label.toLowerCase();
+      const bLabel = b.label.toLowerCase();
+      const aStarts = aLabel.startsWith(query);
+      const bStarts = bLabel.startsWith(query);
+      if (aStarts !== bStarts) return aStarts ? -1 : 1;
+      return a.label.localeCompare(b.label);
+    });
 
   const resolveServiceId = useCallback(
     (query: string) => {
@@ -834,13 +853,13 @@ export function Homepage() {
                 />
                 <ChevronDown size={16} strokeWidth={2} style={{ color: "#22314d", flexShrink: 0 }} />
 
-                {showCareSuggestions && filteredServices.length > 0 ? (
+                {showCareSuggestions && careSuggestions.length > 0 ? (
                   <div
                     style={{
                       position: "absolute",
                       top: "calc(100% + 6px)",
                       left: 0,
-                      width: "100%",
+                      right: 0,
                       background: "#fff",
                       border: "1px solid #d0d8f0",
                       borderRadius: "12px",
@@ -850,15 +869,14 @@ export function Homepage() {
                       maxHeight: "min(520px, 60vh)",
                       overflowY: "auto",
                       overscrollBehavior: "contain",
-                      scrollbarGutter: "stable",
                     }}
                   >
-                    {filteredServices.map((service) => (
+                    {careSuggestions.map(({ service, label }) => (
                           <button
-                            key={service.service_id}
+                            key={`${service.service_id}-${service.problem_key ?? service.service_name}`}
                             type="button"
                             onMouseDown={() => {
-                              setCareQuery(service.service_name);
+                              setCareQuery(label);
                               setSelectedServiceId(service.service_id);
                               setShowCareSuggestions(false);
                             }}
@@ -868,7 +886,7 @@ export function Homepage() {
                               padding: "10px 16px",
                               fontSize: "14px",
                               color: "#0f1f3d",
-                              background: "none",
+                              background: "transparent",
                               border: "none",
                               cursor: "pointer",
                               display: "flex",
@@ -879,11 +897,13 @@ export function Homepage() {
                               (e.currentTarget as HTMLElement).style.background = "#eef2ff";
                             }}
                             onMouseLeave={(e) => {
-                              (e.currentTarget as HTMLElement).style.background = "none";
+                              (e.currentTarget as HTMLElement).style.background = "transparent";
                             }}
                           >
                             <Search size={13} style={{ color: "#8896b4", flexShrink: 0 }} />
-                            {service.service_name}
+                            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {label}
+                            </span>
                           </button>
                         ))}
                   </div>

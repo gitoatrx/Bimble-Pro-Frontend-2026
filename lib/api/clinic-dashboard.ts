@@ -613,6 +613,12 @@ export type AvailableServiceRecord = {
   requires_phn_billing: boolean;
   is_active: boolean;
   created_at: string;
+  problem_key?: string | null;
+  specialty_codes?: string[];
+  display_reasons?: Array<{
+    reason_key: string;
+    reason_label: string;
+  }>;
 };
 
 export async function fetchAvailableServices() {

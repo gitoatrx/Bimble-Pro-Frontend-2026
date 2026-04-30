@@ -20,7 +20,6 @@ import {
   Video,
   Building2,
 } from "lucide-react";
-import { symptomSuggestions } from "@/components/homepage/content";
 import { CanadianTime } from "@/components/canadian-time";
 import { Button } from "@/components/ui/button";
 import { DisplayDateInput } from "@/components/ui/display-date-input";
@@ -141,6 +140,22 @@ type BookingDraft = {
   preferred_pharmacy_phone: string;
 };
 
+type PatientReasonOption = {
+  value: string;
+  service_id: number;
+  label: string;
+  reason_key: string;
+};
+
+function patientReasonOptionsFromServices(services: PatientPortalService[]): PatientReasonOption[] {
+  return services.map((service) => ({
+    value: `${service.service_id}:${service.problem_key ?? service.service_name}`,
+    service_id: service.service_id,
+    label: service.service_name,
+    reason_key: service.problem_key ?? service.service_code,
+  }));
+}
+
 type FamilyForm = {
   first_name: string;
   last_name: string;
@@ -216,26 +231,6 @@ function nextDates(count: number): string[] {
 
 function formatCalendarDate(value: string) {
   return formatIsoDateToDisplay(value);
-}
-
-function normalizeServiceName(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ");
-}
-
-function resolveServiceIdFromProblem(problemLabel: string, services: PatientPortalService[]) {
-  const normalizedProblem = normalizeServiceName(problemLabel);
-  const suggestion = symptomSuggestions.find(
-    (item) => normalizeServiceName(item.label) === normalizedProblem,
-  );
-  const hints = suggestion?.serviceHints ?? [problemLabel];
-  for (const hint of hints) {
-    const normalizedHint = normalizeServiceName(hint);
-    const match = services.find((service) =>
-      normalizeServiceName(service.service_name).includes(normalizedHint),
-    );
-    if (match) return String(match.service_id);
-  }
-  return "";
 }
 
 function SectionCard({
@@ -320,6 +315,10 @@ export function PatientPortalDashboard() {
   const [requests, setRequests] = useState<PatientPortalRequest[]>([]);
   const [familyMembers, setFamilyMembers] = useState<PatientFamilyMember[]>([]);
   const [services, setServices] = useState<PatientPortalService[]>([]);
+  const patientReasonOptions = useMemo(
+    () => patientReasonOptionsFromServices(services),
+    [services],
+  );
 
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(emptyProfileDraft);
   const [profileFormErrors, setProfileFormErrors] = useState<ProfileFormErrors>({});
@@ -1756,20 +1755,28 @@ export function PatientPortalDashboard() {
                       Problem or reason to visit
                       <select
                         className="h-12 rounded-2xl border border-border bg-white px-4 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                        value={bookingDraft.problem_label}
+                        value={
+                          patientReasonOptions.find(
+                            (option) =>
+                              String(option.service_id) === bookingDraft.service_id &&
+                              option.label === bookingDraft.problem_label,
+                          )?.value ?? ""
+                        }
                         onChange={(event) => {
-                          const nextProblem = event.target.value;
+                          const selectedReason = patientReasonOptions.find(
+                            (option) => option.value === event.target.value,
+                          );
                           setBookingDraft((current) => ({
                             ...current,
-                            problem_label: nextProblem,
-                            service_id: resolveServiceIdFromProblem(nextProblem, services),
+                            problem_label: selectedReason?.label ?? "",
+                            service_id: selectedReason ? String(selectedReason.service_id) : "",
                           }));
                         }}
                       >
                         <option value="">Select a problem</option>
-                        {symptomSuggestions.map((problem) => (
-                          <option key={problem.label} value={problem.label}>
-                            {problem.label}
+                        {patientReasonOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
                           </option>
                         ))}
                       </select>

@@ -8,6 +8,7 @@ import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-
 import { Button } from "@/components/ui/button";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import {
+  fetchDoctorSigAbbreviations,
   fetchDoctorAppointment,
   printDoctorPrescription,
   saveDoctorPrescription,
@@ -15,6 +16,7 @@ import {
   type DoctorAppointment,
   type DoctorDrugSearchItem,
   type DoctorPrescriptionRecord,
+  type DoctorSigAbbreviation,
 } from "@/lib/api/doctor-dashboard";
 import { cn } from "@/lib/utils";
 import { formatIsoDateToDisplay } from "@/lib/date-format";
@@ -39,15 +41,40 @@ type MedicationDraft = {
   drugCode: string | null;
   drugName: string;
   ingredient: string | null;
+  dosageForm: string | null;
+  routeLabel: string | null;
+  drugCategory: string | null;
+  isNarcotic: boolean;
+  technicalReasons: NonNullable<DoctorDrugSearchItem["technical_reasons"]>;
+  selectedReason: string;
   instructions: string;
+  specialInstructions: string;
   quantity: string;
   repeats: string;
   startDate: string;
   durationDays: string;
   endDate: string;
+  sigDose: string;
+  sigRoute: string;
+  sigFrequency: string;
+  sigTiming: string;
+  sigModifier: string;
 };
 
 const DEFAULT_DURATION_DAYS = 30;
+
+const FREQUENCY_OPTIONS = [
+  { code: "OD", label: "Once daily", dosesPerDay: 1 },
+  { code: "BID", label: "Twice daily", dosesPerDay: 2 },
+  { code: "TID", label: "Three times daily", dosesPerDay: 3 },
+  { code: "QID", label: "Four times daily", dosesPerDay: 4 },
+  { code: "QHS", label: "At bedtime", dosesPerDay: 1 },
+  { code: "Q4H", label: "Every 4 hours", dosesPerDay: 6 },
+  { code: "Q6H", label: "Every 6 hours", dosesPerDay: 4 },
+  { code: "Q8H", label: "Every 8 hours", dosesPerDay: 3 },
+  { code: "Q12H", label: "Every 12 hours", dosesPerDay: 2 },
+  { code: "PRN", label: "As needed", dosesPerDay: null },
+];
 
 function dateInputValue(date = new Date()) {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
@@ -179,6 +206,77 @@ function withoutCommas(value: string | null | undefined) {
   return (value || "").replace(/,/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function routeCodeFromDrug(drug: Pick<DoctorDrugSearchItem, "route" | "dosage_form" | "name">) {
+  const route = (drug.route || "").toLowerCase();
+  const form = `${drug.dosage_form || ""} ${drug.name || ""}`.toLowerCase();
+  if (route.includes("oral")) return "PO";
+  if (route.includes("topical") || /cream|ointment|gel|lotion|shampoo|patch/.test(form)) return "TOP";
+  if (route.includes("inhal") || /inhal|puff|neb/.test(form)) return "INH";
+  if (route.includes("nasal")) return "IN";
+  if (route.includes("rectal")) return "PR";
+  if (route.includes("vaginal")) return "PV";
+  if (route.includes("intramuscular")) return "IM";
+  if (route.includes("subcutaneous")) return "SC";
+  if (route.includes("intravenous")) return "IV";
+  if (/inject|vial|syringe|pen/.test(form)) return "";
+  return route ? "" : "PO";
+}
+
+function inferFrequencyCode(text: string) {
+  const value = text.toLowerCase();
+  if (/every\s*12\s*hours|q12h|twice daily|two times daily|bid/.test(value)) return "Q12H";
+  if (/every\s*8\s*hours|q8h|three times daily|tid/.test(value)) return "Q8H";
+  if (/every\s*6\s*hours|q6h/.test(value)) return "Q6H";
+  if (/every\s*4\s*hours|q4h/.test(value)) return "Q4H";
+  if (/four times daily|qid/.test(value)) return "QID";
+  if (/at bedtime|qhs|bedtime/.test(value)) return "QHS";
+  if (/once daily|daily|od\b|qd\b/.test(value)) return "OD";
+  if (/as needed|prn/.test(value)) return "PRN";
+  return "";
+}
+
+function inferDose(text: string) {
+  const match = text.match(/\b(?:take|apply|inhale|instill|insert|inject)\s+([0-9]+(?:\.[0-9]+)?(?:\s*(?:tablet|tablets|capsule|capsules|mL|mg|puff|puffs|drop|drops|unit|units|patch|patches))?)/i);
+  return match?.[1]?.trim() || "1";
+}
+
+function inferDurationDays(text: string) {
+  const match = text.match(/\bfor\s+([0-9]+)(?:\s*-\s*[0-9]+)?\s*(day|days|week|weeks|month|months)\b/i);
+  if (!match) return DEFAULT_DURATION_DAYS;
+  const amount = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(amount) || amount <= 0) return DEFAULT_DURATION_DAYS;
+  const unit = match[2].toLowerCase();
+  if (unit.startsWith("week")) return amount * 7;
+  if (unit.startsWith("month")) return amount * 30;
+  return amount;
+}
+
+function quantityFromDose(dose: string, frequencyCode: string, durationDays: string) {
+  const duration = Number.parseInt(durationDays || "0", 10);
+  const doseAmount = Number.parseFloat(dose || "1");
+  const option = FREQUENCY_OPTIONS.find((item) => item.code === frequencyCode);
+  if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(doseAmount) || !option?.dosesPerDay) {
+    return duration > 0 ? String(duration) : "";
+  }
+  const total = doseAmount * option.dosesPerDay * duration;
+  return Number.isInteger(total) ? String(total) : String(Number(total.toFixed(2)));
+}
+
+function applySigDefaults(medicine: MedicationDraft, sig: string): MedicationDraft {
+  const frequency = inferFrequencyCode(sig);
+  const durationDays = String(inferDurationDays(sig));
+  return {
+    ...medicine,
+    instructions: sig,
+    sigDose: inferDose(sig),
+    sigFrequency: frequency,
+    sigModifier: frequency === "PRN" ? "PRN" : medicine.sigModifier,
+    durationDays,
+    endDate: addDays(medicine.startDate, Number.parseInt(durationDays, 10)),
+    quantity: quantityFromDose(inferDose(sig), frequency, durationDays),
+  };
+}
+
 export default function DoctorAppointmentTreatmentPage() {
   const params = useParams<{ appointmentId: string }>();
   const router = useRouter();
@@ -195,8 +293,8 @@ export default function DoctorAppointmentTreatmentPage() {
   const [saving, setSaving] = useState(false);
   const [savedPrescription, setSavedPrescription] = useState<DoctorPrescriptionRecord | null>(null);
   const [documentDownloadUrl, setDocumentDownloadUrl] = useState<string | null>(null);
-  const [reviewReady, setReviewReady] = useState(false);
   const [printMessage, setPrintMessage] = useState("");
+  const [sigAbbreviations, setSigAbbreviations] = useState<DoctorSigAbbreviation[]>([]);
 
   const loadAppointment = useCallback(async () => {
     const session = readDoctorLoginSession();
@@ -227,6 +325,20 @@ export default function DoctorAppointmentTreatmentPage() {
   useEffect(() => {
     void loadAppointment();
   }, [loadAppointment]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchDoctorSigAbbreviations()
+      .then((items) => {
+        if (!cancelled) setSigAbbreviations(items);
+      })
+      .catch(() => {
+        if (!cancelled) setSigAbbreviations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const session = readDoctorLoginSession();
@@ -264,29 +376,66 @@ export default function DoctorAppointmentTreatmentPage() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
+  const sigByCode = useMemo(
+    () => new Map(sigAbbreviations.map((item) => [item.code, item])),
+    [sigAbbreviations],
+  );
+  const sigText = useCallback((code: string) => sigByCode.get(code)?.plain_language ?? "", [sigByCode]);
+  const sigDoseNumber = (value: string) => {
+    const parsed = Number.parseFloat(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const buildSigInstruction = useCallback(
+    (medicine: Pick<MedicationDraft, "sigDose" | "sigRoute" | "sigFrequency" | "sigTiming" | "sigModifier">) => {
+      const parts = ["Take"];
+      if (medicine.sigDose.trim()) parts.push(medicine.sigDose.trim());
+      if (medicine.sigRoute) parts.push(sigText(medicine.sigRoute));
+      if (medicine.sigFrequency) parts.push(sigText(medicine.sigFrequency));
+      if (medicine.sigTiming && medicine.sigTiming !== medicine.sigFrequency) parts.push(sigText(medicine.sigTiming));
+      if (medicine.sigModifier && medicine.sigModifier !== medicine.sigTiming) parts.push(sigText(medicine.sigModifier));
+      return parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    },
+    [sigText],
+  );
+
   const handleSelectDrug = (drug: DoctorDrugSearchItem) => {
     const startDate = dateInputValue();
-    const durationDays = DEFAULT_DURATION_DAYS;
-    const suggestedInstructions = drug.suggested_sig || "";
+    const suggestedInstructions = drug.suggested_sig || "Take 1 by mouth";
+    const durationDays = inferDurationDays(suggestedInstructions);
+    const frequency = inferFrequencyCode(suggestedInstructions);
+    const dose = inferDose(suggestedInstructions);
+    const route = routeCodeFromDrug(drug);
     const newMedication: MedicationDraft = {
       localId: `${drug.source_id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       drugCatalogSourceId: drug.source_id,
       drugCode: drug.drug_code,
       drugName: drug.name,
       ingredient: drug.brand_name || drug.descriptor,
+      dosageForm: drug.dosage_form ?? drug.descriptor,
+      routeLabel: drug.route ?? null,
+      drugCategory: drug.drug_category ?? null,
+      isNarcotic: Boolean(drug.is_narcotic),
+      technicalReasons: drug.technical_reasons ?? [],
+      selectedReason: drug.technical_reasons?.[0]?.technical_reason ?? "",
       instructions: suggestedInstructions,
-      quantity: String(durationDays),
+      specialInstructions: "",
+      quantity: quantityFromDose(dose, frequency, String(durationDays)),
       repeats: "0",
       startDate,
       durationDays: String(durationDays),
       endDate: addDays(startDate, durationDays),
+      sigDose: dose,
+      sigRoute: route,
+      sigFrequency: frequency,
+      sigTiming: "",
+      sigModifier: frequency === "PRN" ? "PRN" : "",
     };
     setSelectedDrug(drug);
     setMedications((current) => [...current, newMedication]);
     setQuery("");
     setDrugResults([]);
     setDocumentDownloadUrl(null);
-    setReviewReady(false);
   };
 
   const updateMedication = <K extends keyof MedicationDraft>(localId: string, field: K, value: MedicationDraft[K]) => {
@@ -297,12 +446,16 @@ export default function DoctorAppointmentTreatmentPage() {
         if (field === "startDate" || field === "durationDays") {
           const days = Number.parseInt(String(field === "durationDays" ? value : next.durationDays), 10);
           next.endDate = next.startDate && Number.isFinite(days) ? addDays(next.startDate, days) : next.endDate;
+          next.quantity = quantityFromDose(next.sigDose, next.sigFrequency, next.durationDays);
         }
         if (field === "endDate" && next.startDate && value) {
           const start = new Date(`${next.startDate}T00:00:00`);
           const end = new Date(`${String(value)}T00:00:00`);
           const diff = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
-          if (Number.isFinite(diff) && diff > 0) next.durationDays = String(diff);
+          if (Number.isFinite(diff) && diff > 0) {
+            next.durationDays = String(diff);
+            next.quantity = quantityFromDose(next.sigDose, next.sigFrequency, next.durationDays);
+          }
         }
         return next;
       }),
@@ -310,7 +463,38 @@ export default function DoctorAppointmentTreatmentPage() {
     setSavedPrescription(null);
     setDocumentDownloadUrl(null);
     setPrintMessage("");
-    setReviewReady(false);
+
+  };
+
+  const updateMedicationSig = <K extends keyof MedicationDraft>(localId: string, field: K, value: MedicationDraft[K]) => {
+    setMedications((current) =>
+      current.map((item) => {
+        if (item.localId !== localId) return item;
+        const next = { ...item, [field]: value };
+        const updated = { ...next, instructions: buildSigInstruction(next) };
+        if (field === "sigDose" || field === "sigFrequency") {
+          updated.quantity = quantityFromDose(updated.sigDose, updated.sigFrequency, updated.durationDays);
+        }
+        return updated;
+      }),
+    );
+    setSavedPrescription(null);
+    setDocumentDownloadUrl(null);
+    setPrintMessage("");
+
+  };
+
+  const applySuggestedSig = (localId: string, reason: string, sig: string) => {
+    setMedications((current) =>
+      current.map((item) => {
+        if (item.localId !== localId) return item;
+        return applySigDefaults({ ...item, selectedReason: reason }, sig);
+      }),
+    );
+    setSavedPrescription(null);
+    setDocumentDownloadUrl(null);
+    setPrintMessage("");
+
   };
 
   const removeMedication = (localId: string) => {
@@ -318,7 +502,7 @@ export default function DoctorAppointmentTreatmentPage() {
     setSavedPrescription(null);
     setDocumentDownloadUrl(null);
     setPrintMessage("");
-    setReviewReady(false);
+
   };
 
   const canSave = medications.length > 0 && medications.every((item) => item.drugName.trim() && item.instructions.trim());
@@ -327,12 +511,14 @@ export default function DoctorAppointmentTreatmentPage() {
   const buildPrescriptionPayload = () => {
     const primary = medications[0];
     if (!primary) return null;
+    const instructionFor = (item: MedicationDraft) =>
+      [item.instructions.trim(), item.specialInstructions.trim()].filter(Boolean).join(" ");
     return {
       drug_catalog_source_id: primary.drugCatalogSourceId,
       drug_code: primary.drugCode,
       drug_name: primary.drugName,
       ingredient: primary.ingredient,
-      instructions: primary.instructions,
+      instructions: instructionFor(primary),
       quantity: primary.quantity,
       repeats: Number.parseInt(primary.repeats || "0", 10),
       medications: medications.map((item) => ({
@@ -340,15 +526,21 @@ export default function DoctorAppointmentTreatmentPage() {
         drug_code: item.drugCode,
         drug_name: item.drugName,
         ingredient: item.ingredient,
-        instructions: item.instructions,
-        dosage: item.instructions,
+        instructions: instructionFor(item),
+        dosage: instructionFor(item),
         quantity: item.quantity,
         repeats: Number.parseInt(item.repeats || "0", 10),
+        route: item.sigRoute || null,
         start_date: item.startDate,
         end_date: item.endDate,
         duration_days: Number.parseInt(item.durationDays || "0", 10) || null,
       })),
       no_substitution: form.noSubstitution,
+      prn: primary.sigModifier === "PRN" || primary.sigFrequency === "PRN",
+      route: primary.sigRoute || "PO",
+      frequency: primary.sigFrequency === "PRN" ? null : primary.sigFrequency || primary.sigTiming || null,
+      take_min: sigDoseNumber(primary.sigDose),
+      take_max: sigDoseNumber(primary.sigDose),
       duration: primary.durationDays,
       duration_unit: "days",
       additional_note: form.additionalNote,
@@ -356,15 +548,6 @@ export default function DoctorAppointmentTreatmentPage() {
       signature_label: "Prescriber signature",
       pdf_size: form.pdfSize,
     };
-  };
-
-  const handleReview = () => {
-    if (!canSave) return;
-    setSavedPrescription(null);
-    setDocumentDownloadUrl(null);
-    setPrintMessage("");
-    setReviewReady(true);
-    window.setTimeout(() => document.getElementById("prescription-review")?.scrollIntoView({ behavior: "smooth" }), 50);
   };
 
   const handleSave = async (options: { printAfterSave?: boolean } = {}) => {
@@ -497,7 +680,7 @@ export default function DoctorAppointmentTreatmentPage() {
                   setSavedPrescription(null);
                   setDocumentDownloadUrl(null);
                   setPrintMessage("");
-                  setReviewReady(false);
+
                 }}
                 className="h-12 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                 placeholder="Enter drug name..."
@@ -514,7 +697,7 @@ export default function DoctorAppointmentTreatmentPage() {
                     >
                       <span className="text-sm font-semibold text-foreground">{drug.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {[drug.brand_name, drug.descriptor, drug.drug_identification_number ? `DIN ${drug.drug_identification_number}` : ""]
+                        {[drug.brand_name, drug.descriptor, drug.route, drug.drug_category]
                           .filter(Boolean)
                           .join(" · ") || "OSCAR drugref"}
                       </span>
@@ -532,6 +715,7 @@ export default function DoctorAppointmentTreatmentPage() {
           </DoctorSection>
 
           <DoctorSection title="Step 3 · Prescription details">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
             <div className={cn("grid gap-4", medications.length === 0 && "opacity-70")}>
               {medications.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border/80 bg-muted/30 px-4 py-8 text-center text-sm font-medium text-muted-foreground">
@@ -553,7 +737,48 @@ export default function DoctorAppointmentTreatmentPage() {
                   </div>
 
                   <div className="mt-4 grid gap-4">
-                    <Field label="Dosage / instructions">
+                    <div className="rounded-2xl border border-primary/15 bg-primary/5 p-3">
+                      <div className="flex flex-wrap gap-2 text-xs font-medium text-muted-foreground">
+                        {[medicine.dosageForm, medicine.routeLabel, medicine.drugCategory, medicine.isNarcotic ? "Narcotic" : ""]
+                          .filter(Boolean)
+                          .map((item) => (
+                            <span key={item} className="rounded-full bg-background px-3 py-1">
+                              {item}
+                            </span>
+                          ))}
+                      </div>
+                      {medicine.technicalReasons.length > 0 ? (
+                        <div className="mt-3 grid gap-2">
+                          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                            OatRx suggested instructions
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {medicine.technicalReasons.slice(0, 5).flatMap((reasonItem) =>
+                              reasonItem.sigs.slice(0, 2).map((sig) => (
+                                <button
+                                  key={`${reasonItem.technical_reason}-${sig}`}
+                                  type="button"
+                                  onClick={() => applySuggestedSig(medicine.localId, reasonItem.technical_reason, sig)}
+                                  className={cn(
+                                    "rounded-2xl border px-3 py-2 text-left text-xs font-semibold transition hover:border-primary/50 hover:bg-background",
+                                    medicine.instructions === sig
+                                      ? "border-primary bg-background text-primary"
+                                      : "border-border bg-white text-foreground",
+                                  )}
+                                >
+                                  <span className="block text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                                    {reasonItem.technical_reason || "Suggested SIG"}
+                                  </span>
+                                  {sig}
+                                </button>
+                              )),
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <Field label="System instruction">
                       <textarea
                         value={medicine.instructions}
                         onChange={(event) => updateMedication(medicine.localId, "instructions", event.target.value)}
@@ -562,29 +787,28 @@ export default function DoctorAppointmentTreatmentPage() {
                       />
                     </Field>
 
-                    <div className="grid gap-4 md:grid-cols-5">
-                      <Field label="Start date">
+                    <div className="grid gap-4 md:grid-cols-[1fr_1fr_1fr_1fr]">
+                      <Field label="Dose">
                         <input
-                          type="date"
-                          value={medicine.startDate}
-                          onChange={(event) => updateMedication(medicine.localId, "startDate", event.target.value)}
+                          value={medicine.sigDose}
+                          onChange={(event) => updateMedicationSig(medicine.localId, "sigDose", event.target.value)}
                           className={inputClass()}
+                          placeholder="1"
                         />
                       </Field>
-                      <Field label="Days">
-                        <input
-                          value={medicine.durationDays}
-                          onChange={(event) => updateMedication(medicine.localId, "durationDays", event.target.value)}
+                      <Field label="Frequency">
+                        <select
+                          value={medicine.sigFrequency}
+                          onChange={(event) => updateMedicationSig(medicine.localId, "sigFrequency", event.target.value)}
                           className={inputClass()}
-                        />
-                      </Field>
-                      <Field label="End date">
-                        <input
-                          type="date"
-                          value={medicine.endDate}
-                          onChange={(event) => updateMedication(medicine.localId, "endDate", event.target.value)}
-                          className={inputClass()}
-                        />
+                        >
+                          <option value="">Select frequency</option>
+                          {FREQUENCY_OPTIONS.map((item) => (
+                            <option key={item.code} value={item.code}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
                       </Field>
                       <Field label="Qty/Mitte">
                         <input
@@ -601,6 +825,41 @@ export default function DoctorAppointmentTreatmentPage() {
                         />
                       </Field>
                     </div>
+
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <Field label="Start date">
+                        <input
+                          type="date"
+                          value={medicine.startDate}
+                          onChange={(event) => updateMedication(medicine.localId, "startDate", event.target.value)}
+                          className={inputClass()}
+                        />
+                      </Field>
+                      <Field label="Duration days">
+                        <input
+                          value={medicine.durationDays}
+                          onChange={(event) => updateMedication(medicine.localId, "durationDays", event.target.value)}
+                          className={inputClass()}
+                        />
+                      </Field>
+                      <Field label="End date">
+                        <input
+                          type="date"
+                          value={medicine.endDate}
+                          onChange={(event) => updateMedication(medicine.localId, "endDate", event.target.value)}
+                          className={inputClass()}
+                        />
+                      </Field>
+                    </div>
+
+                    <Field label="Special instructions">
+                      <textarea
+                        value={medicine.specialInstructions}
+                        onChange={(event) => updateMedication(medicine.localId, "specialInstructions", event.target.value)}
+                        className="min-h-16 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                        placeholder="Optional: with food, affected area, left eye, counselling note..."
+                      />
+                    </Field>
                   </div>
                 </div>
               ))}
@@ -618,28 +877,9 @@ export default function DoctorAppointmentTreatmentPage() {
               </div>
             </div>
 
-            {error ? <p className="mt-4 text-sm font-medium text-destructive">{error}</p> : null}
-
-            <div className="mt-5 flex flex-wrap gap-3 print:hidden">
-              <Button onClick={handleReview} disabled={!canSave || saving}>
-                <Save className="h-4 w-4" />
-                Review prescription
-              </Button>
-              <Button variant="outline" onClick={() => void handlePrintDocument()} disabled={!savedPrescription}>
-                <Printer className="h-4 w-4" />
-                Print saved PDF
-              </Button>
-            </div>
-            {printMessage ? <p className="mt-3 text-sm font-medium text-muted-foreground">{printMessage}</p> : null}
-          </DoctorSection>
-
-          {reviewReady && medications.length > 0 ? (
-            <DoctorSection
-              title="Step 4 · Review, sign, and save"
-              description="Final check before the prescription is stored in Bimble and synced to OSCAR."
-            >
-              <div id="prescription-review" className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-                <div className="rounded-2xl border border-slate-300 bg-white p-5 text-slate-950 shadow-sm print:border-0 print:shadow-none">
+            {medications.length > 0 ? (
+              <div className="space-y-5 rounded-2xl border border-border bg-card p-4 print:hidden">
+                <div id="prescription-preview" className="rounded-2xl border border-slate-300 bg-white p-5 text-slate-950 shadow-sm">
                   <div className="flex min-h-24 border-2 border-slate-900">
                     <div className="flex w-32 items-center justify-center border-r-2 border-slate-900 font-serif text-7xl">Rx</div>
                     <div className="flex-1 p-4 text-xs leading-5">
@@ -670,7 +910,9 @@ export default function DoctorAppointmentTreatmentPage() {
                         <p className="mt-1">
                           Start: {medicine.startDate || "N/A"} End: {medicine.endDate || "N/A"}
                         </p>
-                        <p className="mt-3 border-t border-slate-400 pt-2">{medicine.instructions}</p>
+                        <p className="mt-3 border-t border-slate-400 pt-2">
+                          {[medicine.instructions, medicine.specialInstructions].filter(Boolean).join(" ")}
+                        </p>
                       </div>
                     ))}
                     {form.additionalNote ? <p className="mt-28 whitespace-pre-wrap">{form.additionalNote}</p> : null}
@@ -691,93 +933,48 @@ export default function DoctorAppointmentTreatmentPage() {
                   </div>
                 </div>
 
-                <div className="space-y-5 rounded-2xl border border-border bg-card p-5 print:hidden">
-                  <div>
-                    <h3 className="font-display text-xl font-semibold text-foreground">Actions</h3>
-                    <div className="mt-4 grid gap-3">
-                      <div className="grid grid-cols-[1fr_auto] gap-3">
-                        <Button type="button" variant="outline" onClick={() => void handleSave()} disabled={!canFinalize || saving}>
-                          Generate PDF
-                        </Button>
-                        <select value={form.pdfSize} onChange={(event) => updateForm("pdfSize", event.target.value)} className="rounded-xl border border-border bg-background px-3 text-sm">
-                          <option>A4 page</option>
-                          <option>Letter page</option>
-                        </select>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => (savedPrescription ? void handlePrintDocument() : void handleSave({ printAfterSave: true }))}
-                        disabled={!canFinalize || saving}
-                      >
-                        Print
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => void handleSave()} disabled={!canFinalize || saving}>
-                        Paste into EMR
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => (savedPrescription ? void handlePrintDocument() : void handleSave({ printAfterSave: true }))}
-                        disabled={!canFinalize || saving}
-                      >
-                        Print & Paste into EMR
-                      </Button>
-                      <Button type="button" variant="outline" disabled>
-                        Fax & Paste into EMR
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedDrug(null);
-                          setQuery("");
-                          setDrugResults([]);
-                          setForm(initialForm);
-                          setReviewReady(false);
-                          setSavedPrescription(null);
-                          setDocumentDownloadUrl(null);
-                          setPrintMessage("");
-                        }}
-                      >
-                        Create New Prescription
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => router.back()}>
-                        Close Window
-                      </Button>
-                    </div>
+                <Field label="Additional notes to add to Rx">
+                  <textarea
+                    value={form.additionalNote}
+                    onChange={(event) => updateForm("additionalNote", event.target.value)}
+                    className="min-h-20 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                    placeholder="Add final note before saving"
+                  />
+                </Field>
+
+                <div className="space-y-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Signature</span>
+                  <SignaturePad value={form.signatureDataUrl} onChange={(value) => updateForm("signatureDataUrl", value)} />
+                </div>
+
+                {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
+                {printMessage ? <p className="text-sm font-medium text-muted-foreground">{printMessage}</p> : null}
+                {savedPrescription ? (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                    Prescription saved and document created.
                   </div>
+                ) : null}
 
-                  <Field label="Additional notes to add to Rx">
-                    <textarea
-                      value={form.additionalNote}
-                      onChange={(event) => updateForm("additionalNote", event.target.value)}
-                      className="min-h-20 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-                      placeholder="Add final note before saving"
-                    />
-                  </Field>
-
-                  <div className="space-y-1.5">
-                    <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Signature</span>
-                    <SignaturePad value={form.signatureDataUrl} onChange={(value) => updateForm("signatureDataUrl", value)} />
-                  </div>
-
-                  {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
-                  {printMessage ? <p className="text-sm font-medium text-muted-foreground">{printMessage}</p> : null}
-                  {savedPrescription ? (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                      Prescription saved and document created.
-                    </div>
-                  ) : null}
-
+                <div className="grid gap-3 sm:grid-cols-2">
                   <Button type="button" className="w-full" onClick={() => void handleSave()} disabled={!canFinalize || saving}>
                     <Save className="h-4 w-4" />
                     {saving ? "Saving…" : "Save prescription"}
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => (savedPrescription ? void handlePrintDocument() : void handleSave({ printAfterSave: true }))}
+                    disabled={!canFinalize || saving}
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print
+                  </Button>
                 </div>
               </div>
-            </DoctorSection>
-          ) : null}
+            ) : null}
+            </div>
+          </DoctorSection>
         </>
       ) : null}
     </DoctorPageShell>
