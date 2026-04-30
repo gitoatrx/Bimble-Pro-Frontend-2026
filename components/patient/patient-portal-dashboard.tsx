@@ -2096,7 +2096,7 @@ export function PatientPortalDashboard() {
           >
             <div className="space-y-3">
               {pastAppointments.length ? (
-                pastAppointments.slice(0, 5).map((appointment) => (
+                pastAppointments.map((appointment) => (
                   <div key={appointment.appointment_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
@@ -2104,14 +2104,30 @@ export function PatientPortalDashboard() {
                           {appointment.service_name || "General appointment"}
                         </div>
                         <div className="mt-1 text-sm text-slate-600">
-                          {appointment.clinic_name || "Clinic pending"} · {appointment.status}
+                          {appointment.clinic_name || "Clinic pending"} · {getAppointmentStatusLabel(appointment.status)}
                         </div>
+                        {(appointment.appointment_date || appointment.appointment_time) ? (
+                          <div className="mt-1 text-sm text-slate-600">
+                            {appointment.appointment_date || "Date not available"}
+                            {appointment.appointment_time ? ` · ${appointment.appointment_time}` : ""}
+                          </div>
+                        ) : null}
+                        {appointment.chief_complaint ? (
+                          <div className="mt-2 text-sm text-slate-600">
+                            {appointment.chief_complaint}
+                          </div>
+                        ) : null}
                         {appointment.fulfillment ? (
                           <div className="mt-2 text-sm text-slate-600">
                             {appointment.fulfillment === "pickup" ? "Pickup" : "Delivery"} ·{" "}
                             {appointment.pharmacy_choice === "preferred"
                               ? appointment.preferred_pharmacy_name || "Preferred pharmacy"
                               : "Bimble pharmacy"}
+                          </div>
+                        ) : null}
+                        {appointment.cancellation_reason ? (
+                          <div className="mt-2 text-sm text-slate-600">
+                            Reason: {appointment.cancellation_reason}
                           </div>
                         ) : null}
                       </div>

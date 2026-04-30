@@ -247,7 +247,7 @@ function PoolAlertBanner({
             New appointment{poolAlert.newCount === 1 ? "" : "s"} waiting in the pool
           </p>
           <p className="text-xs text-amber-800">
-            {poolAlert.newCount} new item{poolAlert.newCount === 1 ? "" : "s"} detected. Open the pool to accept or reject them.
+            {poolAlert.newCount} new appointment request{poolAlert.newCount === 1 ? " is" : "s are"} available. Review the pool promptly to accept, assign, or decline.
           </p>
         </div>
         <div className="flex items-center gap-2">

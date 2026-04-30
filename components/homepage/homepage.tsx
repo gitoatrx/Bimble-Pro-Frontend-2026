@@ -25,7 +25,6 @@ import {
   faqs,
   marqueeConditions,
   stats,
-  symptomSuggestions,
   testimonials,
 } from "./content";
 import "./homepage.css";
@@ -617,47 +616,10 @@ export function Homepage() {
     return service.service_name.toLowerCase().includes(query);
   });
 
-  const resolveServiceIdFromHints = useCallback(
-    (hints: string[]) => {
-      const normalizedHints = hints.map((hint) => hint.trim().toLowerCase()).filter(Boolean);
-      if (!normalizedHints.length) return null;
-
-      const exact = serviceOptions.find((service) =>
-        normalizedHints.includes(service.service_name.trim().toLowerCase()),
-      );
-      if (exact) return exact.service_id;
-
-      const partial = serviceOptions.find((service) => {
-        const normalizedName = service.service_name.trim().toLowerCase();
-        return normalizedHints.some((hint) => normalizedName.includes(hint) || hint.includes(normalizedName));
-      });
-      return partial?.service_id ?? null;
-    },
-    [serviceOptions],
-  );
-
-  const filteredSymptomSuggestions = symptomSuggestions.filter((suggestion) => {
-    if (!careQuery.trim()) return true;
-    const query = careQuery.trim().toLowerCase();
-    return (
-      suggestion.label.toLowerCase().includes(query) ||
-      suggestion.serviceHints.some((hint) => hint.toLowerCase().includes(query))
-    );
-  });
-
   const resolveServiceId = useCallback(
     (query: string) => {
       const normalized = query.trim().toLowerCase();
       if (!normalized) return null;
-      const matchingSuggestion = symptomSuggestions.find(
-        (suggestion) =>
-          suggestion.label.toLowerCase() === normalized ||
-          suggestion.label.toLowerCase().includes(normalized) ||
-          normalized.includes(suggestion.label.toLowerCase()),
-      );
-      if (matchingSuggestion) {
-        return resolveServiceIdFromHints(matchingSuggestion.serviceHints);
-      }
       const exact = serviceOptions.find(
         (service) => service.service_name.toLowerCase() === normalized,
       );
@@ -673,7 +635,7 @@ export function Homepage() {
       });
       return partial?.service_id ?? null;
     },
-    [resolveServiceIdFromHints, serviceOptions],
+    [serviceOptions],
   );
 
   const handleSelectCity = useCallback((city: string) => {
@@ -860,13 +822,6 @@ export function Homepage() {
                     const value = e.target.value;
                     setCareQuery(value);
                     setShowCareSuggestions(true);
-                    const matchingSuggestion = symptomSuggestions.find(
-                      (suggestion) => suggestion.label.toLowerCase() === value.trim().toLowerCase(),
-                    );
-                    if (matchingSuggestion) {
-                      setSelectedServiceId(resolveServiceIdFromHints(matchingSuggestion.serviceHints));
-                      return;
-                    }
                     const selected = serviceOptions.find(
                       (service) => service.service_name.toLowerCase() === value.trim().toLowerCase(),
                     );
@@ -879,7 +834,7 @@ export function Homepage() {
                 />
                 <ChevronDown size={16} strokeWidth={2} style={{ color: "#22314d", flexShrink: 0 }} />
 
-                {showCareSuggestions && (filteredSymptomSuggestions.length > 0 || filteredServices.length > 0) ? (
+                {showCareSuggestions && filteredServices.length > 0 ? (
                   <div
                     style={{
                       position: "absolute",
@@ -898,41 +853,7 @@ export function Homepage() {
                       scrollbarGutter: "stable",
                     }}
                   >
-                    {filteredSymptomSuggestions.map((suggestion) => (
-                      <button
-                        key={suggestion.label}
-                        type="button"
-                        onMouseDown={() => {
-                          setCareQuery(suggestion.label);
-                          setSelectedServiceId(resolveServiceIdFromHints(suggestion.serviceHints));
-                          setShowCareSuggestions(false);
-                        }}
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "10px 16px",
-                          fontSize: "14px",
-                          color: "#0f1f3d",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = "#eef2ff";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = "none";
-                        }}
-                      >
-                        <Search size={13} style={{ color: "#8896b4", flexShrink: 0 }} />
-                        {suggestion.label}
-                      </button>
-                    ))}
-                    {filteredSymptomSuggestions.length === 0
-                      ? filteredServices.map((service) => (
+                    {filteredServices.map((service) => (
                           <button
                             key={service.service_id}
                             type="button"
@@ -964,8 +885,7 @@ export function Homepage() {
                             <Search size={13} style={{ color: "#8896b4", flexShrink: 0 }} />
                             {service.service_name}
                           </button>
-                        ))
-                      : null}
+                        ))}
                   </div>
                 ) : null}
               </div>
