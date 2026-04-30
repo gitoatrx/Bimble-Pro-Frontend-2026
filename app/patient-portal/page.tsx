@@ -7,12 +7,17 @@ import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { PatientLoginCard } from "@/components/patient/patient-login-card";
 import { PatientOtpCard } from "@/components/patient/patient-otp-card";
 import { Button } from "@/components/ui/button";
+import { DisplayDateInput } from "@/components/ui/display-date-input";
 import { Input } from "@/components/ui/input";
 import {
   getLiveDigitCountError,
-  getLiveFutureDateError,
   getLiveTenDigitError,
 } from "@/lib/form-validation";
+import {
+  getDisplayDateError,
+  parseDisplayDateToIso,
+} from "@/lib/date-format";
+import { getCanadaPacificDateKey } from "@/lib/time-zone";
 import {
   submitPatientPhoneLogin,
   submitPatientPhoneProfileLogin,
@@ -149,12 +154,13 @@ export default function PatientPortalLoginPage() {
   async function handleCompleteProfile() {
     if (!otpToken) return;
 
-    const nextDateOfBirthError = getLiveFutureDateError(dateOfBirth, "Date of birth");
+    const nextDateOfBirthError = getDisplayDateError(dateOfBirth, "Date of birth");
     const nextPhnError = getLiveDigitCountError(phn, "PHN", 10);
+    const parsedDateOfBirth = parseDisplayDateToIso(dateOfBirth);
     setDateOfBirthError(nextDateOfBirthError);
     setPhnError(nextPhnError);
 
-    if (!dateOfBirth || !phn.trim() || nextDateOfBirthError || nextPhnError) {
+    if (!parsedDateOfBirth || !phn.trim() || nextDateOfBirthError || nextPhnError) {
       setError("Enter a valid date of birth and 10-digit PHN.");
       return;
     }
@@ -165,7 +171,7 @@ export default function PatientPortalLoginPage() {
     try {
       const response = await submitPatientPhoneProfileLogin({
         otp_token: otpToken,
-        date_of_birth: dateOfBirth,
+        date_of_birth: parsedDateOfBirth,
         phn: phn.trim(),
       });
       storePatientLoginSession({
@@ -250,16 +256,18 @@ export default function PatientPortalLoginPage() {
 
               <label className="grid gap-2 text-sm font-medium text-slate-700">
                 Date of birth
-                <Input
-                  type="date"
+                <DisplayDateInput
                   value={dateOfBirth}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
+                  onChange={(nextValue) => {
                     setDateOfBirth(nextValue);
-                    setDateOfBirthError(getLiveFutureDateError(nextValue, "Date of birth"));
+                    setDateOfBirthError(
+                      getDisplayDateError(nextValue, "Date of birth", {
+                        allowIncomplete: true,
+                      }),
+                    );
                     setError("");
                   }}
-                  autoComplete="bday"
+                  maxIsoDate={getCanadaPacificDateKey()}
                 />
                 {dateOfBirthError ? (
                   <span className="text-xs font-normal text-destructive">{dateOfBirthError}</span>

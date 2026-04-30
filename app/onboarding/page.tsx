@@ -18,11 +18,15 @@ import {
 } from "@/lib/clinic/session";
 import {
   clinicTypeOptions,
+  capitalizeWordsInput,
   formatPhoneNumber,
   formatPostalCode,
   initialClinicOnboardingFormData,
+  normalizeCityNameInput,
+  normalizeClinicOnboardingFormData,
+  normalizeClinicTextInput,
+  normalizeServicesInput,
   onboardingStepOrder,
-  provinceOptions,
   validateClinicOnboardingStep,
 } from "@/lib/clinic/onboarding";
 import type {
@@ -55,6 +59,9 @@ const neutralTextareaClassName =
 
 const neutralSelectClassName =
   "flex h-12 w-full rounded-md !border !border-slate-200 !bg-white px-3 py-2 text-sm text-slate-900 shadow-none outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/20";
+
+const invalidFieldClassName =
+  "!border-destructive/60 focus-visible:ring-destructive/20";
 
 export default function ClinicOnboardingPage() {
   const router = useRouter();
@@ -105,12 +112,61 @@ export default function ClinicOnboardingPage() {
     });
   }, [formData, isFlowReady, step]);
 
+  function getFieldClassName(field: keyof ClinicOnboardingFormData) {
+    return `${neutralFieldClassName} ${errors[field] ? invalidFieldClassName : ""}`;
+  }
+
+  function getTextareaClassName(field: keyof ClinicOnboardingFormData) {
+    return `${neutralTextareaClassName} ${errors[field] ? invalidFieldClassName : ""}`;
+  }
+
+  function normalizeFieldValue<K extends keyof ClinicOnboardingFormData>(
+    field: K,
+    value: ClinicOnboardingFormData[K],
+  ): ClinicOnboardingFormData[K] {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    const normalizers: Partial<
+      Record<keyof ClinicOnboardingFormData, (raw: string) => string>
+    > = {
+      clinicLegalName: normalizeClinicTextInput,
+      clinicDisplayName: normalizeClinicTextInput,
+      address: capitalizeWordsInput,
+      city: normalizeCityNameInput,
+      province: capitalizeWordsInput,
+      postalCode: formatPostalCode,
+      email: (raw) => raw.trimStart().toLowerCase(),
+      phoneNumber: formatPhoneNumber,
+      servicesProvided: normalizeServicesInput,
+      pin: (raw) => raw.replace(/\D/g, "").slice(0, 4),
+    };
+
+    return (normalizers[field]?.(value) ?? value) as ClinicOnboardingFormData[K];
+  }
+
   function setField<K extends keyof ClinicOnboardingFormData>(
     field: K,
     value: ClinicOnboardingFormData[K],
   ) {
-    setFormData((current) => ({ ...current, [field]: value }));
-    setErrors((current) => ({ ...current, [field]: "" }));
+    const nextValue = normalizeFieldValue(field, value);
+    const nextFormData = { ...formData, [field]: nextValue };
+    const nextFieldErrors = validateClinicOnboardingStep(step, nextFormData);
+
+    setFormData(nextFormData);
+    setErrors((currentErrors) => {
+      const nextErrors = {
+        ...currentErrors,
+        [field]: nextFieldErrors[field] ?? "",
+      };
+
+      if (field === "password" || field === "confirmPassword") {
+        nextErrors.confirmPassword = nextFieldErrors.confirmPassword ?? "";
+      }
+
+      return nextErrors;
+    });
     setSubmitError("");
   }
 
@@ -149,7 +205,10 @@ export default function ClinicOnboardingPage() {
   }
 
   async function handleContinue() {
-    const nextErrors = validateClinicOnboardingStep(step, formData);
+    const normalizedFormData = normalizeClinicOnboardingFormData(formData);
+    setFormData(normalizedFormData);
+
+    const nextErrors = validateClinicOnboardingStep(step, normalizedFormData);
     setErrors(nextErrors);
 
     if (Object.keys(nextErrors).length > 0) {
@@ -172,7 +231,10 @@ export default function ClinicOnboardingPage() {
         throw new Error("No plan selected. Please go back and choose a plan.");
       }
 
-      const signupResult = await submitClinicOnboarding(formData, selectedPlan.id);
+      const signupResult = await submitClinicOnboarding(
+        normalizedFormData,
+        selectedPlan.id,
+      );
       storeClinicSignupResult(signupResult);
 
       // Redirect to Stripe checkout for payment.
@@ -220,7 +282,8 @@ export default function ClinicOnboardingPage() {
                 placeholder="Minimum 8 characters"
                 value={formData.password}
                 onChange={(event) => setField("password", event.target.value)}
-                className={`${neutralFieldClassName} pr-10`}
+                className={`${getFieldClassName("password")} pr-10`}
+                aria-invalid={Boolean(errors.password)}
                 autoFocus
                 autoComplete="new-password"
               />
@@ -257,7 +320,8 @@ export default function ClinicOnboardingPage() {
                 onChange={(event) =>
                   setField("confirmPassword", event.target.value)
                 }
-                className={`${neutralFieldClassName} pr-10`}
+                className={`${getFieldClassName("confirmPassword")} pr-10`}
+                aria-invalid={Boolean(errors.confirmPassword)}
                 autoComplete="new-password"
               />
               <button
@@ -298,7 +362,8 @@ export default function ClinicOnboardingPage() {
                 onChange={(event) =>
                   setField("pin", event.target.value.replace(/\D/g, "").slice(0, 4))
                 }
-                className={`${neutralFieldClassName} pr-10 tracking-[0.35em]`}
+                className={`${getFieldClassName("pin")} pr-10 tracking-[0.35em]`}
+                aria-invalid={Boolean(errors.pin)}
                 autoComplete="new-password"
               />
               <button
@@ -338,8 +403,11 @@ export default function ClinicOnboardingPage() {
               onChange={(event) =>
                 setField("clinicLegalName", event.target.value)
               }
-              className={neutralFieldClassName}
+              className={getFieldClassName("clinicLegalName")}
+              aria-invalid={Boolean(errors.clinicLegalName)}
               autoFocus
+              autoCapitalize="words"
+              autoComplete="organization"
             />
             <FieldError message={errors.clinicLegalName} />
           </div>
@@ -358,7 +426,10 @@ export default function ClinicOnboardingPage() {
               onChange={(event) =>
                 setField("clinicDisplayName", event.target.value)
               }
-              className={neutralFieldClassName}
+              className={getFieldClassName("clinicDisplayName")}
+              aria-invalid={Boolean(errors.clinicDisplayName)}
+              autoCapitalize="words"
+              autoComplete="organization"
             />
             <FieldError message={errors.clinicDisplayName} />
           </div>
@@ -382,7 +453,8 @@ export default function ClinicOnboardingPage() {
                   event.target.value.replace(/\D/g, "").slice(0, 4),
                 )
               }
-              className={neutralFieldClassName}
+              className={getFieldClassName("establishedYear")}
+              aria-invalid={Boolean(errors.establishedYear)}
             />
             <FieldError message={errors.establishedYear} />
           </div>
@@ -406,6 +478,7 @@ export default function ClinicOnboardingPage() {
               value={formData.address}
               onChange={(value) => setField("address", value)}
               onAddressSelected={handleAddressSelected}
+              hasError={Boolean(errors.address)}
               autoFocus
             />
             <FieldError message={errors.address} />
@@ -423,7 +496,10 @@ export default function ClinicOnboardingPage() {
               placeholder="Vancouver"
               value={formData.city}
               onChange={(event) => setField("city", event.target.value)}
-              className={neutralFieldClassName}
+              className={getFieldClassName("city")}
+              aria-invalid={Boolean(errors.city)}
+              autoCapitalize="words"
+              autoComplete="address-level2"
             />
             <FieldError message={errors.city} />
           </div>
@@ -435,19 +511,16 @@ export default function ClinicOnboardingPage() {
             >
               Province
             </label>
-            <select
+            <Input
               id="province"
+              placeholder="BC"
               value={formData.province}
               onChange={(event) => setField("province", event.target.value)}
-              className={neutralSelectClassName}
-            >
-              <option value="">Select province</option>
-              {provinceOptions.map((province) => (
-                <option key={province} value={province}>
-                  {province}
-                </option>
-              ))}
-            </select>
+              className={getFieldClassName("province")}
+              aria-invalid={Boolean(errors.province)}
+              autoCapitalize="words"
+              autoComplete="address-level1"
+            />
             <FieldError message={errors.province} />
           </div>
 
@@ -465,7 +538,10 @@ export default function ClinicOnboardingPage() {
               onChange={(event) =>
                 setField("postalCode", formatPostalCode(event.target.value))
               }
-              className={neutralFieldClassName}
+              className={getFieldClassName("postalCode")}
+              aria-invalid={Boolean(errors.postalCode)}
+              autoCapitalize="characters"
+              autoComplete="postal-code"
             />
             <FieldError message={errors.postalCode} />
           </div>
@@ -488,8 +564,11 @@ export default function ClinicOnboardingPage() {
             placeholder="clinic@bimble.health"
             value={formData.email}
             onChange={(event) => setField("email", event.target.value)}
-            className={neutralFieldClassName}
+            className={getFieldClassName("email")}
+            aria-invalid={Boolean(errors.email)}
             autoFocus
+            autoCapitalize="none"
+            autoComplete="email"
           />
           <FieldError message={errors.email} />
         </div>
@@ -509,7 +588,9 @@ export default function ClinicOnboardingPage() {
             onChange={(event) =>
               setField("phoneNumber", formatPhoneNumber(event.target.value))
             }
-            className={neutralFieldClassName}
+            className={getFieldClassName("phoneNumber")}
+            aria-invalid={Boolean(errors.phoneNumber)}
+            autoComplete="tel"
           />
           <FieldError message={errors.phoneNumber} />
         </div>
@@ -525,7 +606,10 @@ export default function ClinicOnboardingPage() {
             id="clinicType"
             value={formData.clinicType}
             onChange={(event) => setField("clinicType", event.target.value)}
-            className={neutralSelectClassName}
+            className={`${neutralSelectClassName} ${
+              errors.clinicType ? invalidFieldClassName : ""
+            }`}
+            aria-invalid={Boolean(errors.clinicType)}
           >
             <option value="">Select clinic type</option>
             {clinicTypeOptions.map((type) => (
@@ -551,7 +635,9 @@ export default function ClinicOnboardingPage() {
             onChange={(event) =>
               setField("servicesProvided", event.target.value)
             }
-            className={neutralTextareaClassName}
+            className={getTextareaClassName("servicesProvided")}
+            aria-invalid={Boolean(errors.servicesProvided)}
+            autoCapitalize="sentences"
           />
           <FieldError message={errors.servicesProvided} />
         </div>

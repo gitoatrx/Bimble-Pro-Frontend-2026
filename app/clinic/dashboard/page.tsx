@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { digitsOnly } from "@/lib/form-validation";
 import {
   fetchClinicDoctors,
   fetchClinicSetupState,
@@ -106,6 +107,29 @@ function StepIndicator({ status }: { status: StepStatus }) {
   return <Circle className="h-5 w-5 text-border flex-shrink-0" />;
 }
 
+const invalidInputClassName = "!border-destructive focus-visible:ring-destructive/20";
+
+function normalizeTenDigitNumber(value: string) {
+  const digits = digitsOnly(value);
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return digits.slice(1);
+  }
+  return digits;
+}
+
+function limitPhoneOrFaxInput(value: string) {
+  return digitsOnly(value).slice(0, 10);
+}
+
+function getTenDigitNumberError(value: string, label: string) {
+  if (!value.trim()) {
+    return `${label} is required.`;
+  }
+  return normalizeTenDigitNumber(value).length === 10
+    ? ""
+    : `${label} must be a valid 10-digit number.`;
+}
+
 // ── SMS Step ──────────────────────────────────────────────────────
 
 function SmsStep({ onComplete }: { onComplete: () => void }) {
@@ -116,7 +140,25 @@ function SmsStep({ onComplete }: { onComplete: () => void }) {
     authToken: "",
     fromNumber: "",
   });
+  const [errors, setErrors] = useState({
+    provider: "",
+    accountSid: "",
+    authToken: "",
+    fromNumber: "",
+  });
   const [saving, setSaving] = useState(false);
+
+  function validateSmsFields() {
+    const nextErrors = {
+      provider: provider ? "" : "Provider is required.",
+      accountSid: fields.accountSid.trim() ? "" : "Account SID is required.",
+      authToken: fields.authToken.trim() ? "" : "Auth token is required.",
+      fromNumber: getTenDigitNumberError(fields.fromNumber, "From number"),
+    };
+
+    setErrors(nextErrors);
+    return Object.values(nextErrors).every((message) => !message);
+  }
 
   async function handleSave() {
     const session = readClinicLoginSession();
@@ -130,6 +172,10 @@ function SmsStep({ onComplete }: { onComplete: () => void }) {
       return;
     }
 
+    if (!validateSmsFields()) {
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -138,7 +184,7 @@ function SmsStep({ onComplete }: { onComplete: () => void }) {
         provider_name: provider,
         account_identifier: fields.accountSid,
         auth_secret: fields.authToken,
-        from_number: fields.fromNumber,
+        from_number: normalizeTenDigitNumber(fields.fromNumber),
       });
       onComplete();
     } catch (err) {
@@ -181,7 +227,10 @@ function SmsStep({ onComplete }: { onComplete: () => void }) {
               {(["twilio", "auth0", "swift"] as const).map((p) => (
                 <button
                   key={p}
-                  onClick={() => setProvider(p)}
+                  onClick={() => {
+                    setProvider(p);
+                    setErrors((current) => ({ ...current, provider: "" }));
+                  }}
                   className={cn(
                     "rounded-full border px-3 py-1.5 text-sm font-medium transition-all",
                     provider === p
@@ -193,31 +242,58 @@ function SmsStep({ onComplete }: { onComplete: () => void }) {
                 </button>
               ))}
             </div>
+            {errors.provider ? (
+              <p className="mt-2 text-xs text-destructive">{errors.provider}</p>
+            ) : null}
           </div>
 
           <div className="space-y-3">
             <Input
               placeholder="Account SID"
               value={fields.accountSid}
-              onChange={(e) =>
-                setFields((f) => ({ ...f, accountSid: e.target.value }))
-              }
+              onChange={(e) => {
+                setFields((f) => ({ ...f, accountSid: e.target.value }));
+                setErrors((current) => ({ ...current, accountSid: "" }));
+              }}
+              className={errors.accountSid ? invalidInputClassName : undefined}
+              aria-invalid={Boolean(errors.accountSid)}
             />
+            {errors.accountSid ? (
+              <p className="text-xs text-destructive">{errors.accountSid}</p>
+            ) : null}
             <Input
               type="password"
               placeholder="Auth Token"
               value={fields.authToken}
-              onChange={(e) =>
-                setFields((f) => ({ ...f, authToken: e.target.value }))
-              }
+              onChange={(e) => {
+                setFields((f) => ({ ...f, authToken: e.target.value }));
+                setErrors((current) => ({ ...current, authToken: "" }));
+              }}
+              className={errors.authToken ? invalidInputClassName : undefined}
+              aria-invalid={Boolean(errors.authToken)}
             />
+            {errors.authToken ? (
+              <p className="text-xs text-destructive">{errors.authToken}</p>
+            ) : null}
             <Input
               placeholder="From number (e.g. +16041234567)"
               value={fields.fromNumber}
-              onChange={(e) =>
-                setFields((f) => ({ ...f, fromNumber: e.target.value }))
-              }
+              onChange={(e) => {
+                const nextValue = limitPhoneOrFaxInput(e.target.value);
+                setFields((f) => ({ ...f, fromNumber: nextValue }));
+                setErrors((current) => ({
+                  ...current,
+                  fromNumber: getTenDigitNumberError(nextValue, "From number"),
+                }));
+              }}
+              className={errors.fromNumber ? invalidInputClassName : undefined}
+              aria-invalid={Boolean(errors.fromNumber)}
+              inputMode="tel"
+              maxLength={10}
             />
+            {errors.fromNumber ? (
+              <p className="text-xs text-destructive">{errors.fromNumber}</p>
+            ) : null}
           </div>
         </div>
       )}
@@ -242,6 +318,12 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
     faxNumber: "",
     notes: "",
   });
+  const [errors, setErrors] = useState({
+    provider: "",
+    accountIdentifier: "",
+    authSecret: "",
+    faxNumber: "",
+  });
   const [saving, setSaving] = useState(false);
 
   function canSave() {
@@ -252,6 +334,20 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
       fields.authSecret.trim() !== "" &&
       fields.faxNumber.trim() !== ""
     );
+  }
+
+  function validateFaxFields() {
+    const nextErrors = {
+      provider: provider ? "" : "Provider is required.",
+      accountIdentifier: fields.accountIdentifier.trim()
+        ? ""
+        : "Account identifier is required.",
+      authSecret: fields.authSecret.trim() ? "" : "Auth secret is required.",
+      faxNumber: getTenDigitNumberError(fields.faxNumber, "Fax number"),
+    };
+
+    setErrors(nextErrors);
+    return Object.values(nextErrors).every((message) => !message);
   }
 
   async function handleSave() {
@@ -266,6 +362,10 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
       return;
     }
 
+    if (!validateFaxFields()) {
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -274,7 +374,7 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
         provider_name: provider === "SRFax" ? "srfax" : "ringcentral",
         account_identifier: fields.accountIdentifier,
         auth_secret: fields.authSecret,
-        fax_number: fields.faxNumber,
+        fax_number: normalizeTenDigitNumber(fields.faxNumber),
         notes: fields.notes.trim() ? fields.notes : null,
       });
       onComplete();
@@ -318,7 +418,10 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
               {(["SRFax", "RingCentral Fax"] as const).map((p) => (
                 <button
                   key={p}
-                  onClick={() => setProvider(p)}
+                  onClick={() => {
+                    setProvider(p);
+                    setErrors((current) => ({ ...current, provider: "" }));
+                  }}
                   className={cn(
                     "rounded-lg border px-3 py-1.5 text-sm font-medium transition-all",
                     provider === p
@@ -330,6 +433,9 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
                 </button>
               ))}
             </div>
+            {errors.provider ? (
+              <p className="mt-2 text-xs text-destructive">{errors.provider}</p>
+            ) : null}
           </div>
 
           {provider && (
@@ -337,19 +443,49 @@ function FaxStep({ onComplete }: { onComplete: () => void }) {
               <Input
                 placeholder="Account identifier"
                 value={fields.accountIdentifier}
-                onChange={(e) => setFields((f) => ({ ...f, accountIdentifier: e.target.value }))}
+                onChange={(e) => {
+                  setFields((f) => ({ ...f, accountIdentifier: e.target.value }));
+                  setErrors((current) => ({ ...current, accountIdentifier: "" }));
+                }}
+                className={errors.accountIdentifier ? invalidInputClassName : undefined}
+                aria-invalid={Boolean(errors.accountIdentifier)}
               />
+              {errors.accountIdentifier ? (
+                <p className="text-xs text-destructive">{errors.accountIdentifier}</p>
+              ) : null}
               <Input
                 type="password"
                 placeholder="Auth secret"
                 value={fields.authSecret}
-                onChange={(e) => setFields((f) => ({ ...f, authSecret: e.target.value }))}
+                onChange={(e) => {
+                  setFields((f) => ({ ...f, authSecret: e.target.value }));
+                  setErrors((current) => ({ ...current, authSecret: "" }));
+                }}
+                className={errors.authSecret ? invalidInputClassName : undefined}
+                aria-invalid={Boolean(errors.authSecret)}
               />
+              {errors.authSecret ? (
+                <p className="text-xs text-destructive">{errors.authSecret}</p>
+              ) : null}
               <Input
                 placeholder="Fax number"
                 value={fields.faxNumber}
-                onChange={(e) => setFields((f) => ({ ...f, faxNumber: e.target.value }))}
+                onChange={(e) => {
+                  const nextValue = limitPhoneOrFaxInput(e.target.value);
+                  setFields((f) => ({ ...f, faxNumber: nextValue }));
+                  setErrors((current) => ({
+                    ...current,
+                    faxNumber: getTenDigitNumberError(nextValue, "Fax number"),
+                  }));
+                }}
+                className={errors.faxNumber ? invalidInputClassName : undefined}
+                aria-invalid={Boolean(errors.faxNumber)}
+                inputMode="tel"
+                maxLength={10}
               />
+              {errors.faxNumber ? (
+                <p className="text-xs text-destructive">{errors.faxNumber}</p>
+              ) : null}
               <Input
                 placeholder="Notes"
                 value={fields.notes}

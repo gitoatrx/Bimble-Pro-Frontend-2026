@@ -19,7 +19,8 @@ import { normalizeProvinceCodeInput } from "@/lib/form-validation";
 import { doctorStatusLabel } from "@/lib/doctor/types";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { SignaturePad } from "@/components/doctor/doctor-form-shared";
-import { formatCanadaPacificDateKey, formatCanadaPacificDateTime } from "@/lib/time-zone";
+import { formatCanadaPacificDateTime } from "@/lib/time-zone";
+import { formatIsoDateToDisplay } from "@/lib/date-format";
 import {
   deleteClinicDoctorInvite,
   fetchClinicDoctor,
@@ -122,11 +123,7 @@ function formatDateOnly(value: unknown) {
     return "—";
   }
 
-  return formatCanadaPacificDateKey(value, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return formatIsoDateToDisplay(value);
 }
 
 function toDoctor(record: Record<string, unknown>): Doctor {
