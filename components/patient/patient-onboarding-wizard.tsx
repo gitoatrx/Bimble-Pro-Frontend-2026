@@ -8,13 +8,11 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Clock,
   HeartPulse,
   MapPin,
   Package,
   Pill,
   Search,
-  Sparkles,
   Truck,
   Video,
 } from "lucide-react";
@@ -43,6 +41,7 @@ import {
   completePatientIntake,
   fetchBimblePharmacies,
   fetchPatientIntakeSlots,
+  fetchPharmacyDeliveryEstimate,
   resolvePatientLocationCoordinates,
   savePatientIntakeHealth,
   savePatientIntakeProfile,
@@ -229,6 +228,8 @@ export function PatientOnboardingWizard() {
   const [pharmacySearch, setPharmacySearch] = useState("");
   const [isLoadingBimblePharmacies, setIsLoadingBimblePharmacies] = useState(false);
   const [bimblePharmacyError, setBimblePharmacyError] = useState("");
+  const [preferredDeliveryEtaLabel, setPreferredDeliveryEtaLabel] = useState<string | null>(null);
+  const [isLoadingPreferredDeliveryEta, setIsLoadingPreferredDeliveryEta] = useState(false);
   const [dobMonth, setDobMonth] = useState(() => splitDateOfBirth(readPatientOnboardingDraft().dateOfBirth).month);
   const [dobDay, setDobDay] = useState(() => splitDateOfBirth(readPatientOnboardingDraft().dateOfBirth).day);
   const [dobYear, setDobYear] = useState(() => splitDateOfBirth(readPatientOnboardingDraft().dateOfBirth).year);
@@ -280,6 +281,7 @@ export function PatientOnboardingWizard() {
     () => bimblePharmacies.find((option) => option.id === selectedNearbyPharmacyId) ?? null,
     [bimblePharmacies, selectedNearbyPharmacyId],
   );
+  const nearestBimblePharmacy = useMemo(() => bimblePharmacies[0] ?? null, [bimblePharmacies]);
   const filteredBimblePharmacies = useMemo(() => {
     const query = pharmacySearch.trim().toLowerCase();
     if (!query) return bimblePharmacies;
@@ -367,7 +369,7 @@ export function PatientOnboardingWizard() {
     let cancelled = false;
 
     async function loadBimblePharmacies() {
-      if (step !== "pharmacy" || draft.pharmacyChoice !== "preferred") return;
+      if (step !== "pharmacy" || (draft.pharmacyChoice !== "preferred" && draft.pharmacyChoice !== "bimble")) return;
       setBimblePharmacyError("");
       setIsLoadingBimblePharmacies(true);
 
@@ -424,6 +426,58 @@ export function PatientOnboardingWizard() {
       cancelled = true;
     };
   }, [draft, step]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreferredDeliveryEstimate() {
+      setPreferredDeliveryEtaLabel(null);
+      if (
+        step !== "pharmacy" ||
+        draft.pharmacyChoice !== "preferred" ||
+        !selectedBimblePharmacy ||
+        draft.careLatitude == null ||
+        draft.careLongitude == null ||
+        selectedBimblePharmacy.latitude == null ||
+        selectedBimblePharmacy.longitude == null
+      ) {
+        setIsLoadingPreferredDeliveryEta(false);
+        return;
+      }
+
+      setIsLoadingPreferredDeliveryEta(true);
+      try {
+        const estimate = await fetchPharmacyDeliveryEstimate({
+          patientLat: draft.careLatitude,
+          patientLng: draft.careLongitude,
+          pharmacyLat: selectedBimblePharmacy.latitude,
+          pharmacyLng: selectedBimblePharmacy.longitude,
+        });
+        if (!cancelled) {
+          setPreferredDeliveryEtaLabel(estimate.delivery_eta_label);
+        }
+      } catch {
+        if (!cancelled) {
+          setPreferredDeliveryEtaLabel(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingPreferredDeliveryEta(false);
+        }
+      }
+    }
+
+    void loadPreferredDeliveryEstimate();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    draft.careLatitude,
+    draft.careLongitude,
+    draft.pharmacyChoice,
+    selectedBimblePharmacy,
+    step,
+  ]);
 
   useEffect(() => {
     const dob = splitDateOfBirth(draft.dateOfBirth);
@@ -1272,6 +1326,11 @@ export function PatientOnboardingWizard() {
                 setDraft((current) => ({
                   ...current,
                   pharmacyChoice: "bimble",
+                  preferredPharmacyName: "",
+                  preferredPharmacyAddress: "",
+                  preferredPharmacyCity: "",
+                  preferredPharmacyPostalCode: "",
+                  preferredPharmacyPhone: "",
                 }));
                 setBimblePharmacyError("");
                 setPharmacySearch("");
@@ -1285,7 +1344,13 @@ export function PatientOnboardingWizard() {
             >
               <Pill className="h-8 w-8 text-primary" />
               <p className="font-semibold text-foreground">Bimble pharmacy</p>
-              <p className="text-sm text-muted-foreground">Our integrated network — fastest delivery.</p>
+              <p className="text-sm text-muted-foreground">
+                {draft.pharmacyChoice === "bimble" && isLoadingBimblePharmacies
+                  ? "Calculating delivery time..."
+                  : nearestBimblePharmacy?.delivery_eta_label
+                    ? `Estimated delivery: ${nearestBimblePharmacy.delivery_eta_label}`
+                    : "Select to calculate delivery time"}
+              </p>
             </button>
             <button
               type="button"
@@ -1310,7 +1375,15 @@ export function PatientOnboardingWizard() {
             >
               <MapPin className="h-8 w-8 text-primary" />
               <p className="font-semibold text-foreground">My preferred pharmacy</p>
-              <p className="text-sm text-muted-foreground">A partner location you already use.</p>
+              <p className="text-sm text-muted-foreground">
+                {selectedBimblePharmacy
+                  ? isLoadingPreferredDeliveryEta
+                    ? "Calculating delivery time..."
+                    : preferredDeliveryEtaLabel
+                      ? `Estimated delivery: ${preferredDeliveryEtaLabel}`
+                      : "Delivery time unavailable"
+                  : "Choose a pharmacy to see delivery time"}
+              </p>
             </button>
           </div>
           {draft.pharmacyChoice === "preferred" ? (
@@ -1363,7 +1436,11 @@ export function PatientOnboardingWizard() {
                               ) : null}
                             </div>
                             <div className="shrink-0 text-right text-xs font-semibold text-primary">
-                              {option.distance_label || "Nearby"}
+                              {selected
+                                ? isLoadingPreferredDeliveryEta
+                                  ? "Calculating"
+                                  : preferredDeliveryEtaLabel || "ETA unavailable"
+                                : option.distance_label || "Nearby"}
                             </div>
                           </div>
                         </button>
@@ -1377,50 +1454,6 @@ export function PatientOnboardingWizard() {
                   </div>
                 </div>
               ) : null}
-            </div>
-          ) : draft.pharmacyChoice === "bimble" ? (
-            <div className="space-y-4 rounded-[1.5rem] border border-primary/10 bg-gradient-to-br from-primary/5 via-white to-primary/10 p-5 shadow-sm">
-              <div className="rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-foreground">
-                <Sparkles className="mb-1 inline h-4 w-4 text-primary" />{" "}
-                {draft.fulfillment === "delivery" ? (
-                  <>
-                    <strong>
-                      {selectedBimblePharmacy?.delivery_eta_label
-                        ? `We will deliver your order in ${selectedBimblePharmacy.delivery_eta_label}`
-                        : "We will deliver your order as quickly as possible"}
-                    </strong>
-                    .
-                  </>
-                ) : (
-                  <>
-                    <strong>Bimble pharmacy will prepare your prescription quickly</strong> for pharmacy pickup.
-                  </>
-                )}
-              </div>
-              {draft.preferredPharmacyName ? (
-                <div className="rounded-2xl border border-border bg-white px-4 py-3 text-sm">
-                  <div className="font-semibold text-foreground">{draft.preferredPharmacyName}</div>
-                  <div className="mt-1 text-muted-foreground">
-                    {[draft.preferredPharmacyAddress, draft.preferredPharmacyCity, draft.preferredPharmacyPostalCode]
-                      .filter(Boolean)
-                      .join(", ")}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {draft.pharmacyChoice === "preferred" ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-              <Clock className="mb-1 inline h-4 w-4" />{" "}
-              {draft.fulfillment === "delivery" ? (
-                <>
-                  If you choose your preferred pharmacy, delivery may take <strong>up to 3–5 hours</strong>.
-                </>
-              ) : (
-                <>
-                  If you choose your preferred pharmacy, pickup timing will depend on that pharmacy&apos;s processing time.
-                </>
-              )}
             </div>
           ) : null}
           <div className="flex gap-3 pt-2">

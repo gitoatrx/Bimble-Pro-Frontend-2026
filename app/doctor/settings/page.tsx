@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, ChevronUp, Eye, EyeOff } from "lucide-react";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
-import { DoctorHlth2832Editor } from "@/components/doctor/doctor-hlth2832-editor";
 import { DoctorHlth2820Editor } from "@/components/doctor/doctor-hlth2820-editor";
 import { DoctorDuplicatePrescriptionPadOrderEditor } from "@/components/doctor/doctor-duplicate-prescription-pad-order-editor";
 import { Button } from "@/components/ui/button";
@@ -57,21 +56,19 @@ export default function DoctorSettingsPage() {
   });
   const [showPw, setShowPw] = useState(false);
   const [showFormsHub, setShowFormsHub] = useState(false);
-  const [showHlth2832Modal, setShowHlth2832Modal] = useState(false);
   const [showHlth2820Modal, setShowHlth2820Modal] = useState(false);
   const [showPrescriptionPadOrderModal, setShowPrescriptionPadOrderModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!showHlth2832Modal && !showHlth2820Modal && !showPrescriptionPadOrderModal) return;
+    if (!showHlth2820Modal && !showPrescriptionPadOrderModal) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setShowHlth2832Modal(false);
         setShowHlth2820Modal(false);
         setShowPrescriptionPadOrderModal(false);
       }
@@ -82,7 +79,7 @@ export default function DoctorSettingsPage() {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [showHlth2832Modal, showHlth2820Modal, showPrescriptionPadOrderModal]);
+  }, [showHlth2820Modal, showPrescriptionPadOrderModal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -213,9 +210,9 @@ export default function DoctorSettingsPage() {
 
         <DoctorSection title="Onboarding forms">
           <div className="space-y-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
-                Review clinic-prefilled forms or complete optional forms when needed.
+                Review clinic prefilled forms or complete optional forms when needed
               </p>
               <Button
                 type="button"
@@ -249,7 +246,22 @@ export default function DoctorSettingsPage() {
                   <span className="flex flex-1 flex-col items-start space-y-1 text-left">
                     <span className="block font-medium text-foreground">HLTH 2870</span>
                     <span className="block text-xs text-muted-foreground">
-                      Review clinic-paid assignment details and sign
+                      Assignment of payment due to practitioner under the Medical Services Plan
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm font-medium text-foreground">Open</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="!flex h-auto !w-full !justify-between gap-4 px-4 py-4 text-left"
+                  onClick={() => router.push("/doctor/onboarding?stage=hlth_2832&optional=1")}
+                >
+                  <span className="flex flex-1 flex-col items-start space-y-1 text-left">
+                    <span className="block font-medium text-foreground">HLTH 2832</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Application for direct bank payment from Medical Services Plan (MSP) or request for change of
+                      banking information
                     </span>
                   </span>
                   <span className="shrink-0 text-sm font-medium text-foreground">Open</span>
@@ -263,20 +275,9 @@ export default function DoctorSettingsPage() {
                   <span className="flex flex-1 flex-col items-start space-y-1 text-left">
                     <span className="block font-medium text-foreground">HLTH 2950</span>
                     <span className="block text-xs text-muted-foreground">
-                      Review facility attachment details and sign
+                      Medical Services Plan (MSP) practitioner attachment to MSP facility number for business cost
+                      premium
                     </span>
-                  </span>
-                  <span className="shrink-0 text-sm font-medium text-foreground">Open</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="!flex h-auto !w-full !justify-between gap-4 px-4 py-4 text-left"
-                  onClick={() => setShowHlth2832Modal(true)}
-                >
-                  <span className="flex flex-1 flex-col items-start space-y-1 text-left">
-                    <span className="block font-medium text-foreground">HLTH 2832</span>
-                    <span className="block text-xs text-muted-foreground">Duplicate prescription pad order</span>
                   </span>
                   <span className="shrink-0 text-sm font-medium text-foreground">Open</span>
                 </Button>
@@ -288,7 +289,21 @@ export default function DoctorSettingsPage() {
                 >
                   <span className="flex flex-1 flex-col items-start space-y-1 text-left">
                     <span className="block font-medium text-foreground">HLTH 2820</span>
-                    <span className="block text-xs text-muted-foreground">Teleplan service application</span>
+                    <span className="block text-xs text-muted-foreground">Application for Teleplan service</span>
+                  </span>
+                  <span className="shrink-0 text-sm font-medium text-foreground">Open</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="!flex h-auto !w-full !justify-between gap-4 px-4 py-4 text-left"
+                  onClick={() => router.push("/doctor/onboarding?stage=hlth_2991&optional=1")}
+                >
+                  <span className="flex flex-1 flex-col items-start space-y-1 text-left">
+                    <span className="block font-medium text-foreground">HLTH 2991</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Application for MSP billing number (physicians)
+                    </span>
                   </span>
                   <span className="shrink-0 text-sm font-medium text-foreground">Open</span>
                 </Button>
@@ -299,8 +314,8 @@ export default function DoctorSettingsPage() {
                   onClick={() => setShowPrescriptionPadOrderModal(true)}
                 >
                   <span className="flex flex-1 flex-col items-start space-y-1 text-left">
-                    <span className="block font-medium text-foreground">Duplicate prescription pad order</span>
-                    <span className="block text-xs text-muted-foreground">Settings form</span>
+                    <span className="block font-medium text-foreground">Duplicate Prescription Pad Order Form</span>
+                    <span className="block text-xs text-muted-foreground">Duplicate Prescription Pad Order</span>
                   </span>
                   <span className="shrink-0 text-sm font-medium text-foreground">Open</span>
                 </Button>
@@ -311,36 +326,6 @@ export default function DoctorSettingsPage() {
 
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
       </div>
-
-      {showHlth2832Modal ? (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 p-4 py-8 sm:items-center"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setShowHlth2832Modal(false);
-            }
-          }}
-        >
-          <div className="w-full max-w-5xl overflow-hidden rounded-3xl border border-border bg-white shadow-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                  HLTH 2832
-                </p>
-                <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
-                  Payment form
-                </h2>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowHlth2832Modal(false)}>
-                Close
-              </Button>
-            </div>
-            <div className="max-h-[calc(100vh-8rem)] overflow-y-auto px-4 py-4 sm:px-5">
-              <DoctorHlth2832Editor />
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {showHlth2820Modal ? (
         <div

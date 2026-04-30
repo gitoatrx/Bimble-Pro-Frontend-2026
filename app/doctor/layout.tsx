@@ -16,6 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
+import { DoctorSpecialtyGate } from "@/components/doctor/doctor-specialty-gate";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   clearDoctorLoginSession,
@@ -335,6 +336,7 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-screen bg-background">
+      <DoctorSpecialtyGate accessToken={session.accessToken} />
       <div className="flex min-h-screen">
         <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r border-border bg-card lg:flex">
           <div className="flex h-full w-full flex-col">

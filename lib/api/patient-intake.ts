@@ -47,6 +47,12 @@ export type PatientBimblePharmacyListResponse = {
   pharmacies: PatientBimblePharmacy[];
 };
 
+export type PatientPharmacyDeliveryEstimateResponse = {
+  drive_minutes: number | null;
+  delivery_eta_minutes: number | null;
+  delivery_eta_label: string | null;
+};
+
 type CloudPharmacyRecord = {
   id?: string | number | null;
   name?: string | null;
@@ -65,6 +71,11 @@ type CloudPharmacyRecord = {
   latitude?: string | number | null;
   longitude?: string | number | null;
   distance?: string | number | null;
+  distance_km?: string | number | null;
+  distance_label?: string | null;
+  drive_minutes?: number | null;
+  delivery_eta_minutes?: number | null;
+  delivery_eta_label?: string | null;
 };
 
 export type PatientIntakeLocationResponse = {
@@ -178,8 +189,6 @@ export async function reverseGeocodePatientLocation(lat: number, lng: number) {
   });
 }
 
-const CLOUD_PHARMACY_API_URL = "https://cloud.oatrx.ca/api/fetch-all-pharmacies";
-const CLOUD_PHARMACY_PROXY_URL = "/api/v1/pharmacies/cloud";
 const FALLBACK_PATIENT_LATITUDE = 28.6139;
 const FALLBACK_PATIENT_LONGITUDE = 77.209;
 
@@ -211,7 +220,7 @@ function distanceInKm(
 
 function formatDistanceLabel(distanceKm: number | null) {
   if (distanceKm == null) return null;
-  if (distanceKm < 1) return `${Math.round(distanceKm * 1000)} m`;
+  if (distanceKm < 1) return `${Math.max(1, Math.round(distanceKm * 1000))} m`;
   if (distanceKm < 10) return `${distanceKm.toFixed(1)} km`;
   return `${Math.round(distanceKm)} km`;
 }
@@ -234,27 +243,16 @@ function extractCloudPharmacyRecords(payload: unknown): CloudPharmacyRecord[] {
 export async function fetchBimblePharmacies(lat?: number | null, lng?: number | null) {
   const patientLat = lat ?? FALLBACK_PATIENT_LATITUDE;
   const patientLng = lng ?? FALLBACK_PATIENT_LONGITUDE;
-  const url =
-    typeof window === "undefined"
-      ? new URL(CLOUD_PHARMACY_API_URL)
-      : new URL(CLOUD_PHARMACY_PROXY_URL, window.location.origin);
-  url.searchParams.set("lat", String(patientLat));
-  url.searchParams.set("long", String(patientLng));
-
-  const response = await fetch(url.toString(), {
-    headers: { Accept: "application/json" },
-    cache: "no-store",
+  const endpoint = withQuery(API_ENDPOINTS.patientIntakeBimblePharmacies, {
+    lat: String(patientLat),
+    lng: String(patientLng),
   });
-  if (!response.ok) {
-    throw new Error("Could not load pharmacies right now.");
-  }
-
-  const payload: unknown = await response.json();
+  const payload: unknown = await apiRequest<unknown>({ endpoint });
   const pharmacies = extractCloudPharmacyRecords(payload)
     .map((item, index): PatientBimblePharmacy | null => {
       const latitude = parseNumber(item.latitude ?? item.lat);
       const longitude = parseNumber(item.longitude ?? item.lng ?? item.long);
-      const distanceKm = distanceInKm(patientLat, patientLng, latitude, longitude);
+      const distanceKm = parseNumber(item.distance_km) ?? distanceInKm(patientLat, patientLng, latitude, longitude);
       const name = (item.name ?? item.pharmacy_name ?? "").trim();
       if (!name) return null;
       return {
@@ -270,10 +268,10 @@ export async function fetchBimblePharmacies(lat?: number | null, lng?: number | 
         latitude,
         longitude,
         distance_km: distanceKm,
-        distance_label: formatDistanceLabel(distanceKm),
-        drive_minutes: null,
-        delivery_eta_minutes: null,
-        delivery_eta_label: null,
+        distance_label: formatDistanceLabel(distanceKm) ?? item.distance_label ?? null,
+        drive_minutes: item.drive_minutes ?? null,
+        delivery_eta_minutes: item.delivery_eta_minutes ?? null,
+        delivery_eta_label: item.delivery_eta_label ?? null,
       };
     })
     .filter((item): item is PatientBimblePharmacy => Boolean(item))
@@ -285,6 +283,27 @@ export async function fetchBimblePharmacies(lat?: number | null, lng?: number | 
     });
 
   return { pharmacies };
+}
+
+export async function fetchPharmacyDeliveryEstimate({
+  patientLat,
+  patientLng,
+  pharmacyLat,
+  pharmacyLng,
+}: {
+  patientLat: number;
+  patientLng: number;
+  pharmacyLat: number;
+  pharmacyLng: number;
+}) {
+  return apiRequest<PatientPharmacyDeliveryEstimateResponse>({
+    endpoint: withQuery(API_ENDPOINTS.patientIntakePharmacyDeliveryEstimate, {
+      patientLat: String(patientLat),
+      patientLng: String(patientLng),
+      pharmacyLat: String(pharmacyLat),
+      pharmacyLng: String(pharmacyLng),
+    }),
+  });
 }
 
 export async function searchPatientLocations(query: string) {

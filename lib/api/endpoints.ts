@@ -61,6 +61,7 @@ export const API_ENDPOINTS = {
   patientIntakePhoneStart: "/api/v1/patient-intake/phone/start",
   patientIntakeLocationReverseGeocode: "/api/v1/patient-intake/location/reverse-geocode",
   patientIntakeBimblePharmacies: "/api/v1/patient-intake/pharmacies/bimble",
+  patientIntakePharmacyDeliveryEstimate: "/api/v1/patient-intake/pharmacies/delivery-estimate",
   patientIntakePhoneVerify: "/api/v1/patient-intake/phone/verify",
   patientIntakeHealth: "/api/v1/patient-intake/health",
   patientIntakeProfile: "/api/v1/patient-intake/profile",
