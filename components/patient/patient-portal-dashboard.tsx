@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarDays,
+  ChevronDown,
   ChevronRight,
   Clock,
   FileClock,
@@ -334,6 +335,7 @@ export function PatientPortalDashboard() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingStep, setBookingStep] = useState<BookingStep>("problem");
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(emptyBookingDraft);
+  const [problemMenuOpen, setProblemMenuOpen] = useState(false);
   const [bimblePharmacies, setBimblePharmacies] = useState<PatientBimblePharmacy[]>([]);
   const [pharmacySearch, setPharmacySearch] = useState("");
   const [isLoadingBimblePharmacies, setIsLoadingBimblePharmacies] = useState(false);
@@ -578,6 +580,7 @@ export function PatientPortalDashboard() {
 
   function resetBookingFlow() {
     setBookingDraft(emptyBookingDraft);
+    setProblemMenuOpen(false);
     setBimblePharmacies([]);
     setBimblePharmacyError("");
     setPharmacySearch("");
@@ -1753,33 +1756,60 @@ export function PatientPortalDashboard() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="grid gap-2 text-sm text-slate-700">
                       Problem or reason to visit
-                      <select
-                        className="h-12 rounded-2xl border border-border bg-white px-4 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                        value={
-                          patientReasonOptions.find(
-                            (option) =>
-                              String(option.service_id) === bookingDraft.service_id &&
-                              option.label === bookingDraft.problem_label,
-                          )?.value ?? ""
-                        }
-                        onChange={(event) => {
-                          const selectedReason = patientReasonOptions.find(
-                            (option) => option.value === event.target.value,
-                          );
-                          setBookingDraft((current) => ({
-                            ...current,
-                            problem_label: selectedReason?.label ?? "",
-                            service_id: selectedReason ? String(selectedReason.service_id) : "",
-                          }));
+                      <div
+                        className="relative"
+                        onBlur={(event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                            setProblemMenuOpen(false);
+                          }
                         }}
                       >
-                        <option value="">Select a problem</option>
-                        {patientReasonOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        <button
+                          type="button"
+                          className="flex h-12 w-full items-center justify-between gap-3 rounded-2xl border border-border bg-white px-4 text-left text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                          onClick={() => setProblemMenuOpen((current) => !current)}
+                          aria-haspopup="listbox"
+                          aria-expanded={problemMenuOpen}
+                        >
+                          <span
+                            className={cn(
+                              "truncate",
+                              !bookingDraft.problem_label ? "text-slate-500" : "text-foreground",
+                            )}
+                          >
+                            {bookingDraft.problem_label || "Select a problem"}
+                          </span>
+                          <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
+                        </button>
+
+                        {problemMenuOpen ? (
+                          <div
+                            className="absolute left-0 top-[calc(100%+6px)] z-50 max-h-[320px] w-full overflow-x-hidden overflow-y-auto rounded-xl border border-[#d0d8f0] bg-white py-1 shadow-[0_8px_32px_rgba(15,31,61,0.12)] [scrollbar-gutter:stable]"
+                            role="listbox"
+                          >
+                            {symptomSuggestions.map((problem) => (
+                              <button
+                                key={problem.label}
+                                type="button"
+                                className="flex w-full items-start px-4 py-[9px] text-left text-sm text-slate-900 hover:bg-indigo-50"
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  setBookingDraft((current) => ({
+                                    ...current,
+                                    problem_label: problem.label,
+                                    service_id: resolveServiceIdFromProblem(problem.label, services),
+                                  }));
+                                  setProblemMenuOpen(false);
+                                }}
+                                role="option"
+                                aria-selected={bookingDraft.problem_label === problem.label}
+                              >
+                                {problem.label}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
                     </label>
 
                     <label className="grid gap-2 text-sm text-slate-700 sm:col-span-2">
