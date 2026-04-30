@@ -46,6 +46,7 @@ import {
 import { fetchBimblePharmacies, fetchPatientIntakeSlots } from "@/lib/api/patient-intake";
 import type { PatientBimblePharmacy } from "@/lib/api/patient-intake";
 import { clearPatientLoginSession, readPatientLoginSession } from "@/lib/patient/session";
+import { serviceReasonOptionsFromServices } from "@/lib/service-reason-options";
 import type {
   PatientFamilyMember,
   PatientFulfillment,
@@ -141,22 +142,6 @@ type BookingDraft = {
   preferred_pharmacy_phone: string;
 };
 
-type PatientReasonOption = {
-  value: string;
-  service_id: number;
-  label: string;
-  reason_key: string;
-};
-
-function patientReasonOptionsFromServices(services: PatientPortalService[]): PatientReasonOption[] {
-  return services.map((service) => ({
-    value: `${service.service_id}:${service.problem_key ?? service.service_name}`,
-    service_id: service.service_id,
-    label: service.service_name,
-    reason_key: service.problem_key ?? service.service_code,
-  }));
-}
-
 type FamilyForm = {
   first_name: string;
   last_name: string;
@@ -232,6 +217,16 @@ function nextDates(count: number): string[] {
 
 function formatCalendarDate(value: string) {
   return formatIsoDateToDisplay(value);
+}
+
+function getAppointmentReasonLabel(appointment: PatientPortalAppointment) {
+  const selectedReason = appointment.chief_complaint?.split(":")[0]?.trim();
+  return selectedReason || appointment.service_name || "General appointment";
+}
+
+function getAppointmentExtraDetails(appointment: PatientPortalAppointment) {
+  const parts = appointment.chief_complaint?.split(":") ?? [];
+  return parts.length > 1 ? parts.slice(1).join(":").trim() : "";
 }
 
 function SectionCard({
@@ -317,7 +312,7 @@ export function PatientPortalDashboard() {
   const [familyMembers, setFamilyMembers] = useState<PatientFamilyMember[]>([]);
   const [services, setServices] = useState<PatientPortalService[]>([]);
   const patientReasonOptions = useMemo(
-    () => patientReasonOptionsFromServices(services),
+    () => serviceReasonOptionsFromServices(services),
     [services],
   );
 
@@ -336,6 +331,7 @@ export function PatientPortalDashboard() {
   const [bookingStep, setBookingStep] = useState<BookingStep>("problem");
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(emptyBookingDraft);
   const [problemMenuOpen, setProblemMenuOpen] = useState(false);
+  const [problemSearchQuery, setProblemSearchQuery] = useState("");
   const [bimblePharmacies, setBimblePharmacies] = useState<PatientBimblePharmacy[]>([]);
   const [pharmacySearch, setPharmacySearch] = useState("");
   const [isLoadingBimblePharmacies, setIsLoadingBimblePharmacies] = useState(false);
@@ -418,7 +414,11 @@ export function PatientPortalDashboard() {
     if (!query) return bimblePharmacies;
     return bimblePharmacies.filter((option) => option.name.toLowerCase().includes(query));
   }, [bimblePharmacies, pharmacySearch]);
-
+  const filteredPatientReasonOptions = useMemo(() => {
+    const query = problemSearchQuery.trim().toLowerCase();
+    if (!query) return patientReasonOptions;
+    return patientReasonOptions.filter((option) => option.searchableText.includes(query));
+  }, [patientReasonOptions, problemSearchQuery]);
   const requestableAppointments = useMemo(() => {
     const seen = new Set<number>();
     const nextAppointments: PatientPortalAppointment[] = [];
@@ -581,6 +581,7 @@ export function PatientPortalDashboard() {
   function resetBookingFlow() {
     setBookingDraft(emptyBookingDraft);
     setProblemMenuOpen(false);
+    setProblemSearchQuery("");
     setBimblePharmacies([]);
     setBimblePharmacyError("");
     setPharmacySearch("");
@@ -629,6 +630,7 @@ export function PatientPortalDashboard() {
   function validateBookingStep(step: BookingStep) {
     if (step === "problem") {
       if (!bookingDraft.problem_label) return "Please choose the problem or reason for the visit.";
+      if (!bookingDraft.service_id) return "Please select a matching problem from the list.";
       return "";
     }
     if (step === "visit_type") {
@@ -1499,6 +1501,7 @@ export function PatientPortalDashboard() {
                   const isLoadingOptions = rescheduleActionKey === `load:${appointment.appointment_id}`;
                   const isSubmittingReschedule = rescheduleActionKey === `submit:${appointment.appointment_id}`;
                   const isCancellingAppointment = appointmentActionKey === `cancel:${appointment.appointment_id}`;
+                  const appointmentReasonLabel = getAppointmentReasonLabel(appointment);
 
                   return (
                     <div
@@ -1508,7 +1511,7 @@ export function PatientPortalDashboard() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <div className="text-sm font-semibold text-slate-900">
-                            {appointment.service_name || "General appointment"}
+                            {appointmentReasonLabel}
                           </div>
                           <div className="mt-1 text-sm text-slate-600">
                             {appointment.clinic_name || "Clinic pending"} ·{" "}
@@ -1764,32 +1767,61 @@ export function PatientPortalDashboard() {
                           }
                         }}
                       >
-                        <button
-                          type="button"
-                          className="flex h-12 w-full items-center justify-between gap-3 rounded-2xl border border-border bg-white px-4 text-left text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                          onClick={() => setProblemMenuOpen((current) => !current)}
-                          aria-haspopup="listbox"
-                          aria-expanded={problemMenuOpen}
-                        >
-                          <span
-                            className={cn(
-                              "truncate",
-                              !bookingDraft.problem_label ? "text-slate-500" : "text-foreground",
-                            )}
+                        <div className="flex h-12 w-full items-center gap-3 rounded-2xl border border-border bg-white px-4 text-sm text-foreground outline-none focus-within:ring-2 focus-within:ring-primary/20">
+                          <Search className="h-4 w-4 shrink-0 text-slate-500" />
+                          <input
+                            type="text"
+                            value={problemSearchQuery}
+                            onChange={(event) => {
+                              const query = event.target.value;
+                              const selectedOption = patientReasonOptions.find(
+                                (option) =>
+                                  option.label.toLowerCase() === query.trim().toLowerCase(),
+                              );
+
+                              setProblemSearchQuery(query);
+                              setProblemMenuOpen(true);
+                              setBookingDraft((current) => ({
+                                ...current,
+                                problem_label: query,
+                                service_id: selectedOption ? String(selectedOption.service_id) : "",
+                              }));
+                            }}
+                            onFocus={() => {
+                              setProblemSearchQuery((current) => current || bookingDraft.problem_label);
+                              setProblemMenuOpen(true);
+                            }}
+                            placeholder="Select a problem"
+                            autoComplete="off"
+                            className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-slate-500"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-expanded={problemMenuOpen}
+                            aria-controls="patient-booking-problem-listbox"
+                          />
+                          <button
+                            type="button"
+                            className="shrink-0 text-slate-500 transition-colors hover:text-slate-700"
+                            onClick={() => {
+                              setProblemSearchQuery((current) => current || bookingDraft.problem_label);
+                              setProblemMenuOpen((current) => !current);
+                            }}
+                            aria-label="Toggle problem list"
                           >
-                            {bookingDraft.problem_label || "Select a problem"}
-                          </span>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />
-                        </button>
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                        </div>
 
                         {problemMenuOpen ? (
                           <div
+                            id="patient-booking-problem-listbox"
                             className="absolute left-0 top-[calc(100%+6px)] z-50 max-h-[320px] w-full overflow-x-hidden overflow-y-auto rounded-xl border border-[#d0d8f0] bg-white py-1 shadow-[0_8px_32px_rgba(15,31,61,0.12)] [scrollbar-gutter:stable]"
                             role="listbox"
                           >
-                            {symptomSuggestions.map((problem) => (
+                            {filteredPatientReasonOptions.length ? (
+                              filteredPatientReasonOptions.map((problem) => (
                               <button
-                                key={problem.label}
+                                key={problem.value}
                                 type="button"
                                 className="flex w-full items-start px-4 py-[9px] text-left text-sm text-slate-900 hover:bg-indigo-50"
                                 onMouseDown={(event) => {
@@ -1797,8 +1829,9 @@ export function PatientPortalDashboard() {
                                   setBookingDraft((current) => ({
                                     ...current,
                                     problem_label: problem.label,
-                                    service_id: resolveServiceIdFromProblem(problem.label, services),
+                                    service_id: String(problem.service_id),
                                   }));
+                                  setProblemSearchQuery(problem.label);
                                   setProblemMenuOpen(false);
                                 }}
                                 role="option"
@@ -1806,7 +1839,12 @@ export function PatientPortalDashboard() {
                               >
                                 {problem.label}
                               </button>
-                            ))}
+                              ))
+                            ) : (
+                              <div className="px-4 py-3 text-sm text-slate-500">
+                                No matching reasons found.
+                              </div>
+                            )}
                           </div>
                         ) : null}
                       </div>
@@ -2190,12 +2228,16 @@ export function PatientPortalDashboard() {
           >
             <div className="space-y-3">
               {pastAppointments.length ? (
-                pastAppointments.map((appointment) => (
-                  <div key={appointment.appointment_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                pastAppointments.map((appointment) => {
+                  const appointmentReasonLabel = getAppointmentReasonLabel(appointment);
+                  const appointmentExtraDetails = getAppointmentExtraDetails(appointment);
+
+                  return (
+                    <div key={appointment.appointment_id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="text-sm font-semibold text-slate-900">
-                          {appointment.service_name || "General appointment"}
+                          {appointmentReasonLabel}
                         </div>
                         <div className="mt-1 text-sm text-slate-600">
                           {appointment.clinic_name || "Clinic pending"} · {getAppointmentStatusLabel(appointment.status)}
@@ -2206,9 +2248,9 @@ export function PatientPortalDashboard() {
                             {appointment.appointment_time ? ` · ${appointment.appointment_time}` : ""}
                           </div>
                         ) : null}
-                        {appointment.chief_complaint ? (
+                        {appointmentExtraDetails ? (
                           <div className="mt-2 text-sm text-slate-600">
-                            {appointment.chief_complaint}
+                            {appointmentExtraDetails}
                           </div>
                         ) : null}
                         {appointment.fulfillment ? (
@@ -2233,7 +2275,8 @@ export function PatientPortalDashboard() {
                       </div>
                     </div>
                   </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">
                   Past appointments will appear here once a visit is completed or cancelled.

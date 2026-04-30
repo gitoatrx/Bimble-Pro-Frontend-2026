@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, ArrowRight, Brain, CalendarCheck, ChevronDown, Droplets, MapPin, Search, Stethoscope, TrendingUp, Users, Zap } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { fetchAvailableServices, type AvailableServiceRecord } from "@/lib/api/clinic-dashboard";
@@ -13,6 +13,8 @@ import {
   parseClinicAddressPrediction,
   parseClinicAddressSelection,
 } from "@/lib/clinic/google-places";
+import { clearPatientOnboardingSession } from "@/lib/patient/onboarding-session";
+import { serviceReasonOptionsFromServices } from "@/lib/service-reason-options";
 import type {
   GoogleAutocompleteService,
   GooglePlaceDetails,
@@ -256,6 +258,10 @@ export function Homepage() {
   const locationPredictionRequestRef = useRef(0);
   const skipLocationSearchForValueRef = useRef<string | null>(null);
   const [serviceOptions, setServiceOptions] = useState<AvailableServiceRecord[]>([]);
+  const careReasonOptions = useMemo(
+    () => serviceReasonOptionsFromServices(serviceOptions),
+    [serviceOptions],
+  );
   const [locationResolved, setLocationResolved] = useState(false);
   const locationRequestSeqRef = useRef(0);
   const locationRequestInFlightRef = useRef(false);
@@ -610,21 +616,13 @@ export function Homepage() {
       c.toLowerCase().startsWith(locationQuery.toLowerCase()),
   );
 
-  const filteredServices = serviceOptions.filter((service) => {
+  const filteredCareReasonOptions = careReasonOptions.filter((option) => {
     if (!careQuery.trim()) return true;
     const query = careQuery.trim().toLowerCase();
-    return (
-      service.service_name.toLowerCase().includes(query) ||
-      (service.description ?? "").toLowerCase().includes(query)
-    );
+    return option.searchableText.includes(query);
   });
 
-  const careSuggestions = filteredServices
-    .map((service) => ({
-      service,
-      label: service.display_reasons?.[0]?.reason_label || service.service_name,
-    }))
-    .sort((a, b) => {
+  const careSuggestions = filteredCareReasonOptions.sort((a, b) => {
       const query = careQuery.trim().toLowerCase();
       if (!query) return a.label.localeCompare(b.label);
       const aLabel = a.label.toLowerCase();
@@ -639,22 +637,14 @@ export function Homepage() {
     (query: string) => {
       const normalized = query.trim().toLowerCase();
       if (!normalized) return null;
-      const exact = serviceOptions.find(
-        (service) => service.service_name.toLowerCase() === normalized,
+      const exact = careReasonOptions.find(
+        (option) => option.label.toLowerCase() === normalized,
       );
       if (exact) return exact.service_id;
-      const partial = serviceOptions.find((service) => {
-        const name = service.service_name.toLowerCase();
-        const description = (service.description ?? "").toLowerCase();
-        return (
-          name.includes(normalized) ||
-          normalized.includes(name) ||
-          description.includes(normalized)
-        );
-      });
+      const partial = careReasonOptions.find((option) => option.searchableText.includes(normalized));
       return partial?.service_id ?? null;
     },
-    [serviceOptions],
+    [careReasonOptions],
   );
 
   const handleSelectCity = useCallback((city: string) => {
@@ -841,8 +831,8 @@ export function Homepage() {
                     const value = e.target.value;
                     setCareQuery(value);
                     setShowCareSuggestions(true);
-                    const selected = serviceOptions.find(
-                      (service) => service.service_name.toLowerCase() === value.trim().toLowerCase(),
+                    const selected = careReasonOptions.find(
+                      (option) => option.label.toLowerCase() === value.trim().toLowerCase(),
                     );
                     setSelectedServiceId(selected?.service_id ?? null);
                   }}
@@ -871,13 +861,13 @@ export function Homepage() {
                       overscrollBehavior: "contain",
                     }}
                   >
-                    {careSuggestions.map(({ service, label }) => (
+                    {careSuggestions.map((option) => (
                           <button
-                            key={`${service.service_id}-${service.problem_key ?? service.service_name}`}
+                            key={option.value}
                             type="button"
                             onMouseDown={() => {
-                              setCareQuery(label);
-                              setSelectedServiceId(service.service_id);
+                              setCareQuery(option.label);
+                              setSelectedServiceId(option.service_id);
                               setShowCareSuggestions(false);
                             }}
                             style={{
@@ -902,10 +892,10 @@ export function Homepage() {
                           >
                             <Search size={13} style={{ color: "#8896b4", flexShrink: 0 }} />
                             <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {label}
+                              {option.label}
                             </span>
                           </button>
-                        ))}
+                    ))}
                   </div>
                 ) : null}
               </div>
@@ -1039,6 +1029,7 @@ export function Homepage() {
                     params.set("lng", String(locationCoordinates.lng));
                   }
                   const q = params.toString();
+                  clearPatientOnboardingSession();
                   router.push(q ? `/patient/onboarding?${q}` : "/patient/onboarding");
                 }}
               >
@@ -1203,8 +1194,8 @@ export function Homepage() {
                   className="hp-care-pill"
                   onClick={() => {
                     setCareQuery(c);
-                    const selected = serviceOptions.find(
-                      (service) => service.service_name.toLowerCase() === c.toLowerCase(),
+                    const selected = careReasonOptions.find(
+                      (option) => option.label.toLowerCase() === c.toLowerCase(),
                     );
                     setSelectedServiceId(selected?.service_id ?? null);
                   }}

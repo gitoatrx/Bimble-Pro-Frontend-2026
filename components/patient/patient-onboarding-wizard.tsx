@@ -49,6 +49,7 @@ import {
   startPatientIntakePhone,
   verifyPatientIntakePhone,
 } from "@/lib/api/patient-intake";
+import { fetchPatientServices } from "@/lib/api/patient";
 import type { PatientBimblePharmacy } from "@/lib/api/patient-intake";
 import type {
   PatientIntakeCompletion,
@@ -77,6 +78,7 @@ import {
   writePatientOnboardingDraft,
   writePatientOnboardingStep,
 } from "@/lib/patient/onboarding-session";
+import { serviceReasonOptionsFromServices } from "@/lib/service-reason-options";
 import { storePatientLoginSession } from "@/lib/patient/session";
 import { cn } from "@/lib/utils";
 
@@ -187,33 +189,65 @@ function stepLabel(step: PatientOnboardingStep): string {
   return map[step];
 }
 
+function parseNullableNumber(value: string | null) {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getPatientOnboardingSearch() {
+  return typeof window === "undefined" ? "" : window.location.search;
+}
+
+function applyPatientOnboardingQueryContext(
+  draft: PatientOnboardingDraft,
+  search: string,
+): PatientOnboardingDraft {
+  const params = new URLSearchParams(search);
+  const reason = params.get("reason")?.trim() ?? "";
+  const location = params.get("location")?.trim() ?? "";
+  const careLatitude = parseNullableNumber(params.get("lat"));
+  const careLongitude = parseNullableNumber(params.get("lng"));
+  const serviceId = parseNullableNumber(params.get("serviceId"));
+
+  return {
+    ...draft,
+    serviceId: serviceId ?? (reason ? null : draft.serviceId),
+    careReason: reason || draft.careReason,
+    careLocation: location || draft.careLocation,
+    careLatitude: careLatitude ?? draft.careLatitude,
+    careLongitude: careLongitude ?? draft.careLongitude,
+  };
+}
+
+async function resolveServiceIdFromCareReason(careReason: string) {
+  const normalized = careReason.trim().toLowerCase();
+  if (!normalized || normalized === "general consultation") return null;
+
+  try {
+    const services = await fetchPatientServices();
+    const reasonOptions = serviceReasonOptionsFromServices(services);
+    const exact = reasonOptions.find(
+      (option) =>
+        option.label.toLowerCase() === normalized ||
+        option.reason_key.toLowerCase() === normalized,
+    );
+    if (exact) return exact.service_id;
+
+    const partial = reasonOptions.find((option) => option.searchableText.includes(normalized));
+    return partial?.service_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function PatientOnboardingWizard() {
   const router = useRouter();
   const hydrated = useSyncExternalStore(() => () => {}, () => true, () => false);
   const [step, setStep] = useState<PatientOnboardingStep>(() => readPatientOnboardingStep());
   const [draft, setDraft] = useState<PatientOnboardingDraft>(() => {
     const baseDraft = readPatientOnboardingDraft();
-    if (typeof window === "undefined") return baseDraft;
-
-    const params = new URLSearchParams(window.location.search);
-    const reason = params.get("reason")?.trim() ?? "";
-    const location = params.get("location")?.trim() ?? "";
-    const latitudeRaw = params.get("lat");
-    const longitudeRaw = params.get("lng");
-    const careLatitude =
-      latitudeRaw && Number.isFinite(Number(latitudeRaw)) ? Number(latitudeRaw) : baseDraft.careLatitude;
-    const careLongitude =
-      longitudeRaw && Number.isFinite(Number(longitudeRaw)) ? Number(longitudeRaw) : baseDraft.careLongitude;
-    const serviceIdRaw = params.get("serviceId");
-    const serviceId = serviceIdRaw ? Number(serviceIdRaw) : null;
-    return {
-      ...baseDraft,
-      serviceId: baseDraft.serviceId ?? (Number.isFinite(serviceId) ? serviceId : null),
-      careReason: reason || baseDraft.careReason,
-      careLocation: location || baseDraft.careLocation,
-      careLatitude,
-      careLongitude,
-    };
+    return applyPatientOnboardingQueryContext(baseDraft, getPatientOnboardingSearch());
   });
   const [otpCode, setOtpCode] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -239,6 +273,23 @@ export function PatientOnboardingWizard() {
     writePatientOnboardingStep(nextStep);
     setDraft(nextDraft);
     setStep(nextStep);
+  }, []);
+
+  useEffect(() => {
+    setDraft((current) => {
+      const nextDraft = applyPatientOnboardingQueryContext(current, getPatientOnboardingSearch());
+      if (
+        nextDraft.careReason === current.careReason &&
+        nextDraft.serviceId === current.serviceId &&
+        nextDraft.careLocation === current.careLocation &&
+        nextDraft.careLatitude === current.careLatitude &&
+        nextDraft.careLongitude === current.careLongitude
+      ) {
+        return current;
+      }
+      writePatientOnboardingDraft(nextDraft);
+      return nextDraft;
+    });
   }, []);
 
   const { progressOrder, stepIndex, progressPct } = useMemo(() => {
@@ -500,13 +551,27 @@ export function PatientOnboardingWizard() {
     setSubmitting(true);
     try {
       const phone = digitsOnly(draft.phone);
+      const search = getPatientOnboardingSearch();
+      const params = new URLSearchParams(search);
+      const queryDraft = applyPatientOnboardingQueryContext(draft, search);
+      const careReason = queryDraft.careReason || "General consultation";
+      const queryServiceId = params.has("reason")
+        ? parseNullableNumber(params.get("serviceId"))
+        : queryDraft.serviceId;
+      const resolvedServiceId =
+        queryServiceId ?? (await resolveServiceIdFromCareReason(careReason));
+      const nextDraft = {
+        ...queryDraft,
+        careReason,
+        serviceId: resolvedServiceId,
+      };
       const response = await startPatientIntakePhone({
         phone,
-        careReason: draft.careReason || "General consultation",
-        careLocation: draft.careLocation || undefined,
-        careLatitude: draft.careLatitude,
-        careLongitude: draft.careLongitude,
-        serviceId: draft.serviceId,
+        careReason: nextDraft.careReason,
+        careLocation: nextDraft.careLocation || undefined,
+        careLatitude: nextDraft.careLatitude,
+        careLongitude: nextDraft.careLongitude,
+        serviceId: nextDraft.serviceId,
       });
       storePatientIntakeSessionId(response.intake_session_id);
       setIntakeSessionId(response.intake_session_id);
@@ -514,7 +579,7 @@ export function PatientOnboardingWizard() {
       setPreviewCode(response.preview_code);
       setOtpCode("");
       setErrors({});
-      persist(draft, "otp");
+      persist(nextDraft, "otp");
     } catch (error) {
       setErrors({
         phone: error instanceof Error ? error.message : "Could not start verification. Please try again.",
