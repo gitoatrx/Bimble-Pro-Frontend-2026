@@ -71,6 +71,23 @@ export type PatientIntakeLocationResponse = {
   location: string | null;
 };
 
+export type PatientLocationSearchResult = {
+  id: string;
+  label: string;
+  main_text: string;
+  secondary_text: string;
+  display_name: string;
+  lat: number;
+  lng: number;
+  city: string;
+  province: string;
+  postal_code: string;
+};
+
+export type PatientLocationSearchResponse = {
+  results: PatientLocationSearchResult[];
+};
+
 export type PatientIntakePhoneStartResponse = {
   intake_session_id: number;
   masked_phone: string;
@@ -162,6 +179,7 @@ export async function reverseGeocodePatientLocation(lat: number, lng: number) {
 }
 
 const CLOUD_PHARMACY_API_URL = "https://cloud.oatrx.ca/api/fetch-all-pharmacies";
+const CLOUD_PHARMACY_PROXY_URL = "/api/v1/pharmacies/cloud";
 const FALLBACK_PATIENT_LATITUDE = 28.6139;
 const FALLBACK_PATIENT_LONGITUDE = 77.209;
 
@@ -216,7 +234,10 @@ function extractCloudPharmacyRecords(payload: unknown): CloudPharmacyRecord[] {
 export async function fetchBimblePharmacies(lat?: number | null, lng?: number | null) {
   const patientLat = lat ?? FALLBACK_PATIENT_LATITUDE;
   const patientLng = lng ?? FALLBACK_PATIENT_LONGITUDE;
-  const url = new URL(CLOUD_PHARMACY_API_URL);
+  const url =
+    typeof window === "undefined"
+      ? new URL(CLOUD_PHARMACY_API_URL)
+      : new URL(CLOUD_PHARMACY_PROXY_URL, window.location.origin);
   url.searchParams.set("lat", String(patientLat));
   url.searchParams.set("long", String(patientLng));
 
@@ -264,6 +285,17 @@ export async function fetchBimblePharmacies(lat?: number | null, lng?: number | 
     });
 
   return { pharmacies };
+}
+
+export async function searchPatientLocations(query: string) {
+  return apiRequest<PatientLocationSearchResponse>({
+    endpoint: withQuery("/api/v1/location/search", { q: query }),
+  });
+}
+
+export async function resolvePatientLocationCoordinates(query: string) {
+  const response = await searchPatientLocations(query);
+  return response.results[0] ?? null;
 }
 
 export async function verifyPatientIntakePhone(payload: PatientIntakePhoneVerifyRequest) {

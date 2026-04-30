@@ -43,6 +43,7 @@ import {
   completePatientIntake,
   fetchBimblePharmacies,
   fetchPatientIntakeSlots,
+  resolvePatientLocationCoordinates,
   savePatientIntakeHealth,
   savePatientIntakeProfile,
   savePatientIntakeVisit,
@@ -127,6 +128,20 @@ function composeDateOfBirth(month: string, day: string, year: string) {
     return "";
   }
   return `${normalizedYear}-${normalizedMonth}-${normalizedDay}`;
+}
+
+function buildPatientLocationQuery(draft: PatientOnboardingDraft) {
+  return [
+    draft.careLocation,
+    draft.addressLine,
+    draft.city,
+    draft.province,
+    draft.postalCode,
+    "Canada",
+  ]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ");
 }
 
 function isFutureDateOfBirth(value: string) {
@@ -357,7 +372,34 @@ export function PatientOnboardingWizard() {
       setIsLoadingBimblePharmacies(true);
 
       try {
-        const response = await fetchBimblePharmacies(draft.careLatitude, draft.careLongitude);
+        let latitude = draft.careLatitude;
+        let longitude = draft.careLongitude;
+
+        if (latitude == null || longitude == null) {
+          const locationQuery = buildPatientLocationQuery(draft);
+          if (locationQuery) {
+            const resolvedLocation = await resolvePatientLocationCoordinates(locationQuery);
+            if (cancelled) return;
+            if (resolvedLocation) {
+              latitude = resolvedLocation.lat;
+              longitude = resolvedLocation.lng;
+              setDraft((current) => ({
+                ...current,
+                careLatitude: resolvedLocation.lat,
+                careLongitude: resolvedLocation.lng,
+                careLocation: current.careLocation || resolvedLocation.label,
+              }));
+              writePatientOnboardingDraft({
+                ...draft,
+                careLatitude: resolvedLocation.lat,
+                careLongitude: resolvedLocation.lng,
+                careLocation: draft.careLocation || resolvedLocation.label,
+              });
+            }
+          }
+        }
+
+        const response = await fetchBimblePharmacies(latitude, longitude);
         if (cancelled) return;
         const pharmacies = response.pharmacies ?? [];
         setBimblePharmacies(pharmacies);
@@ -381,7 +423,7 @@ export function PatientOnboardingWizard() {
     return () => {
       cancelled = true;
     };
-  }, [draft.careLatitude, draft.careLongitude, draft.pharmacyChoice, step]);
+  }, [draft, step]);
 
   useEffect(() => {
     const dob = splitDateOfBirth(draft.dateOfBirth);

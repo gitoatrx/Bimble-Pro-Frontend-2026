@@ -23,7 +23,6 @@ import {
   DOCTOR_UI_PREVIEW_OFF_KEY,
   getDoctorUiPreviewSession,
   getDoctorUiPreviewSessionRaw,
-  isDoctorOnboardingComplete,
   readDoctorLoginSession,
   storeDoctorLoginSession,
   suppressDoctorUiPreviewForTab,
@@ -146,7 +145,6 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
     () => true,
     () => false,
   );
-  const isOnboardingRoute = pathname === "/doctor/onboarding";
   const sessionRaw = useSyncExternalStore(
     subscribeToDoctorSessionChanges,
     readDoctorSessionSnapshot,
@@ -191,16 +189,11 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
     if (!hydrated || isPublic) return;
     if (!session) {
       router.replace("/doctor/login");
-      return;
-    }
-
-    if (!isDoctorOnboardingComplete(session.doctorId) && pathname !== "/doctor/onboarding") {
-      router.replace("/doctor/onboarding");
     }
   }, [hydrated, isPublic, pathname, router, session]);
 
   useEffect(() => {
-    if (!session?.accessToken || !isDoctorOnboardingComplete(session.doctorId) || isPublic) {
+    if (!session?.accessToken || isPublic) {
       return;
     }
     const accessToken = session.accessToken;
@@ -282,10 +275,6 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
 
   if (!hydrated) return null;
   if (!session) return null;
-
-  if (isOnboardingRoute) {
-    return <>{children}</>;
-  }
 
   function handleLogout() {
     clearDoctorLoginSession();

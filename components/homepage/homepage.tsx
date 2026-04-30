@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, ArrowRight, Brain, CalendarCheck, ChevronDown, Droplets, MapPin, Search, Stethoscope, TrendingUp, Users, Zap } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { fetchAvailableServices, type AvailableServiceRecord } from "@/lib/api/clinic-dashboard";
+import { searchPatientLocations } from "@/lib/api/patient-intake";
 import {
   loadGoogleMapsPlaces,
   parseClinicAddressPrediction,
@@ -55,6 +56,12 @@ type GooglePlaceDetailsWithGeometry = GooglePlaceDetails & {
       lng?: (() => number) | number;
     };
   };
+};
+
+type HomepageLocationPrediction = GooglePlacePrediction & {
+  lat?: number;
+  lng?: number;
+  label?: string;
 };
 
 async function reverseGeocodeViaProxy(
@@ -237,7 +244,7 @@ export function Homepage() {
   >("idle");
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const [showCareSuggestions, setShowCareSuggestions] = useState(false);
-  const [locationPredictions, setLocationPredictions] = useState<GooglePlacePrediction[]>([]);
+  const [locationPredictions, setLocationPredictions] = useState<HomepageLocationPrediction[]>([]);
   const [isLocationPredictionLoading, setIsLocationPredictionLoading] = useState(false);
   const [locationPlacesState, setLocationPlacesState] = useState<"idle" | "loading" | "ready" | "error">(() =>
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "loading" : "error",
@@ -528,7 +535,7 @@ export function Homepage() {
       return;
     }
 
-    if (locationPlacesState !== "ready" || trimmedLocation.length < 3) return;
+    if (trimmedLocation.length < 3) return;
 
     const requestId = locationPredictionRequestRef.current + 1;
     locationPredictionRequestRef.current = requestId;
@@ -536,9 +543,35 @@ export function Homepage() {
     const timer = window.setTimeout(() => {
       const autocompleteService = locationAutocompleteServiceRef.current;
 
-      if (!autocompleteService) {
-        setLocationPredictions([]);
-        setIsLocationPredictionLoading(false);
+      if (locationPlacesState !== "ready" || !autocompleteService) {
+        setIsLocationPredictionLoading(true);
+        void searchPatientLocations(trimmedLocation)
+          .then((response) => {
+            if (requestId !== locationPredictionRequestRef.current) return;
+            setLocationPredictions(
+              response.results.map((result) => ({
+                place_id: result.id,
+                description: result.label || result.display_name,
+                structured_formatting: {
+                  main_text: result.main_text,
+                  secondary_text: result.secondary_text,
+                },
+                lat: result.lat,
+                lng: result.lng,
+                label: result.label || result.display_name,
+              })),
+            );
+            setShowCitySuggestions(true);
+          })
+          .catch(() => {
+            if (requestId !== locationPredictionRequestRef.current) return;
+            setLocationPredictions([]);
+          })
+          .finally(() => {
+            if (requestId === locationPredictionRequestRef.current) {
+              setIsLocationPredictionLoading(false);
+            }
+          });
         return;
       }
 
@@ -650,15 +683,20 @@ export function Homepage() {
     setShowCitySuggestions(false);
   }, []);
 
-  const handleSelectLocationPrediction = useCallback((prediction: GooglePlacePrediction) => {
+  const handleSelectLocationPrediction = useCallback((prediction: HomepageLocationPrediction) => {
     setShowCitySuggestions(false);
     setLocationPredictions([]);
     setIsLocationPredictionLoading(false);
 
-    const selectedAddress = stripCountrySuffix(prediction.description);
+    const selectedAddress = stripCountrySuffix(prediction.label ?? prediction.description);
     skipLocationSearchForValueRef.current = selectedAddress;
     setLocationQuery(selectedAddress);
     setLocationResolved(true);
+
+    if (typeof prediction.lat === "number" && typeof prediction.lng === "number") {
+      setLocationCoordinates({ lat: prediction.lat, lng: prediction.lng });
+      return;
+    }
 
     const placesService = locationPlacesServiceRef.current;
     if (!placesService) {
