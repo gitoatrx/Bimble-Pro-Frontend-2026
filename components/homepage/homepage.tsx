@@ -847,7 +847,7 @@ export function Homepage() {
                       boxShadow: "0 8px 32px rgba(15,31,61,0.12)",
                       zIndex: 120,
                       overflowX: "hidden",
-                      maxHeight: "min(520px, 60vh)",
+                      maxHeight: "320px",
                       overflowY: "auto",
                       overscrollBehavior: "contain",
                       scrollbarGutter: "stable",
@@ -865,7 +865,7 @@ export function Homepage() {
                             style={{
                               width: "100%",
                               textAlign: "left",
-                              padding: "10px 16px",
+                              padding: "9px 16px",
                               fontSize: "14px",
                               color: "#0f1f3d",
                               background: "none",
