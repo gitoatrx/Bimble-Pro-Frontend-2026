@@ -13,6 +13,8 @@ const invalidInputClassName = "!border-destructive focus-visible:ring-destructiv
 type InviteForm = {
   first_name: string;
   last_name: string;
+  college_id: string;
+  msp_billing_number: string;
   password: string;
   confirm_password: string;
   pin: string;
@@ -32,6 +34,8 @@ export default function DoctorInviteAcceptPage() {
   const [form, setForm] = useState<InviteForm>({
     first_name: "",
     last_name: "",
+    college_id: "",
+    msp_billing_number: "",
     password: "",
     confirm_password: "",
     pin: "",
@@ -155,6 +159,12 @@ export default function DoctorInviteAcceptPage() {
       return;
     }
 
+    const collegeId = form.college_id.trim();
+    if (!collegeId) {
+      setError("CPSID / College ID / Prescriber ID is required.");
+      return;
+    }
+
     setSubmitting(true);
     setError("");
 
@@ -166,6 +176,8 @@ export default function DoctorInviteAcceptPage() {
           invite_token: token,
           first_name: normalizedFirstName,
           last_name: normalizedLastName,
+          college_id: collegeId,
+          msp_billing_number: form.msp_billing_number.trim() || undefined,
           password: form.password,
           pin: form.pin.trim(),
         }),
@@ -408,6 +420,31 @@ export default function DoctorInviteAcceptPage() {
                 <p className="text-xs text-destructive">{fieldErrors.last_name}</p>
               ) : null}
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="college_id" className="text-sm font-medium text-foreground">
+              CPSID / College ID / Prescriber ID
+            </label>
+            <Input
+              id="college_id"
+              placeholder="Required for prescriptions"
+              value={form.college_id}
+              onChange={set("college_id")}
+              required
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="msp_billing_number" className="text-sm font-medium text-foreground">
+              MSP billing / provider number
+            </label>
+            <Input
+              id="msp_billing_number"
+              placeholder="Optional, used for billing"
+              value={form.msp_billing_number}
+              onChange={set("msp_billing_number")}
+            />
           </div>
 
           <div className="space-y-1.5">

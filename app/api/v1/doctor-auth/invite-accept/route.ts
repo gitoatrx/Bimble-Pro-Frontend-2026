@@ -8,6 +8,8 @@ export async function POST(request: Request) {
     last_name: string;
     password: string;
     pin?: string;
+    college_id?: string;
+    msp_billing_number?: string;
     service_codes?: string[];
   };
 
@@ -28,6 +30,12 @@ export async function POST(request: Request) {
   }
   if (payload.pin !== undefined && !/^\d{4}$/.test(payload.pin.trim())) {
     return NextResponse.json({ message: "PIN must be 4 digits." }, { status: 400 });
+  }
+  if (!payload.college_id?.trim()) {
+    return NextResponse.json(
+      { message: "CPSID / College ID / Prescriber ID is required." },
+      { status: 400 },
+    );
   }
   if (payload.service_codes !== undefined && !Array.isArray(payload.service_codes)) {
     return NextResponse.json({ message: "Service codes must be an array." }, { status: 400 });

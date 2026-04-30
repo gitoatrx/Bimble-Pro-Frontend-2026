@@ -8,7 +8,6 @@ import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-
 import { Button } from "@/components/ui/button";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import {
-  fetchDoctorSigAbbreviations,
   fetchDoctorAppointment,
   printDoctorPrescription,
   saveDoctorPrescription,
@@ -16,7 +15,6 @@ import {
   type DoctorAppointment,
   type DoctorDrugSearchItem,
   type DoctorPrescriptionRecord,
-  type DoctorSigAbbreviation,
 } from "@/lib/api/doctor-dashboard";
 import { cn } from "@/lib/utils";
 import { formatIsoDateToDisplay } from "@/lib/date-format";
@@ -41,12 +39,6 @@ type MedicationDraft = {
   drugCode: string | null;
   drugName: string;
   ingredient: string | null;
-  dosageForm: string | null;
-  routeLabel: string | null;
-  drugCategory: string | null;
-  isNarcotic: boolean;
-  technicalReasons: NonNullable<DoctorDrugSearchItem["technical_reasons"]>;
-  selectedReason: string;
   instructions: string;
   specialInstructions: string;
   quantity: string;
@@ -59,6 +51,9 @@ type MedicationDraft = {
   sigFrequency: string;
   sigTiming: string;
   sigModifier: string;
+  sigAction: string;
+  sigUnit: string;
+  sigRouteText: string;
 };
 
 const DEFAULT_DURATION_DAYS = 30;
@@ -74,6 +69,29 @@ const FREQUENCY_OPTIONS = [
   { code: "Q8H", label: "Every 8 hours", dosesPerDay: 3 },
   { code: "Q12H", label: "Every 12 hours", dosesPerDay: 2 },
   { code: "PRN", label: "As needed", dosesPerDay: null },
+];
+
+const DOSAGE_FORM_WORDS = [
+  "tablet",
+  "tablets",
+  "capsule",
+  "capsules",
+  "caplet",
+  "caplets",
+  "pill",
+  "pills",
+  "ml",
+  "mg",
+  "puff",
+  "puffs",
+  "spray",
+  "sprays",
+  "drop",
+  "drops",
+  "unit",
+  "units",
+  "patch",
+  "patches",
 ];
 
 function dateInputValue(date = new Date()) {
@@ -224,8 +242,10 @@ function routeCodeFromDrug(drug: Pick<DoctorDrugSearchItem, "route" | "dosage_fo
 
 function inferFrequencyCode(text: string) {
   const value = text.toLowerCase();
-  if (/every\s*12\s*hours|q12h|twice daily|two times daily|bid/.test(value)) return "Q12H";
-  if (/every\s*8\s*hours|q8h|three times daily|tid/.test(value)) return "Q8H";
+  if (/twice daily|two times daily|bid/.test(value)) return "BID";
+  if (/three times daily|thrice daily|tid/.test(value)) return "TID";
+  if (/every\s*12\s*hours|q12h/.test(value)) return "Q12H";
+  if (/every\s*8\s*hours|q8h/.test(value)) return "Q8H";
   if (/every\s*6\s*hours|q6h/.test(value)) return "Q6H";
   if (/every\s*4\s*hours|q4h/.test(value)) return "Q4H";
   if (/four times daily|qid/.test(value)) return "QID";
@@ -236,8 +256,81 @@ function inferFrequencyCode(text: string) {
 }
 
 function inferDose(text: string) {
-  const match = text.match(/\b(?:take|apply|inhale|instill|insert|inject)\s+([0-9]+(?:\.[0-9]+)?(?:\s*(?:tablet|tablets|capsule|capsules|mL|mg|puff|puffs|drop|drops|unit|units|patch|patches))?)/i);
+  const match = text.match(/\b(?:take|apply|inhale|instill|insert|inject|spray)\s+([0-9]+(?:\.[0-9]+)?(?:\s*(?:tablet|tablets|capsule|capsules|mL|mg|puff|puffs|spray|sprays|drop|drops|unit|units|patch|patches))?)/i);
   return match?.[1]?.trim() || "1";
+}
+
+function normalizeDoseAmount(dose: string) {
+  const amount = Number.parseFloat(dose || "1");
+  return Number.isFinite(amount) && amount > 0 ? amount : 1;
+}
+
+function doseUnitFromDose(dose: string) {
+  const unit = dose
+    .replace(/[0-9.]/g, "")
+    .trim()
+    .toLowerCase();
+  return DOSAGE_FORM_WORDS.includes(unit) ? unit : "";
+}
+
+function singularizeUnit(unit: string) {
+  if (!unit) return "";
+  if (unit === "ml" || unit === "mg") return unit;
+  if (unit.endsWith("ies")) return `${unit.slice(0, -3)}y`;
+  if (unit.endsWith("s")) return unit.slice(0, -1);
+  return unit;
+}
+
+function pluralizeUnit(unit: string, amount: number) {
+  if (!unit || amount === 1 || unit === "ml" || unit === "mg") return unit;
+  if (unit.endsWith("s")) return unit;
+  return `${unit}s`;
+}
+
+function defaultDoseUnitFromDrug(drug: Pick<DoctorDrugSearchItem, "dosage_form" | "name" | "route">) {
+  const text = `${drug.dosage_form || ""} ${drug.name || ""}`.toLowerCase();
+  if (/capsule|cap\b/.test(text)) return "capsule";
+  if (/tablet|tab\b|caplet|pill/.test(text)) return "tablet";
+  if (/suspension|syrup|solution|liquid|elixir|oral drops/.test(text)) return "mL";
+  if (/inhaler|puff/.test(text)) return "puff";
+  if (/spray|nasal/.test(text)) return "spray";
+  if (/eye|ophthalmic|otic|ear|drop/.test(text)) return "drop";
+  if (/patch/.test(text)) return "patch";
+  return "";
+}
+
+function actionPhraseFromDrug(drug: Pick<DoctorDrugSearchItem, "route" | "dosage_form" | "name">, doseUnit: string) {
+  const route = (drug.route || "").toLowerCase();
+  const text = `${drug.dosage_form || ""} ${drug.name || ""}`.toLowerCase();
+  if (route.includes("topical") || /cream|ointment|gel|lotion|shampoo|paste/.test(text)) return "Apply to affected area";
+  if (route.includes("inhal") || /inhaler|puff|neb/.test(text)) return "Inhale";
+  if (route.includes("nasal")) return "Spray into nostril";
+  if (/eye|ophthalmic/.test(text)) return "Instill";
+  if (/ear|otic/.test(text)) return "Instill";
+  if (route.includes("rectal")) return "Insert rectally";
+  if (route.includes("vaginal")) return "Insert vaginally";
+  if (/inject|vial|syringe|pen/.test(text)) return "Inject";
+  if (route.includes("oral") || doseUnit) return "Take";
+  return "Take";
+}
+
+function routeTextFromDrug(drug: Pick<DoctorDrugSearchItem, "route" | "dosage_form" | "name">, action: string) {
+  const route = (drug.route || "").toLowerCase();
+  const text = `${drug.dosage_form || ""} ${drug.name || ""}`.toLowerCase();
+  if (action.toLowerCase().startsWith("apply")) return "";
+  if (action.toLowerCase().startsWith("instill")) {
+    if (/eye|ophthalmic/.test(text)) return "into affected eye";
+    if (/ear|otic/.test(text)) return "into affected ear";
+    return "into affected area";
+  }
+  if (route.includes("oral")) return "by mouth";
+  if (route.includes("topical")) return "topically";
+  if (route.includes("inhal")) return "";
+  if (route.includes("nasal")) return "";
+  if (route.includes("intramuscular")) return "intramuscularly";
+  if (route.includes("subcutaneous")) return "subcutaneously";
+  if (route.includes("intravenous")) return "intravenously";
+  return "";
 }
 
 function inferDurationDays(text: string) {
@@ -253,7 +346,7 @@ function inferDurationDays(text: string) {
 
 function quantityFromDose(dose: string, frequencyCode: string, durationDays: string) {
   const duration = Number.parseInt(durationDays || "0", 10);
-  const doseAmount = Number.parseFloat(dose || "1");
+  const doseAmount = normalizeDoseAmount(dose);
   const option = FREQUENCY_OPTIONS.find((item) => item.code === frequencyCode);
   if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(doseAmount) || !option?.dosesPerDay) {
     return duration > 0 ? String(duration) : "";
@@ -262,19 +355,92 @@ function quantityFromDose(dose: string, frequencyCode: string, durationDays: str
   return Number.isInteger(total) ? String(total) : String(Number(total.toFixed(2)));
 }
 
-function applySigDefaults(medicine: MedicationDraft, sig: string): MedicationDraft {
-  const frequency = inferFrequencyCode(sig);
-  const durationDays = String(inferDurationDays(sig));
+function inferTimingText(text: string) {
+  const value = text.toLowerCase();
+  if (/with food|with meals|with meal/.test(value)) return "with food";
+  if (/before food|before meals|before meal|before eating/.test(value)) return "before meals";
+  if (/after food|after meals|after meal|after eating/.test(value)) return "after meals";
+  if (/empty stomach/.test(value)) return "on an empty stomach";
+  if (/in the morning|every morning/.test(value)) return "in the morning";
+  if (/in the evening|every evening/.test(value)) return "in the evening";
+  if (/at night/.test(value)) return "at night";
+  if (/with water/.test(value)) return "with water";
+  return "";
+}
+
+function inferRouteCodeFromInstruction(text: string, fallbackRoute = "") {
+  const value = text.toLowerCase();
+  if (/by mouth|orally|\bpo\b/.test(value)) return "PO";
+  if (/topically|to affected area|on affected area|apply/.test(value)) return "TOP";
+  if (/inhale|inhalation/.test(value)) return "INH";
+  if (/nostril|nasal/.test(value)) return "IN";
+  if (/rectally|rectal/.test(value)) return "PR";
+  if (/vaginally|vaginal/.test(value)) return "PV";
+  if (/intramuscularly|\bim\b/.test(value)) return "IM";
+  if (/subcutaneously|\bsc\b|\bsubcut\b/.test(value)) return "SC";
+  if (/intravenously|\biv\b/.test(value)) return "IV";
+  return fallbackRoute;
+}
+
+function inferActionFromInstruction(text: string, fallbackAction = "Take") {
+  const value = text.trim().toLowerCase();
+  if (value.startsWith("apply")) return "Apply to affected area";
+  if (value.startsWith("inhale")) return "Inhale";
+  if (value.startsWith("instill")) return "Instill";
+  if (value.startsWith("insert")) return value.includes("vaginal") ? "Insert vaginally" : "Insert rectally";
+  if (value.startsWith("inject")) return "Inject";
+  if (value.startsWith("spray")) return "Spray into nostril";
+  if (value.startsWith("take")) return "Take";
+  return fallbackAction || "Take";
+}
+
+function parseInstructionFields(
+  instruction: string,
+  current: MedicationDraft,
+): Pick<
+  MedicationDraft,
+  "sigDose" | "sigFrequency" | "sigTiming" | "sigRoute" | "sigAction" | "sigUnit" | "sigModifier" | "durationDays" | "endDate" | "quantity"
+> {
+  const dose = inferDose(instruction) || current.sigDose || "1";
+  const frequency = inferFrequencyCode(instruction) || current.sigFrequency || "OD";
+  const timing = inferTimingText(instruction);
+  const duration = inferDurationDays(instruction);
+  const durationDays = String(duration || Number.parseInt(current.durationDays || "0", 10) || DEFAULT_DURATION_DAYS);
+  const unit = doseUnitFromDose(dose) || current.sigUnit;
   return {
-    ...medicine,
-    instructions: sig,
-    sigDose: inferDose(sig),
+    sigDose: dose,
     sigFrequency: frequency,
-    sigModifier: frequency === "PRN" ? "PRN" : medicine.sigModifier,
+    sigTiming: timing,
+    sigRoute: inferRouteCodeFromInstruction(instruction, current.sigRoute),
+    sigAction: inferActionFromInstruction(instruction, current.sigAction),
+    sigUnit: unit,
+    sigModifier: frequency === "PRN" || /as needed|prn/i.test(instruction) ? "PRN" : "",
     durationDays,
-    endDate: addDays(medicine.startDate, Number.parseInt(durationDays, 10)),
-    quantity: quantityFromDose(inferDose(sig), frequency, durationDays),
+    endDate: current.startDate ? addDays(current.startDate, Number.parseInt(durationDays, 10)) : current.endDate,
+    quantity: quantityFromDose(dose, frequency, durationDays),
   };
+}
+
+function buildInstructionFromParts(
+  medicine: Pick<MedicationDraft, "sigDose" | "sigFrequency" | "sigTiming" | "sigAction" | "sigUnit" | "sigRouteText" | "durationDays">,
+) {
+  const frequency = FREQUENCY_OPTIONS.find((item) => item.code === medicine.sigFrequency);
+  const amount = normalizeDoseAmount(medicine.sigDose);
+  const unit = singularizeUnit(doseUnitFromDose(medicine.sigDose) || medicine.sigUnit);
+  const normalizedDose = Number.isInteger(amount) ? String(amount) : String(amount);
+  const pieces = [medicine.sigAction || "Take"];
+  if ((medicine.sigAction || "Take").toLowerCase().startsWith("apply")) {
+    // Topical instructions usually do not need "1 cream"; keep them natural.
+  } else if (unit) {
+    pieces.push(`${normalizedDose} ${pluralizeUnit(unit, amount)}`);
+  } else {
+    pieces.push(normalizedDose);
+  }
+  if (medicine.sigRouteText) pieces.push(medicine.sigRouteText);
+  if (frequency?.label) pieces.push(frequency.label.toLowerCase());
+  if (medicine.sigTiming && medicine.sigTiming !== frequency?.label.toLowerCase()) pieces.push(medicine.sigTiming);
+  if (medicine.durationDays) pieces.push(`for ${medicine.durationDays} days`);
+  return pieces.filter(Boolean).join(" ").replace(/\s+/g, " ").trim() + ".";
 }
 
 export default function DoctorAppointmentTreatmentPage() {
@@ -294,7 +460,6 @@ export default function DoctorAppointmentTreatmentPage() {
   const [savedPrescription, setSavedPrescription] = useState<DoctorPrescriptionRecord | null>(null);
   const [documentDownloadUrl, setDocumentDownloadUrl] = useState<string | null>(null);
   const [printMessage, setPrintMessage] = useState("");
-  const [sigAbbreviations, setSigAbbreviations] = useState<DoctorSigAbbreviation[]>([]);
 
   const loadAppointment = useCallback(async () => {
     const session = readDoctorLoginSession();
@@ -325,20 +490,6 @@ export default function DoctorAppointmentTreatmentPage() {
   useEffect(() => {
     void loadAppointment();
   }, [loadAppointment]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchDoctorSigAbbreviations()
-      .then((items) => {
-        if (!cancelled) setSigAbbreviations(items);
-      })
-      .catch(() => {
-        if (!cancelled) setSigAbbreviations([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const session = readDoctorLoginSession();
@@ -376,49 +527,51 @@ export default function DoctorAppointmentTreatmentPage() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const sigByCode = useMemo(
-    () => new Map(sigAbbreviations.map((item) => [item.code, item])),
-    [sigAbbreviations],
-  );
-  const sigText = useCallback((code: string) => sigByCode.get(code)?.plain_language ?? "", [sigByCode]);
   const sigDoseNumber = (value: string) => {
     const parsed = Number.parseFloat(value.trim());
     return Number.isFinite(parsed) ? parsed : null;
   };
 
   const buildSigInstruction = useCallback(
-    (medicine: Pick<MedicationDraft, "sigDose" | "sigRoute" | "sigFrequency" | "sigTiming" | "sigModifier">) => {
-      const parts = ["Take"];
-      if (medicine.sigDose.trim()) parts.push(medicine.sigDose.trim());
-      if (medicine.sigRoute) parts.push(sigText(medicine.sigRoute));
-      if (medicine.sigFrequency) parts.push(sigText(medicine.sigFrequency));
-      if (medicine.sigTiming && medicine.sigTiming !== medicine.sigFrequency) parts.push(sigText(medicine.sigTiming));
-      if (medicine.sigModifier && medicine.sigModifier !== medicine.sigTiming) parts.push(sigText(medicine.sigModifier));
-      return parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    (
+      medicine: Pick<
+        MedicationDraft,
+        "sigDose" | "sigFrequency" | "sigTiming" | "sigAction" | "sigUnit" | "sigRouteText" | "sigModifier" | "durationDays"
+      >,
+    ) => {
+      const instruction = buildInstructionFromParts(medicine);
+      return instruction;
     },
-    [sigText],
+    [],
   );
 
   const handleSelectDrug = (drug: DoctorDrugSearchItem) => {
     const startDate = dateInputValue();
     const suggestedInstructions = drug.suggested_sig || "Take 1 by mouth";
     const durationDays = inferDurationDays(suggestedInstructions);
-    const frequency = inferFrequencyCode(suggestedInstructions);
+    const frequency = inferFrequencyCode(suggestedInstructions) || "OD";
     const dose = inferDose(suggestedInstructions);
     const route = routeCodeFromDrug(drug);
+    const unit = doseUnitFromDose(dose) || defaultDoseUnitFromDrug(drug);
+    const action = actionPhraseFromDrug(drug, unit);
+    const routeText = routeTextFromDrug(drug, action);
+    const baseMedication = {
+      sigDose: dose,
+      sigFrequency: frequency,
+      sigTiming: inferTimingText(suggestedInstructions),
+      sigAction: action,
+      sigUnit: unit,
+      sigRouteText: routeText,
+      sigModifier: frequency === "PRN" ? "PRN" : "",
+      durationDays: String(durationDays),
+    };
     const newMedication: MedicationDraft = {
       localId: `${drug.source_id}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       drugCatalogSourceId: drug.source_id,
       drugCode: drug.drug_code,
       drugName: drug.name,
       ingredient: drug.brand_name || drug.descriptor,
-      dosageForm: drug.dosage_form ?? drug.descriptor,
-      routeLabel: drug.route ?? null,
-      drugCategory: drug.drug_category ?? null,
-      isNarcotic: Boolean(drug.is_narcotic),
-      technicalReasons: drug.technical_reasons ?? [],
-      selectedReason: drug.technical_reasons?.[0]?.technical_reason ?? "",
-      instructions: suggestedInstructions,
+      instructions: buildSigInstruction(baseMedication),
       specialInstructions: "",
       quantity: quantityFromDose(dose, frequency, String(durationDays)),
       repeats: "0",
@@ -428,8 +581,11 @@ export default function DoctorAppointmentTreatmentPage() {
       sigDose: dose,
       sigRoute: route,
       sigFrequency: frequency,
-      sigTiming: "",
+      sigTiming: baseMedication.sigTiming,
       sigModifier: frequency === "PRN" ? "PRN" : "",
+      sigAction: action,
+      sigUnit: unit,
+      sigRouteText: routeText,
     };
     setSelectedDrug(drug);
     setMedications((current) => [...current, newMedication]);
@@ -443,6 +599,9 @@ export default function DoctorAppointmentTreatmentPage() {
       current.map((item) => {
         if (item.localId !== localId) return item;
         const next = { ...item, [field]: value };
+        if (field === "instructions") {
+          Object.assign(next, parseInstructionFields(String(value), item));
+        }
         if (field === "startDate" || field === "durationDays") {
           const days = Number.parseInt(String(field === "durationDays" ? value : next.durationDays), 10);
           next.endDate = next.startDate && Number.isFinite(days) ? addDays(next.startDate, days) : next.endDate;
@@ -476,19 +635,6 @@ export default function DoctorAppointmentTreatmentPage() {
           updated.quantity = quantityFromDose(updated.sigDose, updated.sigFrequency, updated.durationDays);
         }
         return updated;
-      }),
-    );
-    setSavedPrescription(null);
-    setDocumentDownloadUrl(null);
-    setPrintMessage("");
-
-  };
-
-  const applySuggestedSig = (localId: string, reason: string, sig: string) => {
-    setMedications((current) =>
-      current.map((item) => {
-        if (item.localId !== localId) return item;
-        return applySigDefaults({ ...item, selectedReason: reason }, sig);
       }),
     );
     setSavedPrescription(null);
@@ -715,11 +861,11 @@ export default function DoctorAppointmentTreatmentPage() {
           </DoctorSection>
 
           <DoctorSection title="Step 3 · Prescription details">
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <div className={cn("grid gap-4", medications.length === 0 && "opacity-70")}>
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <div className={cn("grid content-start gap-4 self-start", medications.length === 0 && "opacity-70")}>
               {medications.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border/80 bg-muted/30 px-4 py-8 text-center text-sm font-medium text-muted-foreground">
-                  Search and select one or more medicines above. Each medicine will get its own quick dose and date controls here.
+                  Search and select one or more medicines above. Bimble will prefill the instruction and quantity defaults.
                 </div>
               ) : null}
 
@@ -737,129 +883,92 @@ export default function DoctorAppointmentTreatmentPage() {
                   </div>
 
                   <div className="mt-4 grid gap-4">
-                    <div className="rounded-2xl border border-primary/15 bg-primary/5 p-3">
-                      <div className="flex flex-wrap gap-2 text-xs font-medium text-muted-foreground">
-                        {[medicine.dosageForm, medicine.routeLabel, medicine.drugCategory, medicine.isNarcotic ? "Narcotic" : ""]
-                          .filter(Boolean)
-                          .map((item) => (
-                            <span key={item} className="rounded-full bg-background px-3 py-1">
-                              {item}
-                            </span>
-                          ))}
-                      </div>
-                      {medicine.technicalReasons.length > 0 ? (
-                        <div className="mt-3 grid gap-2">
-                          <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                            OatRx suggested instructions
-                          </span>
-                          <div className="flex flex-wrap gap-2">
-                            {medicine.technicalReasons.slice(0, 5).flatMap((reasonItem) =>
-                              reasonItem.sigs.slice(0, 2).map((sig) => (
-                                <button
-                                  key={`${reasonItem.technical_reason}-${sig}`}
-                                  type="button"
-                                  onClick={() => applySuggestedSig(medicine.localId, reasonItem.technical_reason, sig)}
-                                  className={cn(
-                                    "rounded-2xl border px-3 py-2 text-left text-xs font-semibold transition hover:border-primary/50 hover:bg-background",
-                                    medicine.instructions === sig
-                                      ? "border-primary bg-background text-primary"
-                                      : "border-border bg-white text-foreground",
-                                  )}
-                                >
-                                  <span className="block text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                                    {reasonItem.technical_reason || "Suggested SIG"}
-                                  </span>
-                                  {sig}
-                                </button>
-                              )),
-                            )}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <Field label="System instruction">
+                    <Field label="Dosage / instructions">
                       <textarea
                         value={medicine.instructions}
                         onChange={(event) => updateMedication(medicine.localId, "instructions", event.target.value)}
-                        className="min-h-20 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-                        placeholder="Example: Take 1 tablet by mouth once daily"
+                        className="min-h-24 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                        placeholder="Example: Take 1 capsule by mouth twice daily with food for 7 days."
                       />
                     </Field>
 
-                    <div className="grid gap-4 md:grid-cols-[1fr_1fr_1fr_1fr]">
-                      <Field label="Dose">
-                        <input
-                          value={medicine.sigDose}
-                          onChange={(event) => updateMedicationSig(medicine.localId, "sigDose", event.target.value)}
-                          className={inputClass()}
-                          placeholder="1"
-                        />
-                      </Field>
-                      <Field label="Frequency">
-                        <select
-                          value={medicine.sigFrequency}
-                          onChange={(event) => updateMedicationSig(medicine.localId, "sigFrequency", event.target.value)}
-                          className={inputClass()}
-                        >
-                          <option value="">Select frequency</option>
-                          {FREQUENCY_OPTIONS.map((item) => (
-                            <option key={item.code} value={item.code}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field label="Qty/Mitte">
-                        <input
-                          value={medicine.quantity}
-                          onChange={(event) => updateMedication(medicine.localId, "quantity", event.target.value)}
-                          className={inputClass()}
-                        />
-                      </Field>
-                      <Field label="Repeats">
-                        <input
-                          value={medicine.repeats}
-                          onChange={(event) => updateMedication(medicine.localId, "repeats", event.target.value)}
-                          className={inputClass()}
-                        />
-                      </Field>
+                    <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm text-foreground">
+                      <p className="font-semibold">Parsed prescription details</p>
+                      <p className="mt-1 text-xs font-medium text-muted-foreground">
+                        Dose {medicine.sigDose || "1"} · {FREQUENCY_OPTIONS.find((item) => item.code === medicine.sigFrequency)?.label || "Frequency"}{" "}
+                        {medicine.sigTiming ? `· ${medicine.sigTiming}` : ""} · {medicine.durationDays || "0"} days · Qty {medicine.quantity || "0"} · Repeats{" "}
+                        {medicine.repeats || "0"}
+                      </p>
+                      <p className="mt-1 text-xs font-medium text-muted-foreground">
+                        Start {medicine.startDate || "today"} · End {medicine.endDate || "calculated"}
+                      </p>
                     </div>
 
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <Field label="Start date">
-                        <input
-                          type="date"
-                          value={medicine.startDate}
-                          onChange={(event) => updateMedication(medicine.localId, "startDate", event.target.value)}
-                          className={inputClass()}
-                        />
-                      </Field>
-                      <Field label="Duration days">
-                        <input
-                          value={medicine.durationDays}
-                          onChange={(event) => updateMedication(medicine.localId, "durationDays", event.target.value)}
-                          className={inputClass()}
-                        />
-                      </Field>
-                      <Field label="End date">
-                        <input
-                          type="date"
-                          value={medicine.endDate}
-                          onChange={(event) => updateMedication(medicine.localId, "endDate", event.target.value)}
-                          className={inputClass()}
-                        />
-                      </Field>
-                    </div>
-
-                    <Field label="Special instructions">
-                      <textarea
-                        value={medicine.specialInstructions}
-                        onChange={(event) => updateMedication(medicine.localId, "specialInstructions", event.target.value)}
-                        className="min-h-16 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-                        placeholder="Optional: with food, affected area, left eye, counselling note..."
-                      />
-                    </Field>
+                    <details className="rounded-2xl border border-border bg-muted/20 px-4 py-3">
+                      <summary className="cursor-pointer text-sm font-semibold text-foreground">Adjust details</summary>
+                      <div className="mt-4 grid gap-4">
+                        <div className="grid gap-4 md:grid-cols-3">
+                          <Field label="Dose">
+                            <input
+                              value={medicine.sigDose}
+                              onChange={(event) => updateMedicationSig(medicine.localId, "sigDose", event.target.value)}
+                              className={inputClass()}
+                              placeholder="1"
+                            />
+                          </Field>
+                          <Field label="Frequency">
+                            <select
+                              value={medicine.sigFrequency}
+                              onChange={(event) => updateMedicationSig(medicine.localId, "sigFrequency", event.target.value)}
+                              className={inputClass()}
+                            >
+                              {FREQUENCY_OPTIONS.map((item) => (
+                                <option key={item.code} value={item.code}>
+                                  {item.label}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Duration days">
+                            <input
+                              value={medicine.durationDays}
+                              onChange={(event) => updateMedication(medicine.localId, "durationDays", event.target.value)}
+                              className={inputClass()}
+                            />
+                          </Field>
+                          <Field label="Start date">
+                            <input
+                              type="date"
+                              value={medicine.startDate}
+                              onChange={(event) => updateMedication(medicine.localId, "startDate", event.target.value)}
+                              className={inputClass()}
+                            />
+                          </Field>
+                          <Field label="Qty/Mitte">
+                            <input
+                              value={medicine.quantity}
+                              onChange={(event) => updateMedication(medicine.localId, "quantity", event.target.value)}
+                              className={inputClass()}
+                            />
+                          </Field>
+                          <Field label="Repeats">
+                            <input
+                              value={medicine.repeats}
+                              onChange={(event) => updateMedication(medicine.localId, "repeats", event.target.value)}
+                              className={inputClass()}
+                            />
+                          </Field>
+                        </div>
+                        <Field label="Special instructions">
+                          <textarea
+                            value={medicine.specialInstructions}
+                            onChange={(event) => updateMedication(medicine.localId, "specialInstructions", event.target.value)}
+                            className="min-h-16 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                            placeholder="Optional: with food, affected area, left eye, counselling note..."
+                          />
+                        </Field>
+                      </div>
+                    </details>
                   </div>
                 </div>
               ))}
@@ -878,7 +987,7 @@ export default function DoctorAppointmentTreatmentPage() {
             </div>
 
             {medications.length > 0 ? (
-              <div className="space-y-5 rounded-2xl border border-border bg-card p-4 print:hidden">
+              <div className="self-start space-y-5 rounded-2xl border border-border bg-card p-4 print:hidden">
                 <div id="prescription-preview" className="rounded-2xl border border-slate-300 bg-white p-5 text-slate-950 shadow-sm">
                   <div className="flex min-h-24 border-2 border-slate-900">
                     <div className="flex w-32 items-center justify-center border-r-2 border-slate-900 font-serif text-7xl">Rx</div>
