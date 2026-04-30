@@ -4,9 +4,21 @@ import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, ArrowRight, Battery, Brain, CalendarCheck, ChevronDown, Droplets, MapPin, Moon, Search, Stethoscope, Sun, TrendingUp, Users, Zap } from "lucide-react";
+import { Activity, ArrowRight, Brain, CalendarCheck, ChevronDown, Droplets, MapPin, Search, Stethoscope, TrendingUp, Users, Zap } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { fetchAvailableServices, type AvailableServiceRecord } from "@/lib/api/clinic-dashboard";
+import {
+  loadGoogleMapsPlaces,
+  parseClinicAddressPrediction,
+  parseClinicAddressSelection,
+} from "@/lib/clinic/google-places";
+import type {
+  GoogleAutocompleteService,
+  GooglePlaceDetails,
+  GooglePlacePrediction,
+  GooglePlacesService,
+} from "@/lib/clinic/google-places";
+import { stripCountrySuffix } from "@/lib/form-validation";
 import {
   bcCities,
   faqs,
@@ -34,6 +46,15 @@ type BrowserReverseGeocodeResponse = {
 type ReverseGeocodeProxyResponse = {
   location?: string | null;
   display_name?: string | null;
+};
+
+type GooglePlaceDetailsWithGeometry = GooglePlaceDetails & {
+  geometry?: {
+    location?: {
+      lat?: (() => number) | number;
+      lng?: (() => number) | number;
+    };
+  };
 };
 
 async function reverseGeocodeViaProxy(
@@ -67,6 +88,15 @@ async function reverseGeocodeViaProxy(
   } catch {
     return null;
   }
+}
+
+function readGooglePlaceCoordinates(place: GooglePlaceDetailsWithGeometry) {
+  const latitude = place.geometry?.location?.lat;
+  const longitude = place.geometry?.location?.lng;
+  const lat = typeof latitude === "function" ? latitude() : latitude;
+  const lng = typeof longitude === "function" ? longitude() : longitude;
+
+  return typeof lat === "number" && typeof lng === "number" ? { lat, lng } : null;
 }
 
 async function reverseGeocodeBrowserLocation(
@@ -207,8 +237,18 @@ export function Homepage() {
   >("idle");
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const [showCareSuggestions, setShowCareSuggestions] = useState(false);
+  const [locationPredictions, setLocationPredictions] = useState<GooglePlacePrediction[]>([]);
+  const [isLocationPredictionLoading, setIsLocationPredictionLoading] = useState(false);
+  const [locationPlacesState, setLocationPlacesState] = useState<"idle" | "loading" | "ready" | "error">(() =>
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? "loading" : "error",
+  );
+  const [locationPermissionDismissed, setLocationPermissionDismissed] = useState(false);
   const locationInputRef = useRef<HTMLInputElement>(null);
   const careInputRef = useRef<HTMLInputElement>(null);
+  const locationAutocompleteServiceRef = useRef<GoogleAutocompleteService | null>(null);
+  const locationPlacesServiceRef = useRef<GooglePlacesService | null>(null);
+  const locationPredictionRequestRef = useRef(0);
+  const skipLocationSearchForValueRef = useRef<string | null>(null);
   const [serviceOptions, setServiceOptions] = useState<AvailableServiceRecord[]>([]);
   const [locationResolved, setLocationResolved] = useState(false);
   const locationRequestSeqRef = useRef(0);
@@ -286,6 +326,7 @@ export function Homepage() {
       });
       if (error.code === error.PERMISSION_DENIED) {
         setGeoStatus("denied");
+        setLocationPermissionDismissed(false);
       } else {
         // TIMEOUT/POSITION_UNAVAILABLE can happen even when permission is granted.
         setGeoStatus("unavailable");
@@ -436,20 +477,106 @@ export function Homepage() {
     };
   }, []);
 
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+    if (!apiKey) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function initializePlaces() {
+      try {
+        const placesNamespace = await loadGoogleMapsPlaces(apiKey);
+
+        if (cancelled) {
+          return;
+        }
+
+        locationAutocompleteServiceRef.current = new placesNamespace.AutocompleteService();
+
+        try {
+          locationPlacesServiceRef.current = placesNamespace.PlacesService
+            ? new placesNamespace.PlacesService(document.createElement("div"))
+            : null;
+        } catch {
+          locationPlacesServiceRef.current = null;
+        }
+
+        setLocationPlacesState("ready");
+      } catch {
+        if (!cancelled) {
+          setLocationPlacesState("error");
+        }
+      }
+    }
+
+    void initializePlaces();
+
+    return () => {
+      cancelled = true;
+      locationAutocompleteServiceRef.current = null;
+      locationPlacesServiceRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const trimmedLocation = locationQuery.trim();
+
+    if (skipLocationSearchForValueRef.current === trimmedLocation) {
+      skipLocationSearchForValueRef.current = null;
+      return;
+    }
+
+    if (locationPlacesState !== "ready" || trimmedLocation.length < 3) return;
+
+    const requestId = locationPredictionRequestRef.current + 1;
+    locationPredictionRequestRef.current = requestId;
+
+    const timer = window.setTimeout(() => {
+      const autocompleteService = locationAutocompleteServiceRef.current;
+
+      if (!autocompleteService) {
+        setLocationPredictions([]);
+        setIsLocationPredictionLoading(false);
+        return;
+      }
+
+      setIsLocationPredictionLoading(true);
+      autocompleteService.getPlacePredictions(
+        {
+          input: trimmedLocation,
+          componentRestrictions: { country: "ca" },
+          types: ["geocode"],
+        },
+        (results, status) => {
+          if (requestId !== locationPredictionRequestRef.current) {
+            return;
+          }
+
+          setIsLocationPredictionLoading(false);
+
+          if (status !== "OK" || !results?.length) {
+            setLocationPredictions([]);
+            return;
+          }
+
+          setLocationPredictions(results);
+          setShowCitySuggestions(true);
+        },
+      );
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [locationPlacesState, locationQuery]);
+
   const filteredCities = bcCities.filter(
     (c) =>
       locationQuery.length > 0 &&
       c.toLowerCase().startsWith(locationQuery.toLowerCase()),
   );
-
-  const geoHint =
-    geoStatus === "loading"
-      ? "Checking your browser location access..."
-      : geoStatus === "denied"
-        ? "Location access is blocked in this browser. Allow location and try again."
-        : geoStatus === "unavailable"
-          ? "This in-app browser may not expose location on localhost. Tap to retry or open in a full browser."
-          : "";
 
   const filteredServices = serviceOptions.filter((service) => {
     if (!careQuery.trim()) return true;
@@ -521,6 +648,58 @@ export function Homepage() {
     setLocationCoordinates(null);
     setLocationResolved(true);
     setShowCitySuggestions(false);
+  }, []);
+
+  const handleSelectLocationPrediction = useCallback((prediction: GooglePlacePrediction) => {
+    setShowCitySuggestions(false);
+    setLocationPredictions([]);
+    setIsLocationPredictionLoading(false);
+
+    const selectedAddress = stripCountrySuffix(prediction.description);
+    skipLocationSearchForValueRef.current = selectedAddress;
+    setLocationQuery(selectedAddress);
+    setLocationResolved(true);
+
+    const placesService = locationPlacesServiceRef.current;
+    if (!placesService) {
+      const selection = parseClinicAddressPrediction(prediction);
+      if (selection?.address) {
+        skipLocationSearchForValueRef.current = selection.address;
+        setLocationQuery(selection.address);
+      }
+      setLocationCoordinates(null);
+      return;
+    }
+
+    placesService.getDetails(
+      {
+        placeId: prediction.place_id,
+        fields: ["address_components", "formatted_address", "geometry", "name"],
+      },
+      (place, status) => {
+        if (status === "OK" && place) {
+          const selection = parseClinicAddressSelection(place);
+          const resolvedAddress =
+            stripCountrySuffix(place.formatted_address) ||
+            selection?.address ||
+            stripCountrySuffix(prediction.description);
+          const coordinates = readGooglePlaceCoordinates(place as GooglePlaceDetailsWithGeometry);
+
+          skipLocationSearchForValueRef.current = resolvedAddress;
+          setLocationQuery(resolvedAddress);
+          setLocationCoordinates(coordinates);
+          setLocationResolved(true);
+          return;
+        }
+
+        const fallbackSelection = parseClinicAddressPrediction(prediction);
+        const fallbackAddress = fallbackSelection?.address || selectedAddress;
+        skipLocationSearchForValueRef.current = fallbackAddress;
+        setLocationQuery(fallbackAddress);
+        setLocationCoordinates(null);
+        setLocationResolved(true);
+      },
+    );
   }, []);
 
   return (
@@ -625,7 +804,15 @@ export function Homepage() {
 
             {/* Search bar */}
             <div className="hp-search-box">
-              <div className="hp-search-field" style={{ position: "relative" }}>
+              <div
+                className="hp-search-field"
+                style={{ position: "relative", cursor: "text" }}
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest("button")) return;
+                  careInputRef.current?.focus();
+                  setShowCareSuggestions(true);
+                }}
+              >
                 <Search size={17} strokeWidth={2} />
                 <input
                   ref={careInputRef}
@@ -665,13 +852,15 @@ export function Homepage() {
                       border: "1px solid #d0d8f0",
                       borderRadius: "12px",
                       boxShadow: "0 8px 32px rgba(15,31,61,0.12)",
-                      zIndex: 50,
-                      overflow: "hidden",
-                      maxHeight: "320px",
+                      zIndex: 120,
+                      overflowX: "hidden",
+                      maxHeight: "min(520px, 60vh)",
                       overflowY: "auto",
+                      overscrollBehavior: "contain",
+                      scrollbarGutter: "stable",
                     }}
                   >
-                    {filteredSymptomSuggestions.slice(0, 10).map((suggestion) => (
+                    {filteredSymptomSuggestions.map((suggestion) => (
                       <button
                         key={suggestion.label}
                         type="button"
@@ -705,7 +894,7 @@ export function Homepage() {
                       </button>
                     ))}
                     {filteredSymptomSuggestions.length === 0
-                      ? filteredServices.slice(0, 10).map((service) => (
+                      ? filteredServices.map((service) => (
                           <button
                             key={service.service_id}
                             type="button"
@@ -743,7 +932,15 @@ export function Homepage() {
                 ) : null}
               </div>
 
-              <div className="hp-search-field" style={{ position: "relative" }}>
+              <div
+                className="hp-search-field"
+                style={{ position: "relative", cursor: "text" }}
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest("button")) return;
+                  locationInputRef.current?.focus();
+                  setShowCitySuggestions(true);
+                }}
+              >
                 <MapPin
                   size={17}
                   strokeWidth={2}
@@ -754,10 +951,14 @@ export function Homepage() {
                   type="text"
                   value={locationQuery}
                   onChange={(e) => {
-                    setLocationQuery(e.target.value);
+                    const value = e.target.value;
+                    setLocationQuery(value);
                     setLocationCoordinates(null);
                     setLocationResolved(false);
                     setShowCitySuggestions(true);
+                    if (value.trim().length < 3) {
+                      setLocationPredictions([]);
+                    }
                   }}
                   onFocus={() => setShowCitySuggestions(true)}
                   onBlur={() => setTimeout(() => setShowCitySuggestions(false), 150)}
@@ -765,14 +966,64 @@ export function Homepage() {
                   autoComplete="off"
                 />
 
-                {showCitySuggestions && filteredCities.length > 0 && (
+                {showCitySuggestions &&
+                  locationQuery.trim().length >= 3 &&
+                  (locationPredictions.length > 0 ||
+                    filteredCities.length > 0 ||
+                    isLocationPredictionLoading) && (
                   <div style={{
                     position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0,
                     background: "#fff", border: "1px solid #d0d8f0",
                     borderRadius: "12px", boxShadow: "0 8px 32px rgba(15,31,61,0.12)",
-                    zIndex: 50, overflow: "hidden",
+                    zIndex: 120,
+                    overflowX: "hidden",
+                    maxHeight: "min(420px, 54vh)",
+                    overflowY: "auto",
+                    overscrollBehavior: "contain",
+                    scrollbarGutter: "stable",
                   }}>
-                    {filteredCities.map((city) => (
+                    {isLocationPredictionLoading ? (
+                      <div
+                        style={{
+                          padding: "10px 16px",
+                          fontSize: "14px",
+                          color: "#5f6f8f",
+                        }}
+                      >
+                        Searching addresses...
+                      </div>
+                    ) : null}
+                    {locationPredictions.map((prediction) => (
+                      <button
+                        key={prediction.place_id}
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          handleSelectLocationPrediction(prediction);
+                        }}
+                        style={{
+                          width: "100%", textAlign: "left", padding: "10px 16px",
+                          fontSize: "14px", color: "#0f1f3d", background: "none",
+                          border: "none", cursor: "pointer",
+                          display: "flex", alignItems: "flex-start", gap: "8px",
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#eef2ff"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "none"; }}
+                      >
+                        <MapPin size={13} style={{ color: "#8896b4", flexShrink: 0, marginTop: "3px" }} />
+                        <span style={{ minWidth: 0 }}>
+                          <span style={{ display: "block", fontWeight: 600 }}>
+                            {prediction.structured_formatting?.main_text ?? prediction.description}
+                          </span>
+                          {prediction.structured_formatting?.secondary_text ? (
+                            <span style={{ display: "block", color: "#5f6f8f", fontSize: "12px", marginTop: "2px" }}>
+                              {prediction.structured_formatting.secondary_text}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    ))}
+                    {locationPredictions.length === 0 && !isLocationPredictionLoading ? filteredCities.map((city) => (
                       <button
                         key={city}
                         type="button"
@@ -789,45 +1040,10 @@ export function Homepage() {
                         <MapPin size={13} style={{ color: "#8896b4", flexShrink: 0 }} />
                         {city}, BC
                       </button>
-                    ))}
+                    )) : null}
                   </div>
                 )}
               </div>
-
-              {geoHint ? (
-                <div
-                  style={{
-                    gridColumn: "1 / -1",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "12px",
-                    padding: "0 4px",
-                    color: geoStatus === "denied" ? "#b42318" : "#5f6f8f",
-                    fontSize: "13px",
-                  }}
-                >
-                  <span>{geoHint}</span>
-                  {geoStatus !== "loading" ? (
-                    <button
-                      type="button"
-                      onClick={requestCurrentLocation}
-                      style={{
-                        border: "none",
-                        background: "none",
-                        color: "#1f4fff",
-                        fontSize: "13px",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        padding: 0,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Use my location
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
 
               <button
                 type="button"
@@ -852,6 +1068,65 @@ export function Homepage() {
                 Find care
               </button>
             </div>
+            {geoStatus === "denied" && !locationPermissionDismissed ? (
+              <div
+                role="dialog"
+                aria-live="polite"
+                aria-label="Location permission needed"
+                style={{
+                  position: "fixed",
+                  right: "24px",
+                  bottom: "24px",
+                  zIndex: 80,
+                  width: "min(360px, calc(100vw - 32px))",
+                  border: "1px solid #d0d8f0",
+                  borderRadius: "16px",
+                  background: "#fff",
+                  boxShadow: "0 18px 50px rgba(15,31,61,0.16)",
+                  padding: "16px",
+                  textAlign: "left",
+                }}
+              >
+                <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f1f3d" }}>
+                  Allow location to find care nearby
+                </div>
+                <div style={{ marginTop: "6px", fontSize: "13px", lineHeight: 1.5, color: "#5f6f8f" }}>
+                  We use your browser location to show your current area. You can also type a city or area manually.
+                </div>
+                <div style={{ marginTop: "12px", display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setLocationPermissionDismissed(true)}
+                    style={{
+                      border: "1px solid #d0d8f0",
+                      borderRadius: "999px",
+                      background: "#fff",
+                      color: "#0f1f3d",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      padding: "8px 12px",
+                    }}
+                  >
+                    Not now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={requestCurrentLocation}
+                    style={{
+                      border: "none",
+                      borderRadius: "999px",
+                      background: "#1f4fff",
+                      color: "#fff",
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      padding: "8px 12px",
+                    }}
+                  >
+                    Use my location
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* Stats — no separate background, part of hero */}
