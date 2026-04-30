@@ -22,6 +22,7 @@ type GooglePlacesAddressInputProps = {
   value: string;
   placeholder?: string;
   autoFocus?: boolean;
+  hasError?: boolean;
   onChange: (value: string) => void;
   onAddressSelected: (selection: ClinicAddressSelection) => void;
 };
@@ -31,6 +32,7 @@ export function GooglePlacesAddressInput({
   value,
   placeholder,
   autoFocus,
+  hasError,
   onChange,
   onAddressSelected,
 }: GooglePlacesAddressInputProps) {
@@ -292,7 +294,12 @@ export function GooglePlacesAddressInput({
             }
           }}
           placeholder={fallbackPlaceholder}
-          className="h-12 !border-slate-200 !bg-white pl-10 pr-10 !text-slate-900 !shadow-none placeholder:text-slate-400 focus-visible:ring-primary/20"
+          className={`h-12 !bg-white pl-10 pr-10 !text-slate-900 !shadow-none placeholder:text-slate-400 ${
+            hasError
+              ? "!border-destructive/60 focus-visible:ring-destructive/20"
+              : "!border-slate-200 focus-visible:ring-primary/20"
+          }`}
+          aria-invalid={Boolean(hasError)}
           autoFocus={autoFocus}
           autoComplete="off"
         />

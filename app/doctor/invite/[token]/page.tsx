@@ -6,6 +6,19 @@ import { Building2, CheckCircle2, Eye, EyeOff, Loader2, XCircle } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { DoctorInviteDetailsResponse, DoctorRejectInviteResponse } from "@/lib/doctor/types";
+import { getLiveAlphabeticError, normalizeNameInput } from "@/lib/form-validation";
+
+const invalidInputClassName = "!border-destructive focus-visible:ring-destructive/20";
+
+type InviteForm = {
+  first_name: string;
+  last_name: string;
+  password: string;
+  confirm_password: string;
+  pin: string;
+};
+
+type InviteFormErrors = Partial<Record<keyof Pick<InviteForm, "first_name" | "last_name">, string>>;
 
 export default function DoctorInviteAcceptPage() {
   const params = useParams();
@@ -16,13 +29,14 @@ export default function DoctorInviteAcceptPage() {
 
   const [invite, setInvite] = useState<DoctorInviteDetailsResponse | null>(null);
   const [loadingInvite, setLoadingInvite] = useState(true);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<InviteForm>({
     first_name: "",
     last_name: "",
     password: "",
     confirm_password: "",
     pin: "",
   });
+  const [fieldErrors, setFieldErrors] = useState<InviteFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [error, setError] = useState("");
@@ -78,11 +92,23 @@ export default function DoctorInviteAcceptPage() {
     };
   }, [token]);
 
-  function set(field: keyof typeof form) {
+  function set(field: keyof InviteForm) {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
+      const rawValue = e.target.value;
       const value =
-        field === "pin" ? e.target.value.replace(/\D/g, "").slice(0, 4) : e.target.value;
+        field === "pin"
+          ? rawValue.replace(/\D/g, "").slice(0, 4)
+          : field === "first_name" || field === "last_name"
+            ? normalizeNameInput(rawValue)
+            : rawValue;
+
       setForm((current) => ({ ...current, [field]: value }));
+      if (field === "first_name" || field === "last_name") {
+        setFieldErrors((current) => ({
+          ...current,
+          [field]: getLiveAlphabeticError(value, field === "first_name" ? "first name" : "last name"),
+        }));
+      }
       setError("");
     };
   }
@@ -90,7 +116,26 @@ export default function DoctorInviteAcceptPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!form.first_name.trim() || !form.last_name.trim()) {
+    const normalizedFirstName = normalizeNameInput(form.first_name).trim();
+    const normalizedLastName = normalizeNameInput(form.last_name).trim();
+    const nextFieldErrors: InviteFormErrors = {
+      first_name: normalizedFirstName
+        ? getLiveAlphabeticError(normalizedFirstName, "first name")
+        : "First name is required.",
+      last_name: normalizedLastName
+        ? getLiveAlphabeticError(normalizedLastName, "last name")
+        : "Last name is required.",
+    };
+    const hasFieldErrors = Object.values(nextFieldErrors).some(Boolean);
+
+    setForm((current) => ({
+      ...current,
+      first_name: normalizedFirstName,
+      last_name: normalizedLastName,
+    }));
+    setFieldErrors(nextFieldErrors);
+
+    if (hasFieldErrors) {
       setError("Please enter your full name.");
       return;
     }
@@ -119,8 +164,8 @@ export default function DoctorInviteAcceptPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           invite_token: token,
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim(),
+          first_name: normalizedFirstName,
+          last_name: normalizedLastName,
           password: form.password,
           pin: form.pin.trim(),
         }),
@@ -338,8 +383,13 @@ export default function DoctorInviteAcceptPage() {
                 placeholder="Jane"
                 value={form.first_name}
                 onChange={set("first_name")}
+                aria-invalid={Boolean(fieldErrors.first_name)}
+                className={fieldErrors.first_name ? invalidInputClassName : undefined}
                 required
               />
+              {fieldErrors.first_name ? (
+                <p className="text-xs text-destructive">{fieldErrors.first_name}</p>
+              ) : null}
             </div>
             <div className="space-y-1.5">
               <label htmlFor="last_name" className="text-sm font-medium text-foreground">
@@ -350,8 +400,13 @@ export default function DoctorInviteAcceptPage() {
                 placeholder="Smith"
                 value={form.last_name}
                 onChange={set("last_name")}
+                aria-invalid={Boolean(fieldErrors.last_name)}
+                className={fieldErrors.last_name ? invalidInputClassName : undefined}
                 required
               />
+              {fieldErrors.last_name ? (
+                <p className="text-xs text-destructive">{fieldErrors.last_name}</p>
+              ) : null}
             </div>
           </div>
 

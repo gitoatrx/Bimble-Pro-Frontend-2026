@@ -17,6 +17,7 @@ import {
   type DoctorPrescriptionRecord,
 } from "@/lib/api/doctor-dashboard";
 import { cn } from "@/lib/utils";
+import { formatIsoDateToDisplay } from "@/lib/date-format";
 
 type PrescriptionForm = {
   noSubstitution: boolean;
@@ -473,7 +474,9 @@ export default function DoctorAppointmentTreatmentPage() {
               {appointment.patient_age ? (
                 <p className="mt-2 text-sm font-medium text-muted-foreground">
                   Patient age: {appointment.patient_age} years
-                  {appointment.patient_date_of_birth ? ` · DOB ${appointment.patient_date_of_birth}` : ""}
+                  {appointment.patient_date_of_birth
+                    ? ` · DOB ${formatIsoDateToDisplay(appointment.patient_date_of_birth)}`
+                    : ""}
                 </p>
               ) : null}
             </div>

@@ -23,6 +23,7 @@ import {
 import { symptomSuggestions } from "@/components/homepage/content";
 import { CanadianTime } from "@/components/canadian-time";
 import { Button } from "@/components/ui/button";
+import { DisplayDateInput } from "@/components/ui/display-date-input";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -64,8 +65,14 @@ import {
   shiftCanadaPacificDateKey,
 } from "@/lib/time-zone";
 import {
+  DISPLAY_DATE_FORMAT,
+  formatDateInputValue,
+  formatIsoDateToDisplay,
+  getDisplayDateError,
+  parseDisplayDateToIso,
+} from "@/lib/date-format";
+import {
   getLiveAlphabeticError,
-  getLiveFutureDateError,
   getLiveEmailError,
   getLivePostalCodeError,
   getLiveProvinceCodeError,
@@ -106,6 +113,8 @@ type ProfileFormErrors = Partial<
     string
   >
 >;
+
+const invalidInputClassName = "!border-rose-500 focus-visible:ring-rose-200";
 
 type PortalNavItem = {
   id: "profile" | "appointments" | "history" | "requests" | "family";
@@ -206,9 +215,7 @@ function nextDates(count: number): string[] {
 }
 
 function formatCalendarDate(value: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return value;
-  return `${match[2]}/${match[3]}/${match[1]}`;
+  return formatIsoDateToDisplay(value);
 }
 
 function normalizeServiceName(value: string) {
@@ -466,7 +473,7 @@ export function PatientPortalDashboard() {
         first_name: normalizeNameInput(nextProfile.first_name ?? ""),
         last_name: normalizeNameInput(nextProfile.last_name ?? ""),
         phone: limitDigits(nextProfile.phone ?? "", 10),
-        date_of_birth: nextProfile.date_of_birth ?? "",
+        date_of_birth: formatIsoDateToDisplay(nextProfile.date_of_birth),
         phn: limitDigits(nextProfile.phn ?? "", 10),
         email: nextProfile.email ?? "",
         address_line_1: stripCountrySuffix(nextProfile.address_line_1 ?? ""),
@@ -689,7 +696,7 @@ export function PatientPortalDashboard() {
         first_name: profileDraft.first_name.trim(),
         last_name: profileDraft.last_name.trim(),
         phone: limitDigits(profileDraft.phone, 10),
-        date_of_birth: profileDraft.date_of_birth,
+        date_of_birth: parseDisplayDateToIso(profileDraft.date_of_birth),
         phn: limitDigits(profileDraft.phn, 10) || null,
         email: profileDraft.email.trim() || null,
         address_line_1: profileDraft.address_line_1.trim(),
@@ -704,7 +711,7 @@ export function PatientPortalDashboard() {
         first_name: normalizeNameInput(updated.first_name ?? ""),
         last_name: normalizeNameInput(updated.last_name ?? ""),
         phone: limitDigits(updated.phone ?? "", 10),
-        date_of_birth: updated.date_of_birth ?? "",
+        date_of_birth: formatIsoDateToDisplay(updated.date_of_birth),
         phn: limitDigits(updated.phn ?? "", 10),
         email: updated.email ?? "",
         address_line_1: updated.address_line_1 ?? "",
@@ -778,7 +785,7 @@ export function PatientPortalDashboard() {
         first_name: familyForm.first_name.trim(),
         last_name: familyForm.last_name.trim(),
         relationship_label: familyForm.relationship_label.trim(),
-        date_of_birth: familyForm.date_of_birth || undefined,
+        date_of_birth: parseDisplayDateToIso(familyForm.date_of_birth) || undefined,
         email: familyForm.email || undefined,
         phn: familyForm.phn || undefined,
         notes: familyForm.notes || undefined,
@@ -1014,7 +1021,7 @@ export function PatientPortalDashboard() {
       field === "first_name" || field === "last_name"
         ? normalizeNameInput(rawValue)
         : field === "date_of_birth"
-          ? rawValue
+          ? formatDateInputValue(rawValue)
           : field === "phn"
             ? limitDigits(rawValue, 10)
             : field === "address_line_1"
@@ -1042,7 +1049,11 @@ export function PatientPortalDashboard() {
       } else if (field === "phone") {
         nextErrors.phone = getLiveTenDigitError(nextValue, "phone number");
       } else if (field === "date_of_birth") {
-        nextErrors.date_of_birth = getLiveFutureDateError(nextValue, "Date of birth");
+        nextErrors.date_of_birth = getDisplayDateError(
+          nextValue,
+          "Date of birth",
+          { allowIncomplete: true },
+        );
       } else if (field === "phn") {
         nextErrors.phn = getLiveTenDigitError(nextValue, "PHN");
       } else if (field === "email") {
@@ -1059,42 +1070,53 @@ export function PatientPortalDashboard() {
     });
   }
 
+  function getProfileInputClassName(field: keyof ProfileFormErrors) {
+    return profileFormErrors[field] ? invalidInputClassName : undefined;
+  }
+
+  function getFamilyInputClassName(field: keyof FamilyFormErrors) {
+    return familyFormErrors[field] ? invalidInputClassName : undefined;
+  }
+
   function validateProfileDraft() {
     const nextErrors: ProfileFormErrors = {};
 
     if (!profileDraft.first_name.trim()) {
       nextErrors.first_name = "First name is required.";
     } else {
-      nextErrors.first_name = getLiveAlphabeticError(profileDraft.first_name, "first name");
+      const error = getLiveAlphabeticError(profileDraft.first_name, "first name");
+      if (error) nextErrors.first_name = error;
     }
 
     if (!profileDraft.last_name.trim()) {
       nextErrors.last_name = "Last name is required.";
     } else {
-      nextErrors.last_name = getLiveAlphabeticError(profileDraft.last_name, "last name");
+      const error = getLiveAlphabeticError(profileDraft.last_name, "last name");
+      if (error) nextErrors.last_name = error;
     }
 
     if (!profileDraft.phone.trim()) {
       nextErrors.phone = "Phone number is required.";
     } else {
-      nextErrors.phone = getLiveTenDigitError(profileDraft.phone, "phone number");
+      const error = getLiveTenDigitError(profileDraft.phone, "phone number");
+      if (error) nextErrors.phone = error;
     }
 
     if (!profileDraft.date_of_birth.trim()) {
       nextErrors.date_of_birth = "Date of birth is required.";
     } else {
-      nextErrors.date_of_birth = getLiveFutureDateError(
-        profileDraft.date_of_birth,
-        "Date of birth",
-      );
+      const error = getDisplayDateError(profileDraft.date_of_birth, "Date of birth");
+      if (error) nextErrors.date_of_birth = error;
     }
 
     if (profileDraft.phn.trim()) {
-      nextErrors.phn = getLiveTenDigitError(profileDraft.phn, "PHN");
+      const error = getLiveTenDigitError(profileDraft.phn, "PHN");
+      if (error) nextErrors.phn = error;
     }
 
     if (profileDraft.email.trim()) {
-      nextErrors.email = getLiveEmailError(profileDraft.email, "email address");
+      const error = getLiveEmailError(profileDraft.email, "email address");
+      if (error) nextErrors.email = error;
     }
 
     if (!profileDraft.phn.trim() && !profileDraft.email.trim()) {
@@ -1105,19 +1127,22 @@ export function PatientPortalDashboard() {
     if (!profileDraft.city.trim()) {
       nextErrors.city = "City is required.";
     } else {
-      nextErrors.city = getLiveAlphabeticError(profileDraft.city, "city");
+      const error = getLiveAlphabeticError(profileDraft.city, "city");
+      if (error) nextErrors.city = error;
     }
 
     if (!profileDraft.province.trim()) {
       nextErrors.province = "Province is required.";
     } else {
-      nextErrors.province = getLiveProvinceCodeError(profileDraft.province, "province");
+      const error = getLiveProvinceCodeError(profileDraft.province, "province");
+      if (error) nextErrors.province = error;
     }
 
     if (!profileDraft.postal_code.trim()) {
       nextErrors.postal_code = "Postal code is required.";
     } else {
-      nextErrors.postal_code = getLivePostalCodeError(profileDraft.postal_code, "postal code");
+      const error = getLivePostalCodeError(profileDraft.postal_code, "postal code");
+      if (error) nextErrors.postal_code = error;
     }
 
     setProfileFormErrors(nextErrors);
@@ -1128,6 +1153,8 @@ export function PatientPortalDashboard() {
     const nextValue =
       field === "first_name" || field === "last_name" || field === "relationship_label"
         ? normalizeNameInput(rawValue)
+        : field === "date_of_birth"
+          ? formatDateInputValue(rawValue)
         : field === "phn"
           ? limitDigits(rawValue, 10)
           : rawValue;
@@ -1143,7 +1170,9 @@ export function PatientPortalDashboard() {
       if (field === "first_name" || field === "last_name" || field === "relationship_label") {
         nextErrors[field] = getLiveAlphabeticError(nextValue, field.replaceAll("_", " "));
       } else if (field === "date_of_birth") {
-        nextErrors.date_of_birth = getLiveFutureDateError(nextValue, "Date of birth");
+        nextErrors.date_of_birth = getDisplayDateError(nextValue, "Date of birth", {
+          allowIncomplete: true,
+        });
       } else if (field === "phn") {
         nextErrors.phn = getLiveTenDigitError(nextValue, "PHN");
       }
@@ -1154,40 +1183,51 @@ export function PatientPortalDashboard() {
 
   function validateFamilyForm() {
     const nextErrors: FamilyFormErrors = {};
+    const normalizedFamilyForm: FamilyForm = {
+      ...familyForm,
+      first_name: normalizeNameInput(familyForm.first_name).trim(),
+      last_name: normalizeNameInput(familyForm.last_name).trim(),
+      relationship_label: normalizeNameInput(familyForm.relationship_label).trim(),
+      date_of_birth: formatDateInputValue(familyForm.date_of_birth),
+      phn: limitDigits(familyForm.phn, 10),
+    };
 
-    if (!familyForm.first_name.trim()) {
+    if (!normalizedFamilyForm.first_name) {
       nextErrors.first_name = "First name is required.";
     } else {
-      nextErrors.first_name = getLiveAlphabeticError(familyForm.first_name, "first name");
+      const error = getLiveAlphabeticError(normalizedFamilyForm.first_name, "first name");
+      if (error) nextErrors.first_name = error;
     }
 
-    if (!familyForm.last_name.trim()) {
+    if (!normalizedFamilyForm.last_name) {
       nextErrors.last_name = "Last name is required.";
     } else {
-      nextErrors.last_name = getLiveAlphabeticError(familyForm.last_name, "last name");
+      const error = getLiveAlphabeticError(normalizedFamilyForm.last_name, "last name");
+      if (error) nextErrors.last_name = error;
     }
 
-    if (!familyForm.relationship_label.trim()) {
+    if (!normalizedFamilyForm.relationship_label) {
       nextErrors.relationship_label = "Relationship is required.";
     } else {
-      nextErrors.relationship_label = getLiveAlphabeticError(
-        familyForm.relationship_label,
-        "relationship",
-      );
+      const error = getLiveAlphabeticError(normalizedFamilyForm.relationship_label, "relationship");
+      if (error) nextErrors.relationship_label = error;
     }
 
-    if (!familyForm.date_of_birth.trim()) {
+    if (!normalizedFamilyForm.date_of_birth) {
       nextErrors.date_of_birth = "Date of birth is required.";
     } else {
-      nextErrors.date_of_birth = getLiveFutureDateError(familyForm.date_of_birth, "Date of birth");
+      const error = getDisplayDateError(normalizedFamilyForm.date_of_birth, "Date of birth");
+      if (error) nextErrors.date_of_birth = error;
     }
 
-    if (!familyForm.phn.trim()) {
+    if (!normalizedFamilyForm.phn) {
       nextErrors.phn = "PHN is required.";
     } else {
-      nextErrors.phn = getLiveTenDigitError(familyForm.phn, "PHN");
+      const error = getLiveTenDigitError(normalizedFamilyForm.phn, "PHN");
+      if (error) nextErrors.phn = error;
     }
 
+    setFamilyForm(normalizedFamilyForm);
     setFamilyFormErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   }
@@ -1271,6 +1311,8 @@ export function PatientPortalDashboard() {
                 <Input
                   value={profileDraft.first_name}
                   onChange={(event) => updateProfileField("first_name", event.target.value)}
+                  className={getProfileInputClassName("first_name")}
+                  aria-invalid={Boolean(profileFormErrors.first_name)}
                   autoCapitalize="words"
                 />
                 {profileFormErrors.first_name ? (
@@ -1282,6 +1324,8 @@ export function PatientPortalDashboard() {
                 <Input
                   value={profileDraft.last_name}
                   onChange={(event) => updateProfileField("last_name", event.target.value)}
+                  className={getProfileInputClassName("last_name")}
+                  aria-invalid={Boolean(profileFormErrors.last_name)}
                   autoCapitalize="words"
                 />
                 {profileFormErrors.last_name ? (
@@ -1293,6 +1337,8 @@ export function PatientPortalDashboard() {
                 <Input
                   value={profileDraft.phone}
                   onChange={(event) => updateProfileField("phone", event.target.value)}
+                  className={getProfileInputClassName("phone")}
+                  aria-invalid={Boolean(profileFormErrors.phone)}
                   inputMode="numeric"
                   maxLength={10}
                 />
@@ -1307,6 +1353,8 @@ export function PatientPortalDashboard() {
                     type="email"
                     value={profileDraft.email}
                     onChange={(event) => updateProfileField("email", event.target.value)}
+                    className={getProfileInputClassName("email")}
+                    aria-invalid={Boolean(profileFormErrors.email)}
                   />
                   {profileFormErrors.email ? (
                     <div className="text-xs text-rose-600">{profileFormErrors.email}</div>
@@ -1315,11 +1363,12 @@ export function PatientPortalDashboard() {
               ) : null}
               <label className="grid gap-2 text-sm text-slate-700">
                 Date of birth
-                <Input
-                  type="date"
+                <DisplayDateInput
                   value={profileDraft.date_of_birth}
-                  max={getCanadaPacificDateKey()}
-                  onChange={(event) => updateProfileField("date_of_birth", event.target.value)}
+                  onChange={(value) => updateProfileField("date_of_birth", value)}
+                  className={getProfileInputClassName("date_of_birth")}
+                  aria-invalid={Boolean(profileFormErrors.date_of_birth)}
+                  maxIsoDate={getCanadaPacificDateKey()}
                 />
                 {profileFormErrors.date_of_birth ? (
                   <div className="text-xs text-rose-600">{profileFormErrors.date_of_birth}</div>
@@ -1331,6 +1380,8 @@ export function PatientPortalDashboard() {
                   <Input
                     value={profileDraft.phn}
                     onChange={(event) => updateProfileField("phn", event.target.value)}
+                    className={getProfileInputClassName("phn")}
+                    aria-invalid={Boolean(profileFormErrors.phn)}
                     inputMode="numeric"
                     maxLength={10}
                   />
@@ -1357,6 +1408,8 @@ export function PatientPortalDashboard() {
                   <Input
                     value={profileDraft.city}
                     onChange={(event) => updateProfileField("city", event.target.value)}
+                    className={getProfileInputClassName("city")}
+                    aria-invalid={Boolean(profileFormErrors.city)}
                     autoCapitalize="words"
                   />
                   {profileFormErrors.city ? (
@@ -1370,6 +1423,8 @@ export function PatientPortalDashboard() {
                   <Input
                     value={profileDraft.province}
                     onChange={(event) => updateProfileField("province", event.target.value)}
+                    className={getProfileInputClassName("province")}
+                    aria-invalid={Boolean(profileFormErrors.province)}
                     maxLength={2}
                   />
                   {profileFormErrors.province ? (
@@ -1381,6 +1436,8 @@ export function PatientPortalDashboard() {
                   <Input
                     value={profileDraft.postal_code}
                     onChange={(event) => updateProfileField("postal_code", event.target.value)}
+                    className={getProfileInputClassName("postal_code")}
+                    aria-invalid={Boolean(profileFormErrors.postal_code)}
                     autoCapitalize="characters"
                     maxLength={7}
                   />
@@ -1537,7 +1594,7 @@ export function PatientPortalDashboard() {
                                     }}
                                   >
                                     <span className={selectedDate ? "text-slate-900" : "text-slate-400"}>
-                                      {selectedDate ? formatCalendarDate(selectedDate) : "MM/DD/YYYY"}
+                                      {selectedDate ? formatCalendarDate(selectedDate) : DISPLAY_DATE_FORMAT}
                                     </span>
                                     <CalendarDays className="h-4 w-4 text-slate-400" />
                                   </button>
@@ -2314,6 +2371,8 @@ export function PatientPortalDashboard() {
                       value={familyForm.first_name}
                       onChange={(event) => updateFamilyField("first_name", event.target.value)}
                       autoCapitalize="words"
+                      aria-invalid={Boolean(familyFormErrors.first_name)}
+                      className={getFamilyInputClassName("first_name")}
                     />
                     {familyFormErrors.first_name ? (
                       <div className="text-xs text-rose-600">{familyFormErrors.first_name}</div>
@@ -2325,6 +2384,8 @@ export function PatientPortalDashboard() {
                       value={familyForm.last_name}
                       onChange={(event) => updateFamilyField("last_name", event.target.value)}
                       autoCapitalize="words"
+                      aria-invalid={Boolean(familyFormErrors.last_name)}
+                      className={getFamilyInputClassName("last_name")}
                     />
                     {familyFormErrors.last_name ? (
                       <div className="text-xs text-rose-600">{familyFormErrors.last_name}</div>
@@ -2336,6 +2397,8 @@ export function PatientPortalDashboard() {
                       value={familyForm.relationship_label}
                       onChange={(event) => updateFamilyField("relationship_label", event.target.value)}
                       autoCapitalize="words"
+                      aria-invalid={Boolean(familyFormErrors.relationship_label)}
+                      className={getFamilyInputClassName("relationship_label")}
                     />
                     {familyFormErrors.relationship_label ? (
                       <div className="text-xs text-rose-600">{familyFormErrors.relationship_label}</div>
@@ -2343,11 +2406,11 @@ export function PatientPortalDashboard() {
                   </label>
                   <label className="grid gap-1.5 text-sm text-slate-700">
                     Date of birth
-                    <Input
-                      type="date"
+                    <DisplayDateInput
                       value={familyForm.date_of_birth}
-                      max={getCanadaPacificDateKey()}
-                      onChange={(event) => updateFamilyField("date_of_birth", event.target.value)}
+                      onChange={(value) => updateFamilyField("date_of_birth", value)}
+                      maxIsoDate={getCanadaPacificDateKey()}
+                      className={getFamilyInputClassName("date_of_birth")}
                     />
                     {familyFormErrors.date_of_birth ? (
                       <div className="text-xs text-rose-600">{familyFormErrors.date_of_birth}</div>
@@ -2360,6 +2423,8 @@ export function PatientPortalDashboard() {
                       onChange={(event) => updateFamilyField("phn", event.target.value)}
                       inputMode="numeric"
                       maxLength={10}
+                      aria-invalid={Boolean(familyFormErrors.phn)}
+                      className={getFamilyInputClassName("phn")}
                     />
                     {familyFormErrors.phn ? (
                       <div className="text-xs text-rose-600">{familyFormErrors.phn}</div>
@@ -2409,7 +2474,11 @@ export function PatientPortalDashboard() {
                         </div>
                         <div className="mt-1 text-sm text-slate-600">{member.relationship_label}</div>
                         <div className="mt-2 grid gap-1 text-xs text-slate-500">
-                          <div>DOB: {member.date_of_birth || "Not available"}</div>
+                          <div>
+                            DOB: {member.date_of_birth
+                              ? formatIsoDateToDisplay(member.date_of_birth)
+                              : "Not available"}
+                          </div>
                           <div>PHN: {member.phn || "Not available"}</div>
                         </div>
                       </div>

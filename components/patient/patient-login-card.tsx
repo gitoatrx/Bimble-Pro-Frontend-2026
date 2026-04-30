@@ -1,7 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { DisplayDateInput } from "@/components/ui/display-date-input";
 import { Input } from "@/components/ui/input";
+import { getCanadaPacificDateKey } from "@/lib/time-zone";
 
 type PatientLoginCardProps = {
   phone: string;
@@ -48,11 +50,10 @@ export function PatientLoginCard({
         {showDateOfBirth ? (
           <label className="grid gap-2 text-sm font-medium text-slate-700">
             {dateOfBirthLabel}
-            <Input
-              type="date"
+            <DisplayDateInput
               value={dateOfBirth}
-              onChange={(event) => onDateOfBirthChange(event.target.value)}
-              autoComplete="bday"
+              onChange={onDateOfBirthChange}
+              maxIsoDate={getCanadaPacificDateKey()}
             />
           </label>
         ) : null}

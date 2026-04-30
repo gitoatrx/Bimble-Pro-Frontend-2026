@@ -72,12 +72,18 @@ export function normalizeProvinceCodeInput(value: string | null | undefined) {
     return "";
   }
 
-  const compact = normalized.toUpperCase();
-  if (Object.values(canadianProvinceCodeMap).includes(compact)) {
-    return compact;
+  const code = normalized.toUpperCase().replace(/[^A-Z]/g, "");
+  if (canadianProvinceCodes.has(code)) {
+    return code;
   }
 
-  return canadianProvinceCodeMap[normalized.toLowerCase()] ?? compact;
+  const nameKey = normalized.toLowerCase().replace(/\s+/g, " ");
+  const collapsedNameKey = nameKey.replace(/[^a-z]/g, "");
+  const provinceNameMatch = Object.entries(canadianProvinceCodeMap).find(
+    ([provinceName]) => provinceName.replace(/[^a-z]/g, "") === collapsedNameKey,
+  );
+
+  return canadianProvinceCodeMap[nameKey] ?? provinceNameMatch?.[1] ?? normalized;
 }
 
 export function stripCountrySuffix(value: string | null | undefined, country = "Canada") {
@@ -91,7 +97,7 @@ export function stripCountrySuffix(value: string | null | undefined, country = "
 }
 
 export function isValidCanadianProvinceCode(value: string | null | undefined) {
-  return canadianProvinceCodes.has((value ?? "").trim().toUpperCase());
+  return canadianProvinceCodes.has(normalizeProvinceCodeInput(value));
 }
 
 export function formatPostalCodeInput(value: string | null | undefined) {
