@@ -858,30 +858,30 @@ export default function DoctorAppointmentTreatmentPage() {
               <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
                 <div className={cn("grid content-start gap-4 self-start", medications.length === 0 && "opacity-70")}>
                   {medications.map((medicine, index) => (
-                    <div key={medicine.localId} className="rounded-3xl border border-border bg-background p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div key={medicine.localId} className="rounded-3xl border border-border bg-background p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2.5">
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Medicine {index + 1}</p>
-                          <h3 className="mt-1 font-display text-lg font-semibold text-foreground">{medicine.drugName}</h3>
-                          {medicine.ingredient ? <p className="text-xs text-muted-foreground">{medicine.ingredient}</p> : null}
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-primary">Medicine {index + 1}</p>
+                          <h3 className="mt-0.5 text-sm font-medium text-foreground">{medicine.drugName}</h3>
+                          {medicine.ingredient ? <p className="text-[10px] text-muted-foreground">{medicine.ingredient}</p> : null}
                         </div>
                         <Button type="button" variant="outline" size="sm" onClick={() => removeMedication(medicine.localId)}>
                           Remove
                         </Button>
                       </div>
 
-                      <div className="mt-4 grid gap-4">
+                      <div className="mt-3 grid gap-3">
                         <Field label="Dosage / instructions">
                           <textarea
                             value={medicine.instructions}
                             onChange={(event) => updateMedication(medicine.localId, "instructions", event.target.value)}
-                            className="min-h-24 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                            className="min-h-20 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                             placeholder="Example: Take 1 capsule by mouth twice daily with food for 7 days."
                           />
                         </Field>
 
-                        <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm text-foreground">
-                          <div className="grid gap-4 md:grid-cols-3">
+                        <div className="rounded-2xl border border-border bg-muted/20 px-3 py-2 text-sm text-foreground">
+                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                             <Field label="Dose">
                               <input
                                 value={medicine.sigDose}
@@ -903,58 +903,35 @@ export default function DoctorAppointmentTreatmentPage() {
                                 ))}
                               </select>
                             </Field>
-                            <Field label="Duration days">
+                            <Field label="Duration">
                               <input
                                 value={medicine.durationDays}
                                 onChange={(event) => updateMedication(medicine.localId, "durationDays", event.target.value)}
                                 className={inputClass()}
                               />
                             </Field>
-                            <Field label="Start date">
-                              <input
-                                type="date"
-                                value={medicine.startDate}
-                                onChange={(event) => updateMedication(medicine.localId, "startDate", event.target.value)}
-                                className={inputClass()}
-                              />
-                            </Field>
-                            <Field label="Qty/Mitte">
+                            <Field label="Qty">
                               <input
                                 value={medicine.quantity}
                                 onChange={(event) => updateMedication(medicine.localId, "quantity", event.target.value)}
                                 className={inputClass()}
                               />
                             </Field>
-                            <Field label="Repeats">
-                              <input
-                                value={medicine.repeats}
-                                onChange={(event) => updateMedication(medicine.localId, "repeats", event.target.value)}
-                                className={inputClass()}
-                              />
-                            </Field>
                           </div>
-                          <div className="mt-4 grid gap-4">
+                          <div className="mt-3 grid gap-3">
                             <Field label="Special instructions">
                               <textarea
                                 value={medicine.specialInstructions}
                                 onChange={(event) => updateMedication(medicine.localId, "specialInstructions", event.target.value)}
-                                className="min-h-16 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                                className="min-h-16 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                                 placeholder="Optional: with food, affected area, left eye, counselling note..."
                               />
                             </Field>
-
-                            <div className="rounded-2xl border border-border bg-background px-4 py-3">
-                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Parsed prescription details</p>
-                              <p className="mt-2 text-xs font-medium text-muted-foreground">
-                                Dose {medicine.sigDose || "1"} · {FREQUENCY_OPTIONS.find((item) => item.code === medicine.sigFrequency)?.label || "Frequency"}{" "}
-                                {medicine.sigTiming ? `· ${medicine.sigTiming}` : ""} · {medicine.durationDays || "0"} days · Qty {medicine.quantity || "0"} · Repeats{" "}
-                                {medicine.repeats || "0"}
-                              </p>
-                              <p className="mt-1 text-xs font-medium text-muted-foreground">
-                                Start {medicine.startDate || "today"} · End {medicine.endDate || "calculated"}
-                              </p>
-                            </div>
                           </div>
+                          <p className="mt-1.5 text-[10px] font-medium leading-4 text-muted-foreground">
+                            Parsed as: {medicine.sigDose || "1"} {FREQUENCY_OPTIONS.find((item) => item.code === medicine.sigFrequency)?.label || "Frequency"}
+                            {medicine.sigTiming ? ` · ${medicine.sigTiming}` : ""} · {medicine.durationDays || "0"} days · Qty {medicine.quantity || "0"}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -963,56 +940,56 @@ export default function DoctorAppointmentTreatmentPage() {
                 </div>
 
                 {medications.length > 0 ? (
-                  <div className="self-start space-y-5 print:hidden">
+                  <div className="self-start space-y-3 print:hidden">
                     <div id="prescription-preview" className="bg-white text-slate-950">
-                      <div className="flex min-h-24 border-2 border-slate-900">
-                        <div className="flex w-32 items-center justify-center border-r-2 border-slate-900 font-serif text-7xl">Rx</div>
-                        <div className="flex-1 p-4 text-xs leading-5">
-                          <p>Bimble</p>
+                      <div className="flex min-h-18 border-2 border-slate-900">
+                        <div className="flex w-20 items-center justify-center border-r-2 border-slate-900 font-serif text-4xl leading-none">Rx</div>
+                        <div className="flex-1 p-2.5 text-[9px] leading-3.5">
+                          <p className="font-medium leading-4">Bimble</p>
                           <p>Clinic prescription workspace</p>
                         </div>
                       </div>
-                      <div className="border-x-2 border-b-2 border-slate-900 p-4 text-xs">
-                        <div className="flex justify-between gap-4">
+                      <div className="border-x-2 border-b-2 border-slate-900 p-2.5 text-[9px] leading-3.5">
+                        <div className="flex justify-between gap-2.5">
                           <div>
-                            <p className="font-semibold">{appointment.patient_name}</p>
+                            <p className="font-medium leading-3.5">{appointment.patient_name}</p>
                             <p>{withoutCommas(appointment.care_location) || "Patient location not recorded"}</p>
                             <p>Health Ins.: {appointment.patient_id}</p>
                           </div>
-                          <p className="font-semibold">{new Date().toLocaleDateString()}</p>
+                          <p className="font-medium">{new Date().toLocaleDateString()}</p>
                         </div>
                       </div>
-                      <div className="min-h-[360px] border-x-2 border-b-2 border-slate-900 p-4 text-xs">
+                      <div className="min-h-[290px] border-x-2 border-b-2 border-slate-900 p-2.5 text-[9px] leading-3.5">
                         {medications.map((medicine, index) => (
-                          <div key={medicine.localId} className={cn(index > 0 && "mt-5 border-t border-slate-400 pt-4")}>
-                            <p className="font-semibold">
+                          <div key={medicine.localId} className={cn(index > 0 && "mt-3.5 border-t border-slate-400 pt-2.5")}>
+                            <p className="font-medium leading-3.5">
                               Rx {index + 1} - {medicine.drugName}
                             </p>
-                            <p className="mt-3">
+                            <p className="mt-1.5">
                               Qty:{medicine.quantity || "0"} Repeats:{medicine.repeats || "0"}
                             </p>
                             <p className="mt-2">{form.noSubstitution ? "No substitution" : "Substitution allowed"}</p>
                             <p className="mt-1">
                               Start: {medicine.startDate || "N/A"} End: {medicine.endDate || "N/A"}
                             </p>
-                            <p className="mt-3 border-t border-slate-400 pt-2">
+                            <p className="mt-1.5 border-t border-slate-400 pt-1.5">
                               {[medicine.instructions, medicine.specialInstructions].filter(Boolean).join(" ")}
                             </p>
                           </div>
                         ))}
-                        {form.additionalNote ? <p className="mt-28 whitespace-pre-wrap">{form.additionalNote}</p> : null}
-                        <div className="mt-12">
+                        {form.additionalNote ? <p className="mt-16 whitespace-pre-wrap">{form.additionalNote}</p> : null}
+                        <div className="mt-6">
                           {form.signatureDataUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={form.signatureDataUrl} alt="Prescriber signature" className="mb-2 h-16 max-w-64 object-contain" />
+                            <img src={form.signatureDataUrl} alt="Prescriber signature" className="mb-1.5 h-12 max-w-48 object-contain" />
                           ) : null}
-                          <div className="border-t border-slate-900 pt-2">
-                            <p className="font-semibold">Prescriber</p>
+                          <div className="border-t border-slate-900 pt-1.5">
+                            <p className="font-medium">Prescriber</p>
                             <p>Provider #: N/A</p>
                           </div>
                         </div>
                       </div>
-                      <div className="mt-2 flex justify-between text-[10px] lowercase text-slate-600">
+                      <div className="mt-1 flex justify-between text-[8px] lowercase text-slate-600">
                         <span>generated by bimble</span>
                         <span>page 1 of 1</span>
                       </div>
@@ -1023,7 +1000,7 @@ export default function DoctorAppointmentTreatmentPage() {
 
               <div className="space-y-5">
                 {medications.length > 0 ? (
-                  <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-border bg-background px-4 text-sm font-medium text-foreground">
+                  <label className="flex min-h-10 items-center gap-3 rounded-2xl border border-border bg-background px-3 text-sm font-medium text-foreground">
                     <input
                       type="checkbox"
                       checked={!form.noSubstitution}
@@ -1038,7 +1015,7 @@ export default function DoctorAppointmentTreatmentPage() {
                   <textarea
                     value={form.additionalNote}
                     onChange={(event) => updateForm("additionalNote", event.target.value)}
-                    className="min-h-20 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                    className="min-h-16 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                     placeholder="Add final note before saving"
                   />
                 </Field>
