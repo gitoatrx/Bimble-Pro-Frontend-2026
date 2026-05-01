@@ -1,4 +1,9 @@
-export type OnboardingStepKey = "clinic" | "location" | "operations" | "credentials";
+export type OnboardingStepKey =
+  | "clinic"
+  | "location"
+  | "operations"
+  | "credentials"
+  | "demographics";
 
 export type ClinicBillingCycle = "monthly" | "annual";
 
@@ -57,6 +62,40 @@ export type ClinicOnboardingFormData = {
   pin: string;
 };
 
+export type DemographicImportRow = {
+  row_number: number;
+  title?: string;
+  last_name: string;
+  first_name: string;
+  middle_names?: string;
+  pref_name?: string;
+  sex: string;
+  year_of_birth: string;
+  month_of_birth: string;
+  date_of_birth: string;
+  hin?: string;
+  ver?: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  postal?: string;
+  phone?: string;
+  phone2?: string;
+  email?: string;
+  provider_no?: string;
+  roster_status?: string;
+  patient_status?: string;
+  original: Record<string, string>;
+};
+
+export type DemographicImportPayload = {
+  approved: boolean;
+  source_filename?: string;
+  file_format?: "xml" | "zip";
+  file_content_base64?: string;
+  rows?: DemographicImportRow[];
+};
+
 // Stored after a successful signup — used by login page
 export type ClinicSignupResult = {
   clinicId: number;
@@ -104,6 +143,7 @@ export type ClinicRegisterRequest = {
   plan_code: string;
   password: string;
   pin: string;
+  demographic_import?: DemographicImportPayload;
 };
 
 // POST /api/v1/clinics/signup — response

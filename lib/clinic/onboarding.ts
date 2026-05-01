@@ -1,4 +1,5 @@
 import type {
+  DemographicImportPayload,
   ClinicOnboardingFormData,
   ClinicRegisterRequest,
   FieldErrors,
@@ -14,6 +15,7 @@ export const onboardingStepOrder: OnboardingStepKey[] = [
   "location",
   "operations",
   "credentials",
+  "demographics",
 ];
 
 export const provinceOptions = [
@@ -163,6 +165,7 @@ export function parseServicesProvided(value: string) {
 export function buildClinicRegisterPayload(
   formData: ClinicOnboardingFormData,
   planCode: string,
+  demographicImport?: DemographicImportPayload,
 ): ClinicRegisterRequest {
   const normalizedFormData = normalizeClinicOnboardingFormData(formData);
 
@@ -185,6 +188,7 @@ export function buildClinicRegisterPayload(
     plan_code: planCode,
     password: normalizedFormData.password,
     pin: normalizedFormData.pin,
+    demographic_import: demographicImport?.approved ? demographicImport : undefined,
   };
 }
 

@@ -6,6 +6,7 @@ import type {
   ClinicLoginFormData,
   ClinicLoginResponse,
   ClinicLoginStep1Response,
+  DemographicImportPayload,
   ClinicOnboardingFormData,
   ClinicOtpResendRequest,
   ClinicOtpVerifyRequest,
@@ -51,8 +52,9 @@ function normalizeClinicLoginResponse(
 export async function submitClinicOnboarding(
   payload: ClinicOnboardingFormData,
   planCode: string,
+  demographicImport?: DemographicImportPayload,
 ): Promise<ClinicSignupResult> {
-  const registerPayload = buildClinicRegisterPayload(payload, planCode);
+  const registerPayload = buildClinicRegisterPayload(payload, planCode, demographicImport);
 
   const response = await apiRequest<ClinicRegisterResponse, ClinicRegisterRequest>({
     endpoint: API_ENDPOINTS.clinicSignup,

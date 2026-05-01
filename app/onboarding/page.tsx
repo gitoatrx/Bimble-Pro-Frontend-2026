@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Upload } from "lucide-react";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { GooglePlacesAddressInput } from "@/components/clinic-access/google-places-address-input";
 import { FieldError } from "@/components/clinic-access/field-error";
@@ -31,6 +31,8 @@ import {
 } from "@/lib/clinic/onboarding";
 import type {
   ClinicAddressSelection,
+  DemographicImportPayload,
+  DemographicImportRow,
   ClinicOnboardingFormData,
   ClinicPlan,
   FieldErrors,
@@ -42,6 +44,7 @@ const onboardingStepTitles: Record<OnboardingStepKey, string> = {
   location: "Add clinic location",
   operations: "Add contact details",
   credentials: "Set your credentials",
+  demographics: "Import demographics",
 };
 
 const onboardingStepHelpers: Record<OnboardingStepKey, string> = {
@@ -49,6 +52,7 @@ const onboardingStepHelpers: Record<OnboardingStepKey, string> = {
   location: "Add the clinic address and postal code.",
   operations: "Finish with the contact and service details.",
   credentials: "Create your admin password and 4-digit PIN for Bimble and OSCAR.",
+  demographics: "Choose whether to stage an OSCAR-compatible demographics import before payment.",
 };
 
 const neutralFieldClassName =
@@ -62,6 +66,171 @@ const neutralSelectClassName =
 
 const invalidFieldClassName =
   "!border-destructive/60 focus-visible:ring-destructive/20";
+
+type ImportMode = "skip" | "import";
+
+type ParsedDemographicImport = {
+  rows: DemographicImportRow[];
+  errors: string[];
+};
+
+type OscarImportPackage = {
+  fileName: string;
+  fileFormat: "xml" | "zip";
+  fileBase64: string;
+  fileSize: number;
+};
+
+const demographicImportHeaders = [
+  "last_name",
+  "first_name",
+  "sex",
+  "year_of_birth",
+  "month_of_birth",
+  "date_of_birth",
+  "hin",
+  "ver",
+  "address",
+  "city",
+  "province",
+  "postal",
+  "phone",
+  "phone2",
+  "email",
+  "provider_no",
+  "roster_status",
+  "patient_status",
+];
+
+function parseCsvLine(line: string) {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const nextChar = line[index + 1];
+
+    if (char === '"' && inQuotes && nextChar === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      values.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  values.push(current.trim());
+  return values;
+}
+
+function normalizeHeader(value: string) {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function normalizeSex(value: string) {
+  const raw = value.trim().toUpperCase();
+  if (raw === "MALE") return "M";
+  if (raw === "FEMALE") return "F";
+  if (raw === "OTHER") return "O";
+  if (raw === "UNKNOWN") return "U";
+  return raw.slice(0, 1);
+}
+
+function buildDemographicTemplate() {
+  return `${demographicImportHeaders.join(",")}\nDoe,Jane,F,1988,04,22,9999999999,,123 Main St,Vancouver,BC,V6B 1A1,6045550100,6045550101,jane@example.com,,ROSTERED,AC`;
+}
+
+function parseDemographicCsv(csvText: string): ParsedDemographicImport {
+  const lines = csvText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) {
+    return { rows: [], errors: ["Add a header row and at least one demographic row."] };
+  }
+
+  const headers = parseCsvLine(lines[0]).map(normalizeHeader);
+  const errors: string[] = [];
+  const rows: DemographicImportRow[] = [];
+
+  for (const required of ["last_name", "first_name", "sex", "year_of_birth", "month_of_birth", "date_of_birth"]) {
+    if (!headers.includes(required)) {
+      errors.push(`Missing required OSCAR column: ${required}`);
+    }
+  }
+
+  lines.slice(1).forEach((line, index) => {
+    const values = parseCsvLine(line);
+    const original: Record<string, string> = {};
+    headers.forEach((header, valueIndex) => {
+      original[header] = values[valueIndex]?.trim() ?? "";
+    });
+
+    const rowNumber = index + 2;
+    const rowErrors: string[] = [];
+    const required = ["last_name", "first_name", "sex", "year_of_birth", "month_of_birth", "date_of_birth"];
+    for (const field of required) {
+      if (!original[field]) rowErrors.push(`${field} is required`);
+    }
+    if (original.year_of_birth && !/^\d{4}$/.test(original.year_of_birth)) {
+      rowErrors.push("year_of_birth must be YYYY");
+    }
+    if (original.month_of_birth && !/^\d{1,2}$/.test(original.month_of_birth)) {
+      rowErrors.push("month_of_birth must be numeric");
+    }
+    if (original.date_of_birth && !/^\d{1,2}$/.test(original.date_of_birth)) {
+      rowErrors.push("date_of_birth must be numeric");
+    }
+    const sex = normalizeSex(original.sex || "");
+    if (!["M", "F", "O", "U"].includes(sex)) {
+      rowErrors.push("sex must be M, F, O, or U");
+    }
+    if (rowErrors.length) {
+      errors.push(`Row ${rowNumber}: ${rowErrors.join(", ")}`);
+      return;
+    }
+
+    rows.push({
+      row_number: rowNumber,
+      title: original.title || undefined,
+      last_name: original.last_name.slice(0, 30),
+      first_name: original.first_name.slice(0, 30),
+      middle_names: original.middle_names || undefined,
+      pref_name: original.pref_name || original.preferred_name || undefined,
+      sex,
+      year_of_birth: original.year_of_birth,
+      month_of_birth: original.month_of_birth.padStart(2, "0"),
+      date_of_birth: original.date_of_birth.padStart(2, "0"),
+      hin: original.hin || original.phn || undefined,
+      ver: original.ver || undefined,
+      address: original.address || undefined,
+      city: original.city || undefined,
+      province: original.province || undefined,
+      postal: original.postal || original.postal_code || undefined,
+      phone: original.phone || undefined,
+      phone2: original.phone2 || original.cell || original.mobile || undefined,
+      email: original.email || undefined,
+      provider_no: original.provider_no || undefined,
+      roster_status: original.roster_status || undefined,
+      patient_status: original.patient_status || "AC",
+      original,
+    });
+  });
+
+  return { rows, errors };
+}
 
 export default function ClinicOnboardingPage() {
   const router = useRouter();
@@ -78,6 +247,15 @@ export default function ClinicOnboardingPage() {
   const [showPin, setShowPin] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<ClinicPlan | null>(null);
   const [isFlowReady, setIsFlowReady] = useState(false);
+  const [importMode, setImportMode] = useState<ImportMode>("skip");
+  const [importFilename, setImportFilename] = useState("");
+  const [importCsv, setImportCsv] = useState("");
+  const [oscarImportPackage, setOscarImportPackage] = useState<OscarImportPackage | null>(null);
+  const [parsedImport, setParsedImport] = useState<ParsedDemographicImport>({
+    rows: [],
+    errors: [],
+  });
+  const [importApproved, setImportApproved] = useState(false);
 
   useEffect(() => {
     const storedPlan = readClinicSelectedPlan();
@@ -204,6 +382,57 @@ export default function ClinicOnboardingPage() {
     setSubmitError("");
   }
 
+  function updateImportCsv(value: string, filename = importFilename) {
+    setImportCsv(value);
+    setImportFilename(filename);
+    setParsedImport(value.trim() ? parseDemographicCsv(value) : { rows: [], errors: [] });
+    setImportApproved(false);
+    setSubmitError("");
+  }
+
+  async function handleImportFileSelected(file: File | null) {
+    if (!file) return;
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (extension !== "xml" && extension !== "zip") {
+      setParsedImport({ rows: [], errors: ["OSCAR import file must be .xml or .zip."] });
+      setOscarImportPackage(null);
+      setImportApproved(false);
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+    const fileBase64 = dataUrl.split(",", 2)[1] || "";
+    setImportFilename(file.name);
+    setImportCsv("");
+    setOscarImportPackage({
+      fileName: file.name,
+      fileFormat: extension,
+      fileBase64,
+      fileSize: file.size,
+    });
+    setParsedImport({ rows: [], errors: [] });
+    setImportApproved(false);
+    setSubmitError("");
+  }
+
+  function buildApprovedDemographicImport(): DemographicImportPayload | undefined {
+    if (importMode !== "import") return undefined;
+    if (!importApproved || !oscarImportPackage || parsedImport.errors.length > 0) {
+      return undefined;
+    }
+    return {
+      approved: true,
+      source_filename: oscarImportPackage.fileName,
+      file_format: oscarImportPackage.fileFormat,
+      file_content_base64: oscarImportPackage.fileBase64,
+      rows: [],
+    };
+  }
+
   async function handleContinue() {
     const normalizedFormData = normalizeClinicOnboardingFormData(formData);
     setFormData(normalizedFormData);
@@ -223,6 +452,21 @@ export default function ClinicOnboardingPage() {
       return;
     }
 
+    if (importMode === "import") {
+      if (!oscarImportPackage) {
+        setSubmitError("Upload an OSCAR EMR DM .xml file or a .zip containing XML files, or choose continue without import.");
+        return;
+      }
+      if (parsedImport.errors.length > 0) {
+        setSubmitError("Fix the demographics import errors before payment.");
+        return;
+      }
+      if (!importApproved) {
+        setSubmitError("Approve the demographics preview before continuing to payment.");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setSubmitError("");
 
@@ -234,6 +478,7 @@ export default function ClinicOnboardingPage() {
       const signupResult = await submitClinicOnboarding(
         normalizedFormData,
         selectedPlan.id,
+        buildApprovedDemographicImport(),
       );
       storeClinicSignupResult(signupResult);
 
@@ -545,6 +790,132 @@ export default function ClinicOnboardingPage() {
             />
             <FieldError message={errors.postalCode} />
           </div>
+        </>
+      );
+    }
+
+    if (step === "demographics") {
+      return (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => {
+                setImportMode("skip");
+                setSubmitError("");
+              }}
+              className={`rounded-xl border p-4 text-left transition ${
+                importMode === "skip"
+                  ? "border-primary bg-primary/5 text-slate-950"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              <div className="text-sm font-semibold">Continue without import</div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">
+                Use the existing setup flow and start with empty clinic demographics.
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setImportMode("import");
+                setSubmitError("");
+              }}
+              className={`rounded-xl border p-4 text-left transition ${
+                importMode === "import"
+                  ? "border-primary bg-primary/5 text-slate-950"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              <div className="text-sm font-semibold">Import existing demographics</div>
+              <div className="mt-1 text-xs leading-5 text-slate-500">
+                Stage an OSCAR EMR DM XML or ZIP before payment and approve it.
+              </div>
+            </button>
+          </div>
+
+          {importMode === "import" ? (
+            <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm hover:border-primary/50">
+                  <Upload className="h-4 w-4 text-primary" />
+                  Upload XML or ZIP
+                  <input
+                    type="file"
+                    accept=".xml,.zip,application/xml,text/xml,application/zip"
+                    className="sr-only"
+                    onChange={(event) => void handleImportFileSelected(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {importFilename ? (
+                  <span className="text-xs font-medium text-slate-500">{importFilename}</span>
+                ) : null}
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
+                Upload the same file OSCAR accepts on its native Import Demographic screen:
+                <span className="font-semibold text-slate-900"> .xml</span> or
+                <span className="font-semibold text-slate-900"> .zip containing .xml</span>.
+                The package is staged before payment and parsed after provisioning.
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Package</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">
+                    {oscarImportPackage ? oscarImportPackage.fileFormat.toUpperCase() : "Not uploaded"}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Errors</div>
+                  <div className="mt-1 text-xl font-semibold text-slate-950">{parsedImport.errors.length}</div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Destination</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-950">Bimble + OSCAR</div>
+                </div>
+              </div>
+
+              {parsedImport.errors.length > 0 ? (
+                <div className="max-h-36 overflow-y-auto rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {parsedImport.errors.slice(0, 8).map((error) => (
+                    <div key={error}>{error}</div>
+                  ))}
+                  {parsedImport.errors.length > 8 ? (
+                    <div>And {parsedImport.errors.length - 8} more errors.</div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {oscarImportPackage ? (
+                <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                  <div className="grid grid-cols-[1.4fr_0.8fr_1fr] gap-3 border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    <span>File</span>
+                    <span>Type</span>
+                    <span>Size</span>
+                  </div>
+                  <div className="grid grid-cols-[1.4fr_0.8fr_1fr] gap-3 px-3 py-2 text-sm text-slate-700">
+                    <span className="font-medium text-slate-950">{oscarImportPackage.fileName}</span>
+                    <span>{oscarImportPackage.fileFormat.toUpperCase()}</span>
+                    <span>{Math.max(1, Math.round(oscarImportPackage.fileSize / 1024))} KB</span>
+                  </div>
+                </div>
+              ) : null}
+
+              <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20"
+                  checked={importApproved}
+                  disabled={!oscarImportPackage || parsedImport.errors.length > 0}
+                  onChange={(event) => setImportApproved(event.target.checked)}
+                />
+                <span>
+                  I approve this OSCAR-compatible import package. After payment and provisioning, demographics from this package will be saved into both the clinic PostgreSQL database and the clinic OSCAR database.
+                </span>
+              </label>
+            </div>
+          ) : null}
         </>
       );
     }
