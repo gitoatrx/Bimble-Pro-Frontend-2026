@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent, ReactNode } from "react";
-import { ArrowLeft, CheckCircle2, Printer, Save, Search } from "lucide-react";
+import { ArrowLeft, Printer, Save, Search } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
@@ -772,15 +772,10 @@ export default function DoctorAppointmentTreatmentPage() {
   }
 
   const reason = appointment?.chief_complaint || appointment?.user_friendly_service_name || appointment?.service || "Appointment";
+  const patientGender = appointment?.patient_gender || appointment?.patient_sex || appointment?.gender || "—";
 
   return (
-    <DoctorPageShell eyebrow="Patient care" title={appointment?.patient_name || "Patient record"}>
-      <div className="print:hidden">
-        <Button variant="outline" size="sm" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Button>
-      </div>
+    <DoctorPageShell>
 
       {loading ? (
         <DoctorSection>
@@ -796,251 +791,248 @@ export default function DoctorAppointmentTreatmentPage() {
         </DoctorSection>
       ) : appointment ? (
         <>
-          <DoctorSection title="Step 1 · Visit reason">
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-primary">Reason</p>
-              <p className="mt-1 font-display text-xl font-semibold text-foreground">{reason}</p>
-              {appointment.patient_age ? (
-                <p className="mt-2 text-sm font-medium text-muted-foreground">
-                  Patient age: {appointment.patient_age} years
-                  {appointment.patient_date_of_birth
-                    ? ` · DOB ${formatIsoDateToDisplay(appointment.patient_date_of_birth)}`
-                    : ""}
-                </p>
-              ) : null}
-            </div>
-          </DoctorSection>
+          <div className="print:hidden">
+            <Button variant="outline" size="sm" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
+          </div>
 
           <DoctorSection
-            title="Step 2 · Medication search"
-            description="Search the OatRx medication catalog."
             className="relative z-30 overflow-visible"
           >
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  setSelectedDrug(null);
-                  setSavedPrescription(null);
-                  setDocumentDownloadUrl(null);
-                  setPrintMessage("");
-
-                }}
-                className="h-12 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-                placeholder="Enter drug name..."
-              />
-              {drugResults.length > 0 || searching ? (
-                <div className="absolute left-0 right-0 z-50 mt-2 max-h-96 overflow-y-auto rounded-2xl border border-border bg-card p-2 shadow-xl">
-                  {searching ? <p className="px-3 py-2 text-sm text-muted-foreground">Searching…</p> : null}
-                  {drugResults.map((drug) => (
-                    <button
-                      key={drug.source_id}
-                      type="button"
-                      onClick={() => handleSelectDrug(drug)}
-                      className="flex w-full flex-col rounded-xl px-3 py-2 text-left transition hover:bg-accent/50"
-                    >
-                      <span className="text-sm font-semibold text-foreground">{drug.name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {[drug.brand_name, drug.descriptor, drug.route, drug.drug_category]
-                          .filter(Boolean)
-                          .join(" · ") || "OSCAR drugref"}
-                      </span>
-                    </button>
-                  ))}
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">{appointment.patient_name}</h2>
+                <p className="text-sm font-medium text-muted-foreground">
+                  {appointment.patient_age ? `${appointment.patient_age} years` : "Age not recorded"}
+                  {appointment.patient_date_of_birth ? ` · DOB ${formatIsoDateToDisplay(appointment.patient_date_of_birth)}` : ""}
+                  {patientGender !== "—" ? ` · ${patientGender}` : ""}
+                </p>
+                <div className="pt-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Reason</p>
+                  <p className="mt-1 text-sm font-medium leading-5 text-foreground">{reason}</p>
                 </div>
-              ) : null}
-            </div>
-            {selectedDrug ? (
-              <div className="mt-3 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                <CheckCircle2 className="h-4 w-4" />
-                Added {selectedDrug.name}
               </div>
-            ) : null}
-          </DoctorSection>
 
-          <DoctorSection title="Step 3 · Prescription details">
-            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-            <div className={cn("grid content-start gap-4 self-start", medications.length === 0 && "opacity-70")}>
-              {medications.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-border/80 bg-muted/30 px-4 py-8 text-center text-sm font-medium text-muted-foreground">
-                  Search and select one or more medicines above. Bimble will prefill the instruction and quantity defaults.
-                </div>
-              ) : null}
-
-              {medications.map((medicine, index) => (
-                <div key={medicine.localId} className="rounded-3xl border border-border bg-background p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Medicine {index + 1}</p>
-                      <h3 className="mt-1 font-display text-lg font-semibold text-foreground">{medicine.drugName}</h3>
-                      {medicine.ingredient ? <p className="text-xs text-muted-foreground">{medicine.ingredient}</p> : null}
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => removeMedication(medicine.localId)}>
-                      Remove
-                    </Button>
+              <div className="space-y-3">
+                <div className="relative z-30 overflow-visible">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
+                    <input
+                      value={query}
+                      onChange={(event) => {
+                        setQuery(event.target.value);
+                        setSelectedDrug(null);
+                        setSavedPrescription(null);
+                        setDocumentDownloadUrl(null);
+                        setPrintMessage("");
+                      }}
+                      className="h-12 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                      placeholder="Enter drug name..."
+                    />
+                    {drugResults.length > 0 || searching ? (
+                      <div className="absolute left-0 right-0 z-50 mt-2 max-h-96 overflow-y-auto rounded-2xl border border-border bg-card p-2 shadow-xl">
+                        {searching ? <p className="px-3 py-2 text-sm text-muted-foreground">Searching…</p> : null}
+                        {drugResults.map((drug) => (
+                          <button
+                            key={drug.source_id}
+                            type="button"
+                            onClick={() => handleSelectDrug(drug)}
+                            className="flex w-full flex-col rounded-xl px-3 py-2 text-left transition hover:bg-accent/50"
+                          >
+                            <span className="text-sm font-semibold text-foreground">{drug.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {[drug.brand_name, drug.descriptor, drug.route, drug.drug_category]
+                                .filter(Boolean)
+                                .join(" · ") || "OSCAR drugref"}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
+                </div>
+              </div>
 
-                  <div className="mt-4 grid gap-4">
-                    <Field label="Dosage / instructions">
-                      <textarea
-                        value={medicine.instructions}
-                        onChange={(event) => updateMedication(medicine.localId, "instructions", event.target.value)}
-                        className="min-h-24 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-                        placeholder="Example: Take 1 capsule by mouth twice daily with food for 7 days."
-                      />
-                    </Field>
-
-                    <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm text-foreground">
-                      <p className="font-semibold">Parsed prescription details</p>
-                      <p className="mt-1 text-xs font-medium text-muted-foreground">
-                        Dose {medicine.sigDose || "1"} · {FREQUENCY_OPTIONS.find((item) => item.code === medicine.sigFrequency)?.label || "Frequency"}{" "}
-                        {medicine.sigTiming ? `· ${medicine.sigTiming}` : ""} · {medicine.durationDays || "0"} days · Qty {medicine.quantity || "0"} · Repeats{" "}
-                        {medicine.repeats || "0"}
-                      </p>
-                      <p className="mt-1 text-xs font-medium text-muted-foreground">
-                        Start {medicine.startDate || "today"} · End {medicine.endDate || "calculated"}
-                      </p>
-                    </div>
-
-                    <details className="rounded-2xl border border-border bg-muted/20 px-4 py-3">
-                      <summary className="cursor-pointer text-sm font-semibold text-foreground">Adjust details</summary>
-                      <div className="mt-4 grid gap-4">
-                        <div className="grid gap-4 md:grid-cols-3">
-                          <Field label="Dose">
-                            <input
-                              value={medicine.sigDose}
-                              onChange={(event) => updateMedicationSig(medicine.localId, "sigDose", event.target.value)}
-                              className={inputClass()}
-                              placeholder="1"
-                            />
-                          </Field>
-                          <Field label="Frequency">
-                            <select
-                              value={medicine.sigFrequency}
-                              onChange={(event) => updateMedicationSig(medicine.localId, "sigFrequency", event.target.value)}
-                              className={inputClass()}
-                            >
-                              {FREQUENCY_OPTIONS.map((item) => (
-                                <option key={item.code} value={item.code}>
-                                  {item.label}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                          <Field label="Duration days">
-                            <input
-                              value={medicine.durationDays}
-                              onChange={(event) => updateMedication(medicine.localId, "durationDays", event.target.value)}
-                              className={inputClass()}
-                            />
-                          </Field>
-                          <Field label="Start date">
-                            <input
-                              type="date"
-                              value={medicine.startDate}
-                              onChange={(event) => updateMedication(medicine.localId, "startDate", event.target.value)}
-                              className={inputClass()}
-                            />
-                          </Field>
-                          <Field label="Qty/Mitte">
-                            <input
-                              value={medicine.quantity}
-                              onChange={(event) => updateMedication(medicine.localId, "quantity", event.target.value)}
-                              className={inputClass()}
-                            />
-                          </Field>
-                          <Field label="Repeats">
-                            <input
-                              value={medicine.repeats}
-                              onChange={(event) => updateMedication(medicine.localId, "repeats", event.target.value)}
-                              className={inputClass()}
-                            />
-                          </Field>
+              <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+                <div className={cn("grid content-start gap-4 self-start", medications.length === 0 && "opacity-70")}>
+                  {medications.map((medicine, index) => (
+                    <div key={medicine.localId} className="rounded-3xl border border-border bg-background p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Medicine {index + 1}</p>
+                          <h3 className="mt-1 font-display text-lg font-semibold text-foreground">{medicine.drugName}</h3>
+                          {medicine.ingredient ? <p className="text-xs text-muted-foreground">{medicine.ingredient}</p> : null}
                         </div>
-                        <Field label="Special instructions">
+                        <Button type="button" variant="outline" size="sm" onClick={() => removeMedication(medicine.localId)}>
+                          Remove
+                        </Button>
+                      </div>
+
+                      <div className="mt-4 grid gap-4">
+                        <Field label="Dosage / instructions">
                           <textarea
-                            value={medicine.specialInstructions}
-                            onChange={(event) => updateMedication(medicine.localId, "specialInstructions", event.target.value)}
-                            className="min-h-16 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-                            placeholder="Optional: with food, affected area, left eye, counselling note..."
+                            value={medicine.instructions}
+                            onChange={(event) => updateMedication(medicine.localId, "instructions", event.target.value)}
+                            className="min-h-24 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                            placeholder="Example: Take 1 capsule by mouth twice daily with food for 7 days."
                           />
                         </Field>
-                      </div>
-                    </details>
-                  </div>
-                </div>
-              ))}
 
-              <div className="grid gap-3">
-                <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-border bg-background px-4 text-sm font-medium text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={!form.noSubstitution}
-                    onChange={(event) => updateForm("noSubstitution", !event.target.checked)}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
-                  />
-                  Substitution allowed
-                </label>
+                        <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm text-foreground">
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <Field label="Dose">
+                              <input
+                                value={medicine.sigDose}
+                                onChange={(event) => updateMedicationSig(medicine.localId, "sigDose", event.target.value)}
+                                className={inputClass()}
+                                placeholder="1"
+                              />
+                            </Field>
+                            <Field label="Frequency">
+                              <select
+                                value={medicine.sigFrequency}
+                                onChange={(event) => updateMedicationSig(medicine.localId, "sigFrequency", event.target.value)}
+                                className={inputClass()}
+                              >
+                                {FREQUENCY_OPTIONS.map((item) => (
+                                  <option key={item.code} value={item.code}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </Field>
+                            <Field label="Duration days">
+                              <input
+                                value={medicine.durationDays}
+                                onChange={(event) => updateMedication(medicine.localId, "durationDays", event.target.value)}
+                                className={inputClass()}
+                              />
+                            </Field>
+                            <Field label="Start date">
+                              <input
+                                type="date"
+                                value={medicine.startDate}
+                                onChange={(event) => updateMedication(medicine.localId, "startDate", event.target.value)}
+                                className={inputClass()}
+                              />
+                            </Field>
+                            <Field label="Qty/Mitte">
+                              <input
+                                value={medicine.quantity}
+                                onChange={(event) => updateMedication(medicine.localId, "quantity", event.target.value)}
+                                className={inputClass()}
+                              />
+                            </Field>
+                            <Field label="Repeats">
+                              <input
+                                value={medicine.repeats}
+                                onChange={(event) => updateMedication(medicine.localId, "repeats", event.target.value)}
+                                className={inputClass()}
+                              />
+                            </Field>
+                          </div>
+                          <div className="mt-4 grid gap-4">
+                            <Field label="Special instructions">
+                              <textarea
+                                value={medicine.specialInstructions}
+                                onChange={(event) => updateMedication(medicine.localId, "specialInstructions", event.target.value)}
+                                className="min-h-16 w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                                placeholder="Optional: with food, affected area, left eye, counselling note..."
+                              />
+                            </Field>
+
+                            <div className="rounded-2xl border border-border bg-background px-4 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Parsed prescription details</p>
+                              <p className="mt-2 text-xs font-medium text-muted-foreground">
+                                Dose {medicine.sigDose || "1"} · {FREQUENCY_OPTIONS.find((item) => item.code === medicine.sigFrequency)?.label || "Frequency"}{" "}
+                                {medicine.sigTiming ? `· ${medicine.sigTiming}` : ""} · {medicine.durationDays || "0"} days · Qty {medicine.quantity || "0"} · Repeats{" "}
+                                {medicine.repeats || "0"}
+                              </p>
+                              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                                Start {medicine.startDate || "today"} · End {medicine.endDate || "calculated"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                </div>
+
+                {medications.length > 0 ? (
+                  <div className="self-start space-y-5 print:hidden">
+                    <div id="prescription-preview" className="bg-white text-slate-950">
+                      <div className="flex min-h-24 border-2 border-slate-900">
+                        <div className="flex w-32 items-center justify-center border-r-2 border-slate-900 font-serif text-7xl">Rx</div>
+                        <div className="flex-1 p-4 text-xs leading-5">
+                          <p>Bimble</p>
+                          <p>Clinic prescription workspace</p>
+                        </div>
+                      </div>
+                      <div className="border-x-2 border-b-2 border-slate-900 p-4 text-xs">
+                        <div className="flex justify-between gap-4">
+                          <div>
+                            <p className="font-semibold">{appointment.patient_name}</p>
+                            <p>{withoutCommas(appointment.care_location) || "Patient location not recorded"}</p>
+                            <p>Health Ins.: {appointment.patient_id}</p>
+                          </div>
+                          <p className="font-semibold">{new Date().toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                      <div className="min-h-[360px] border-x-2 border-b-2 border-slate-900 p-4 text-xs">
+                        {medications.map((medicine, index) => (
+                          <div key={medicine.localId} className={cn(index > 0 && "mt-5 border-t border-slate-400 pt-4")}>
+                            <p className="font-semibold">
+                              Rx {index + 1} - {medicine.drugName}
+                            </p>
+                            <p className="mt-3">
+                              Qty:{medicine.quantity || "0"} Repeats:{medicine.repeats || "0"}
+                            </p>
+                            <p className="mt-2">{form.noSubstitution ? "No substitution" : "Substitution allowed"}</p>
+                            <p className="mt-1">
+                              Start: {medicine.startDate || "N/A"} End: {medicine.endDate || "N/A"}
+                            </p>
+                            <p className="mt-3 border-t border-slate-400 pt-2">
+                              {[medicine.instructions, medicine.specialInstructions].filter(Boolean).join(" ")}
+                            </p>
+                          </div>
+                        ))}
+                        {form.additionalNote ? <p className="mt-28 whitespace-pre-wrap">{form.additionalNote}</p> : null}
+                        <div className="mt-12">
+                          {form.signatureDataUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={form.signatureDataUrl} alt="Prescriber signature" className="mb-2 h-16 max-w-64 object-contain" />
+                          ) : null}
+                          <div className="border-t border-slate-900 pt-2">
+                            <p className="font-semibold">Prescriber</p>
+                            <p>Provider #: N/A</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex justify-between text-[10px] lowercase text-slate-600">
+                        <span>generated by bimble</span>
+                        <span>page 1 of 1</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            </div>
 
-            {medications.length > 0 ? (
-              <div className="self-start space-y-5 rounded-2xl border border-border bg-card p-4 print:hidden">
-                <div id="prescription-preview" className="rounded-2xl border border-slate-300 bg-white p-5 text-slate-950 shadow-sm">
-                  <div className="flex min-h-24 border-2 border-slate-900">
-                    <div className="flex w-32 items-center justify-center border-r-2 border-slate-900 font-serif text-7xl">Rx</div>
-                    <div className="flex-1 p-4 text-xs leading-5">
-                      <p>Bimble</p>
-                      <p>Clinic prescription workspace</p>
-                    </div>
-                  </div>
-                  <div className="border-x-2 border-b-2 border-slate-900 p-4 text-xs">
-                    <div className="flex justify-between gap-4">
-                      <div>
-                        <p className="font-semibold">{appointment.patient_name}</p>
-                        <p>{withoutCommas(appointment.care_location) || "Patient location not recorded"}</p>
-                        <p>Health Ins.: {appointment.patient_id}</p>
-                      </div>
-                      <p className="font-semibold">{new Date().toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                  <div className="min-h-[360px] border-x-2 border-b-2 border-slate-900 p-4 text-xs">
-                    {medications.map((medicine, index) => (
-                      <div key={medicine.localId} className={cn(index > 0 && "mt-5 border-t border-slate-400 pt-4")}>
-                        <p className="font-semibold">
-                          Rx {index + 1} - {medicine.drugName}
-                        </p>
-                        <p className="mt-3">
-                          Qty:{medicine.quantity || "0"} Repeats:{medicine.repeats || "0"}
-                        </p>
-                        <p className="mt-2">{form.noSubstitution ? "No substitution" : "Substitution allowed"}</p>
-                        <p className="mt-1">
-                          Start: {medicine.startDate || "N/A"} End: {medicine.endDate || "N/A"}
-                        </p>
-                        <p className="mt-3 border-t border-slate-400 pt-2">
-                          {[medicine.instructions, medicine.specialInstructions].filter(Boolean).join(" ")}
-                        </p>
-                      </div>
-                    ))}
-                    {form.additionalNote ? <p className="mt-28 whitespace-pre-wrap">{form.additionalNote}</p> : null}
-                    <div className="mt-12">
-                      {form.signatureDataUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={form.signatureDataUrl} alt="Prescriber signature" className="mb-2 h-16 max-w-64 object-contain" />
-                      ) : null}
-                      <div className="border-t border-slate-900 pt-2">
-                        <p className="font-semibold">Prescriber</p>
-                        <p>Provider #: N/A</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex justify-between text-[10px] lowercase text-slate-600">
-                    <span>generated by bimble</span>
-                    <span>page 1 of 1</span>
-                  </div>
-                </div>
+              <div className="space-y-5">
+                {medications.length > 0 ? (
+                  <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-border bg-background px-4 text-sm font-medium text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={!form.noSubstitution}
+                      onChange={(event) => updateForm("noSubstitution", !event.target.checked)}
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
+                    />
+                    Substitution allowed
+                  </label>
+                ) : null}
 
                 <Field label="Additional notes to add to Rx">
                   <textarea
@@ -1081,7 +1073,6 @@ export default function DoctorAppointmentTreatmentPage() {
                   </Button>
                 </div>
               </div>
-            ) : null}
             </div>
           </DoctorSection>
         </>

@@ -59,6 +59,9 @@ export type DoctorAppointment = {
   patient_name: string;
   patient_date_of_birth?: string | null;
   patient_age?: number | null;
+  patient_gender?: string | null;
+  patient_sex?: string | null;
+  gender?: string | null;
   service: string;
   service_name: string | null;
   user_friendly_service_name: string;
