@@ -60,16 +60,16 @@ type MedicationDraft = {
 const DEFAULT_DURATION_DAYS = 30;
 
 const FREQUENCY_OPTIONS = [
-  { code: "OD", label: "Once daily", dosesPerDay: 1 },
-  { code: "BID", label: "Twice daily", dosesPerDay: 2 },
-  { code: "TID", label: "Three times daily", dosesPerDay: 3 },
-  { code: "QID", label: "Four times daily", dosesPerDay: 4 },
-  { code: "QHS", label: "At bedtime", dosesPerDay: 1 },
-  { code: "Q4H", label: "Every 4 hours", dosesPerDay: 6 },
-  { code: "Q6H", label: "Every 6 hours", dosesPerDay: 4 },
-  { code: "Q8H", label: "Every 8 hours", dosesPerDay: 3 },
-  { code: "Q12H", label: "Every 12 hours", dosesPerDay: 2 },
-  { code: "PRN", label: "As needed", dosesPerDay: null },
+  { code: "OD", label: "OD", dosesPerDay: 1 },
+  { code: "BID", label: "BID", dosesPerDay: 2 },
+  { code: "TID", label: "TID", dosesPerDay: 3 },
+  { code: "QID", label: "QID", dosesPerDay: 4 },
+  { code: "QHS", label: "QHS", dosesPerDay: 1 },
+  { code: "Q4H", label: "Q4H", dosesPerDay: 6 },
+  { code: "Q6H", label: "Q6H", dosesPerDay: 4 },
+  { code: "Q8H", label: "Q8H", dosesPerDay: 3 },
+  { code: "Q12H", label: "Q12H", dosesPerDay: 2 },
+  { code: "PRN", label: "PRN", dosesPerDay: null },
 ];
 
 const DOSAGE_FORM_WORDS = [
@@ -122,7 +122,7 @@ function Field({
 }
 
 function inputClass() {
-  return "h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15";
+  return "h-11 w-full rounded-2xl border border-border bg-card px-4 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15";
 }
 
 function withoutCommas(value: string | null | undefined) {
@@ -732,7 +732,7 @@ export default function DoctorAppointmentTreatmentPage() {
                         setDocumentDownloadUrl(null);
                         setPrintMessage("");
                       }}
-                      className="h-12 w-full rounded-2xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                      className="h-12 w-full rounded-2xl border border-border bg-card pl-11 pr-4 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                       placeholder="Enter drug name..."
                     />
                     {drugResults.length > 0 || searching ? (
@@ -762,7 +762,7 @@ export default function DoctorAppointmentTreatmentPage() {
               <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
                 <div className={cn("grid content-start gap-4 self-start", medications.length === 0 && "opacity-70")}>
                   {medications.map((medicine, index) => (
-                    <div key={medicine.localId} className="rounded-3xl border border-border bg-background p-3">
+                    <div key={medicine.localId} className="rounded-3xl border border-border bg-card p-3">
                       <div className="flex flex-wrap items-start justify-between gap-2.5">
                         <div>
                           <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-primary">Medicine {index + 1}</p>
@@ -779,64 +779,76 @@ export default function DoctorAppointmentTreatmentPage() {
                           <textarea
                             value={medicine.instructions}
                             onChange={(event) => updateMedication(medicine.localId, "instructions", event.target.value)}
-                            className="min-h-20 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                            className="min-h-20 w-full resize-none rounded-2xl border border-border bg-white px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                             placeholder="Example: Take 1 capsule by mouth twice daily with food for 7 days."
                           />
                         </Field>
 
-                        <div className="rounded-2xl border border-border bg-muted/20 px-3 py-2 text-sm text-foreground">
-                          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                            <Field label="Dose">
-                              <input
-                                value={medicine.sigDose}
-                                onChange={(event) => updateMedicationSig(medicine.localId, "sigDose", event.target.value)}
-                                className={inputClass()}
-                                placeholder="1"
-                              />
-                            </Field>
-                            <Field label="Frequency">
-                              <select
-                                value={medicine.sigFrequency}
-                                onChange={(event) => updateMedicationSig(medicine.localId, "sigFrequency", event.target.value)}
-                                className={inputClass()}
-                              >
-                                {FREQUENCY_OPTIONS.map((item) => (
-                                  <option key={item.code} value={item.code}>
-                                    {item.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </Field>
-                            <Field label="Duration">
-                              <input
-                                value={medicine.durationDays}
-                                onChange={(event) => updateMedication(medicine.localId, "durationDays", event.target.value)}
-                                className={inputClass()}
-                              />
-                            </Field>
-                            <Field label="Qty">
-                              <input
-                                value={medicine.quantity}
-                                onChange={(event) => updateMedication(medicine.localId, "quantity", event.target.value)}
-                                className={inputClass()}
-                              />
-                            </Field>
-                          </div>
-                          <div className="mt-3 grid gap-3">
-                            <Field label="Special instructions">
-                              <textarea
-                                value={medicine.specialInstructions}
-                                onChange={(event) => updateMedication(medicine.localId, "specialInstructions", event.target.value)}
-                                className="min-h-16 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
-                                placeholder="Optional: with food, affected area, left eye, counselling note..."
-                              />
-                            </Field>
-                          </div>
-                          <p className="mt-1.5 text-[10px] font-medium leading-4 text-muted-foreground">
-                            Parsed as: {medicine.sigDose || "1"} {FREQUENCY_OPTIONS.find((item) => item.code === medicine.sigFrequency)?.label || "Frequency"}
-                            {medicine.sigTiming ? ` · ${medicine.sigTiming}` : ""} · {medicine.durationDays || "0"} days · Qty {medicine.quantity || "0"}
-                          </p>
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                          <Field label="Dose">
+                            <input
+                              value={medicine.sigDose}
+                              onChange={(event) => updateMedicationSig(medicine.localId, "sigDose", event.target.value)}
+                              className={inputClass()}
+                              placeholder="1"
+                            />
+                          </Field>
+                          <Field label="Frequency">
+                            <select
+                              value={medicine.sigFrequency}
+                              onChange={(event) => updateMedicationSig(medicine.localId, "sigFrequency", event.target.value)}
+                              className={inputClass()}
+                            >
+                              {FREQUENCY_OPTIONS.map((item) => (
+                                <option key={item.code} value={item.code}>
+                                  {item.label}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field label="Duration">
+                            <input
+                              value={medicine.durationDays}
+                              onChange={(event) => updateMedication(medicine.localId, "durationDays", event.target.value)}
+                              className={inputClass()}
+                            />
+                          </Field>
+                          <Field label="Qty">
+                            <input
+                              value={medicine.quantity}
+                              onChange={(event) => updateMedication(medicine.localId, "quantity", event.target.value)}
+                              className={inputClass()}
+                            />
+                          </Field>
                         </div>
+
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <Field label="Start date">
+                            <input
+                              type="date"
+                              value={medicine.startDate}
+                              onChange={(event) => updateMedication(medicine.localId, "startDate", event.target.value)}
+                              className={inputClass()}
+                            />
+                          </Field>
+                          <Field label="End date">
+                            <input value={medicine.endDate} readOnly className={inputClass()} />
+                          </Field>
+                        </div>
+
+                        <Field label="Special instructions">
+                          <textarea
+                            value={medicine.specialInstructions}
+                            onChange={(event) => updateMedication(medicine.localId, "specialInstructions", event.target.value)}
+                            className="min-h-16 w-full resize-none rounded-2xl border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                            placeholder="Optional: with food, affected area, left eye, counselling note..."
+                          />
+                        </Field>
+
+                        <p className="mt-1.5 text-[10px] font-medium leading-4 text-muted-foreground">
+                          Parsed as: {medicine.sigDose || "1"} {FREQUENCY_OPTIONS.find((item) => item.code === medicine.sigFrequency)?.label || "Frequency"}
+                          {medicine.sigTiming ? ` · ${medicine.sigTiming}` : ""} · {medicine.durationDays || "0"} days · Qty {medicine.quantity || "0"}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -869,9 +881,7 @@ export default function DoctorAppointmentTreatmentPage() {
                             <p className="font-medium leading-3.5">
                               Rx {index + 1} - {medicine.drugName}
                             </p>
-                            <p className="mt-1.5">
-                              Qty:{medicine.quantity || "0"} Repeats:{medicine.repeats || "0"}
-                            </p>
+                            <p className="mt-1.5">Qty:{medicine.quantity || "0"}</p>
                             <p className="mt-2">{form.noSubstitution ? "No substitution" : "Substitution allowed"}</p>
                             <p className="mt-1">
                               Start: {medicine.startDate || "N/A"} End: {medicine.endDate || "N/A"}
@@ -904,7 +914,7 @@ export default function DoctorAppointmentTreatmentPage() {
 
               <div className="space-y-5">
                 {medications.length > 0 ? (
-                  <label className="flex min-h-10 items-center gap-3 rounded-2xl border border-border bg-background px-3 text-sm font-medium text-foreground">
+                  <label className="flex min-h-10 items-center gap-3 rounded-2xl border border-border bg-card px-3 text-sm font-medium text-foreground">
                     <input
                       type="checkbox"
                       checked={!form.noSubstitution}
@@ -919,7 +929,7 @@ export default function DoctorAppointmentTreatmentPage() {
                   <textarea
                     value={form.additionalNote}
                     onChange={(event) => updateForm("additionalNote", event.target.value)}
-                    className="min-h-16 w-full resize-none rounded-2xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+                    className="min-h-16 w-full resize-none rounded-2xl border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
                     placeholder="Add final note before saving"
                   />
                 </Field>
