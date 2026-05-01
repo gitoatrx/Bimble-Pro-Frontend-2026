@@ -181,6 +181,7 @@ export type PatientPortalAppointment = {
   preferred_pharmacy_postal_code: string | null;
   preferred_pharmacy_phone: string | null;
   care_location: string | null;
+  follow_up?: PatientAppointmentFollowUp | null;
   prescription_notes: string | null;
   cancellation_reason: string | null;
   queued_at: string;
@@ -188,6 +189,17 @@ export type PatientPortalAppointment = {
   started_at: string | null;
   completed_at: string | null;
   cancelled_at: string | null;
+};
+
+export type PatientAppointmentFollowUp = {
+  status: "ANSWERED" | "SKIPPED" | string;
+  submitted_at: string | null;
+  answers: Array<{
+    id: string;
+    question: string;
+    answer: string;
+    options?: string[];
+  }>;
 };
 
 export type PatientRescheduleSlotOption = {

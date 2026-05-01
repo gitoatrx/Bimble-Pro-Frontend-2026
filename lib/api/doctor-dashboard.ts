@@ -76,6 +76,7 @@ export type DoctorAppointment = {
   appointment_date?: string | null;
   appointment_time?: string | null;
   care_location?: string | null;
+  follow_up?: AppointmentFollowUp | null;
   time: string;
   date_key: string;
   date: string;
@@ -83,6 +84,16 @@ export type DoctorAppointment = {
   assigned_at: string | null;
   started_at: string | null;
   completed_at: string | null;
+};
+
+export type AppointmentFollowUp = {
+  status: string;
+  submitted_at: string | null;
+  answers: Array<{
+    id: string;
+    question: string;
+    answer: string;
+  }>;
 };
 
 export type DoctorTodayResponse = {

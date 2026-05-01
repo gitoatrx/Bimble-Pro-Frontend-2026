@@ -40,6 +40,7 @@ export type ClinicPoolAppointment = {
   appointment_date?: string | null;
   appointment_time?: string | null;
   care_location?: string | null;
+  follow_up?: AppointmentFollowUp | null;
   time: string;
   date_key: string | null;
   date: string;
@@ -60,6 +61,15 @@ export type ClinicDoctorFormPacketRecord = {
   generated_at: string | null;
   missing_fields: string[];
   download_base_url: string;
+};
+export type AppointmentFollowUp = {
+  status: string;
+  submitted_at: string | null;
+  answers: Array<{
+    id: string;
+    question: string;
+    answer: string;
+  }>;
 };
 export type ClinicDoctorFormPacketsResponse = {
   items: ClinicDoctorFormPacketRecord[];

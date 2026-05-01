@@ -18,6 +18,7 @@ import {
   fetchClinicAppointmentsByRange,
   fetchClinicDoctors,
   rescheduleClinicAppointment,
+  type AppointmentFollowUp,
   type ClinicAppointmentRescheduleSlot,
 } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
@@ -34,6 +35,7 @@ type Appointment = {
   dateKey: string;
   appointmentDate: string;
   appointmentTime: string;
+  followUp: AppointmentFollowUp | null;
 };
 
 type ClinicDoctorOption = {
@@ -51,6 +53,7 @@ function offsetKey(base: string, offset: number): string {
 }
 
 function normalizeAppointment(record: Record<string, unknown>): Appointment {
+  const followUp = normalizeFollowUp(record.follow_up);
   return {
     id: Number(record.id ?? record.appointment_id ?? Date.now()),
     patientName:
@@ -98,7 +101,54 @@ function normalizeAppointment(record: Record<string, unknown>): Appointment {
       (typeof record.time === "string" && record.time) ||
       (typeof record.start_time === "string" && record.start_time) ||
       "",
+    followUp,
   };
+}
+
+function normalizeFollowUp(value: unknown): AppointmentFollowUp | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const answers = Array.isArray(record.answers)
+    ? record.answers
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const answerRecord = item as Record<string, unknown>;
+          const question = typeof answerRecord.question === "string" ? answerRecord.question : "";
+          const answer = typeof answerRecord.answer === "string" ? answerRecord.answer : "";
+          if (!question || !answer) return null;
+          return {
+            id: typeof answerRecord.id === "string" ? answerRecord.id : "",
+            question,
+            answer,
+          };
+        })
+        .filter((item): item is AppointmentFollowUp["answers"][number] => Boolean(item))
+    : [];
+  return {
+    status: typeof record.status === "string" ? record.status : "ANSWERED",
+    submitted_at: typeof record.submitted_at === "string" ? record.submitted_at : null,
+    answers,
+  };
+}
+
+function FollowUpPanel({ followUp }: { followUp: AppointmentFollowUp }) {
+  return (
+    <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Patient follow-up</p>
+      {followUp.status === "SKIPPED" ? (
+        <p className="mt-2 text-sm text-slate-600">Patient skipped the optional follow-up questions.</p>
+      ) : (
+        <div className="mt-2 grid gap-2">
+          {followUp.answers.map((item) => (
+            <div key={`${item.id}-${item.question}`} className="text-sm">
+              <span className="font-medium text-slate-900">{item.question}</span>
+              <span className="text-slate-600"> {item.answer}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -634,6 +684,8 @@ export default function AppointmentsCalendarPage() {
                     <StatusBadge status={appt.status} />
                   </div>
                 </div>
+
+                {appt.followUp ? <FollowUpPanel followUp={appt.followUp} /> : null}
 
                 {!["CANCELLED", "COMPLETED", "NO_SHOW"].includes(appt.status) ? (
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-border/70 pt-4">

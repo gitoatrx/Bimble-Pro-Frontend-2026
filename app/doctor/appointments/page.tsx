@@ -15,6 +15,7 @@ import {
 import {
   fetchDoctorAppointments,
   startDoctorAppointment,
+  type AppointmentFollowUp,
   type DoctorAppointment,
 } from "@/lib/api/doctor-dashboard";
 import { useRealtimeRefresh } from "@/lib/realtime";
@@ -37,6 +38,26 @@ const STATUS_COLORS: Record<string, string> = {
   NO_SHOW: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
   CANCELLED: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
 };
+
+function FollowUpPanel({ followUp }: { followUp: AppointmentFollowUp }) {
+  return (
+    <div className="mt-3 rounded-2xl border border-sky-100 bg-sky-50/60 px-3 py-2">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-700">Patient follow-up</p>
+      {followUp.status === "SKIPPED" ? (
+        <p className="mt-1.5 text-xs text-slate-600">Patient skipped the optional follow-up questions.</p>
+      ) : (
+        <div className="mt-1.5 grid gap-1.5">
+          {followUp.answers.map((item) => (
+            <div key={`${item.id}-${item.question}`} className="text-xs">
+              <span className="font-medium text-slate-900">{item.question}</span>
+              <span className="text-slate-600"> {item.answer}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function DoctorAppointmentsPage() {
   const router = useRouter();
@@ -214,7 +235,7 @@ export default function DoctorAppointmentsPage() {
               {dayAppts.map((appointment) => (
                 <div
                   key={appointment.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card px-3 py-3 transition-all hover:border-primary/30 sm:flex-row sm:items-start sm:justify-between"
+                  className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card px-3 py-3 transition-all hover:border-primary/30 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between"
                 >
                   <div className="flex min-w-0 gap-4">
                     <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-xs font-semibold text-primary">
@@ -255,6 +276,11 @@ export default function DoctorAppointmentsPage() {
                       See patient
                     </button>
                   </div>
+                  {appointment.follow_up ? (
+                    <div className="w-full sm:basis-full">
+                      <FollowUpPanel followUp={appointment.follow_up} />
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

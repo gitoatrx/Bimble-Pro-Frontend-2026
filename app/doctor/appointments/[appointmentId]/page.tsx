@@ -121,6 +121,26 @@ function Field({
   );
 }
 
+function FollowUpSummary({ followUp }: { followUp: NonNullable<DoctorAppointment["follow_up"]> }) {
+  return (
+    <div className="rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-700">Patient follow-up</p>
+      {followUp.status === "SKIPPED" ? (
+        <p className="mt-2 text-sm text-muted-foreground">Patient skipped the optional follow-up questions.</p>
+      ) : (
+        <div className="mt-2 grid gap-2">
+          {followUp.answers.map((item) => (
+            <div key={`${item.id}-${item.question}`} className="text-sm">
+              <span className="font-medium text-foreground">{item.question}</span>
+              <span className="text-muted-foreground"> {item.answer}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function inputClass() {
   return "h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm text-foreground outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/15";
 }
@@ -717,6 +737,7 @@ export default function DoctorAppointmentTreatmentPage() {
                   <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">Reason</p>
                   <p className="mt-1 text-sm font-medium leading-5 text-foreground">{reason}</p>
                 </div>
+                {appointment.follow_up ? <FollowUpSummary followUp={appointment.follow_up} /> : null}
               </div>
 
               <div className="space-y-3">

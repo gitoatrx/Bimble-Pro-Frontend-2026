@@ -98,6 +98,27 @@ export function fetchPatientRescheduleOptions(
   });
 }
 
+export function savePatientAppointmentFollowUp(
+  accessToken: string,
+  appointmentId: number,
+  payload: {
+    skipped?: boolean;
+    answers?: Array<{
+      id: string;
+      question: string;
+      answer: string;
+      options?: string[];
+    }>;
+  },
+) {
+  return apiRequest<PatientPortalAppointment, typeof payload>({
+    endpoint: `/api/v1/patient/appointments/${appointmentId}/follow-up`,
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: payload,
+  });
+}
+
 export function fetchPatientRequests(accessToken: string) {
   return apiRequest<PatientPortalRequest[]>({
     endpoint: "/api/v1/patient/requests",

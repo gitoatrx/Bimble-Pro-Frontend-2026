@@ -41,6 +41,7 @@ import {
   fetchPatientRescheduleOptions,
   fetchPatientRequests,
   fetchPatientServices,
+  savePatientAppointmentFollowUp,
   updatePatientProfile,
 } from "@/lib/api/patient";
 import {
@@ -147,6 +148,12 @@ type BookingDraft = {
   preferred_pharmacy_phone: string;
 };
 
+type FollowUpQuestion = {
+  id: string;
+  question: string;
+  options: string[];
+};
+
 type FamilyForm = {
   first_name: string;
   last_name: string;
@@ -232,6 +239,48 @@ function getAppointmentReasonLabel(appointment: PatientPortalAppointment) {
 function getAppointmentExtraDetails(appointment: PatientPortalAppointment) {
   const parts = appointment.chief_complaint?.split(":") ?? [];
   return parts.length > 1 ? parts.slice(1).join(":").trim() : "";
+}
+
+function buildFollowUpQuestions(appointment: PatientPortalAppointment): FollowUpQuestion[] {
+  const reason = getAppointmentReasonLabel(appointment).toLowerCase();
+  const isFever = reason.includes("fever") || reason.includes("flu") || reason.includes("infection");
+  const symptomQuestion = isFever
+    ? {
+        id: "temperature",
+        question: "Have you measured your temperature?",
+        options: ["No", "Below 38 C", "38 C to 39 C", "Above 39 C"],
+      }
+    : {
+        id: "severity",
+        question: "How severe is the problem right now?",
+        options: ["Mild", "Moderate", "Severe", "Getting worse"],
+      };
+
+  return [
+    symptomQuestion,
+    {
+      id: "duration",
+      question: `How long have you had ${getAppointmentReasonLabel(appointment).toLowerCase()}?`,
+      options: ["Today", "1-2 days", "3-7 days", "More than a week"],
+    },
+    {
+      id: "current_symptoms",
+      question: "Which symptom best matches how you feel now?",
+      options: isFever
+        ? ["Chills or sweats", "Body aches", "Cough or sore throat", "Tired but stable"]
+        : ["Pain", "Swelling", "Numbness or weakness", "Limited movement"],
+    },
+    {
+      id: "medication_taken",
+      question: "Have you taken anything for this problem?",
+      options: ["No", "Over-the-counter medication", "Prescription medication", "Not sure"],
+    },
+    {
+      id: "care_need",
+      question: "What do you need most from the visit?",
+      options: ["Advice", "Prescription", "Assessment", "Referral or follow-up"],
+    },
+  ];
 }
 
 function SectionCard({
@@ -376,6 +425,10 @@ export function PatientPortalDashboard() {
   >({});
   const [appointmentMessage, setAppointmentMessage] = useState("");
   const [appointmentActionKey, setAppointmentActionKey] = useState("");
+  const [followUpAppointment, setFollowUpAppointment] = useState<PatientPortalAppointment | null>(null);
+  const [followUpAnswers, setFollowUpAnswers] = useState<Record<string, string>>({});
+  const [isSavingFollowUp, setIsSavingFollowUp] = useState(false);
+  const [followUpMessage, setFollowUpMessage] = useState("");
   const [rescheduleMessage, setRescheduleMessage] = useState("");
   const [rescheduleActionKey, setRescheduleActionKey] = useState("");
 
@@ -662,6 +715,20 @@ export function PatientPortalDashboard() {
     paths: ["/patient-portal", "/appointments", "/requests", "/pool"],
   });
 
+  useEffect(() => {
+    if (followUpAppointment || !appointments?.current?.length) return;
+    const nextAppointment = appointments.current.find(
+      (appointment) =>
+        ["QUEUED", "ASSIGNED", "IN_PROGRESS"].includes(appointment.status) &&
+        !appointment.follow_up,
+    );
+    if (nextAppointment) {
+      setFollowUpAppointment(nextAppointment);
+      setFollowUpAnswers({});
+      setFollowUpMessage("");
+    }
+  }, [appointments, followUpAppointment]);
+
   function resetBookingFlow() {
     setBookingDraft(emptyBookingDraft);
     setProblemMenuOpen(false);
@@ -919,6 +986,35 @@ export function PatientPortalDashboard() {
       setFamilyMessage(
         error instanceof Error ? error.message : "Could not remove the family member.",
       );
+    }
+  }
+
+  async function handleSaveFollowUp(skipped = false) {
+    if (!session || !followUpAppointment) return;
+    const questions = buildFollowUpQuestions(followUpAppointment);
+    const answers = questions
+      .map((question) => ({
+        id: question.id,
+        question: question.question,
+        answer: followUpAnswers[question.id] ?? "",
+        options: question.options,
+      }))
+      .filter((answer) => answer.answer);
+
+    setIsSavingFollowUp(true);
+    setFollowUpMessage("");
+    try {
+      await savePatientAppointmentFollowUp(session.accessToken, followUpAppointment.appointment_id, {
+        skipped,
+        answers: skipped ? [] : answers,
+      });
+      await refreshPortalData();
+      setFollowUpAppointment(null);
+      setFollowUpAnswers({});
+    } catch (error) {
+      setFollowUpMessage(error instanceof Error ? error.message : "Could not save follow-up answers.");
+    } finally {
+      setIsSavingFollowUp(false);
     }
   }
 
@@ -1351,6 +1447,78 @@ export function PatientPortalDashboard() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[250px_minmax(0,1fr)] xl:gap-8">
+      {followUpAppointment ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6">
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[24px] border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-950">A few follow-up questions</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Help the clinic prepare for your appointment for{" "}
+                  {getAppointmentReasonLabel(followUpAppointment)}.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Skip follow-up questions"
+                onClick={() => void handleSaveFollowUp(true)}
+                disabled={isSavingFollowUp}
+                className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {buildFollowUpQuestions(followUpAppointment).map((question) => (
+                <div key={question.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-sm font-semibold text-slate-900">{question.question}</div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {question.options.map((option) => {
+                      const selected = followUpAnswers[question.id] === option;
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() =>
+                            setFollowUpAnswers((current) => ({
+                              ...current,
+                              [question.id]: option,
+                            }))
+                          }
+                          className={cn(
+                            "rounded-2xl border px-3 py-2 text-left text-sm transition",
+                            selected
+                              ? "border-sky-500 bg-sky-50 text-sky-800"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-sky-200",
+                          )}
+                        >
+                          {option}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {followUpMessage ? (
+              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {followUpMessage}
+              </div>
+            ) : null}
+
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
+              <Button variant="outline" onClick={() => void handleSaveFollowUp(true)} disabled={isSavingFollowUp}>
+                Skip
+              </Button>
+              <Button onClick={() => void handleSaveFollowUp(false)} disabled={isSavingFollowUp}>
+                {isSavingFollowUp ? "Saving..." : "Submit answers"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <aside className="xl:sticky xl:top-8 xl:self-start">
         <div className="rounded-[24px] border border-sky-200/70 bg-white p-4 shadow-sm">
           <div className="min-w-0">
