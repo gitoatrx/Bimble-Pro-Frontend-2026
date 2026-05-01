@@ -67,6 +67,7 @@ export default function DoctorAppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [startingAppointmentId, setStartingAppointmentId] = useState<number | null>(null);
+  const [openFollowUpIds, setOpenFollowUpIds] = useState<number[]>([]);
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => offsetKey(weekStart, index)), [weekStart]);
 
@@ -111,6 +112,12 @@ export default function DoctorAppointmentsPage() {
   }, [appointments]);
 
   const dayAppts = byDate.get(selectedKey) ?? [];
+
+  const toggleFollowUp = useCallback((appointmentId: number) => {
+    setOpenFollowUpIds((current) =>
+      current.includes(appointmentId) ? current.filter((id) => id !== appointmentId) : [...current, appointmentId],
+    );
+  }, []);
 
   const handleSeePatient = useCallback(
     async (appointment: DoctorAppointment) => {
@@ -278,7 +285,20 @@ export default function DoctorAppointmentsPage() {
                   </div>
                   {appointment.follow_up ? (
                     <div className="w-full sm:basis-full">
-                      <FollowUpPanel followUp={appointment.follow_up} />
+                      {openFollowUpIds.includes(appointment.id) ? (
+                        <FollowUpPanel followUp={appointment.follow_up} />
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {appointment.follow_up ? (
+                    <div className="w-full sm:basis-full">
+                      <button
+                        type="button"
+                        onClick={() => toggleFollowUp(appointment.id)}
+                        className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+                      >
+                        {openFollowUpIds.includes(appointment.id) ? "Hide follow-up" : "Show follow-up"}
+                      </button>
                     </div>
                   ) : null}
                 </div>
