@@ -3,7 +3,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Clock,
+  Download,
   Eye,
+  FileText,
   Mail,
   MoreVertical,
   Plus,
@@ -24,6 +26,7 @@ import { formatIsoDateToDisplay } from "@/lib/date-format";
 import {
   deleteClinicDoctorInvite,
   fetchClinicDoctor,
+  fetchClinicDoctorFormPackets,
   fetchClinicDoctorInvitePrefill,
   fetchClinicDoctors,
   fetchClinicDoctorInvites,
@@ -57,6 +60,18 @@ type PendingInvite = {
   email: string;
   status: "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "REVOKED";
   sentAt: string;
+};
+
+type DoctorFormPacket = {
+  packetId: number;
+  doctorId: number;
+  doctorName: string;
+  email: string;
+  status: string;
+  selectedForms: string[];
+  generatedAt: string | null;
+  missingFields: string[];
+  downloadBaseUrl: string;
 };
 
 const STATUS_COLORS: Record<DoctorStatus, string> = {
@@ -178,6 +193,31 @@ function toInvite(record: Record<string, unknown>): PendingInvite {
     sentAt:
       (typeof record.sent_at === "string" && record.sent_at) ||
       (typeof record.created_at === "string" && record.created_at) ||
+      "",
+  };
+}
+
+function toDoctorFormPacket(record: Record<string, unknown>): DoctorFormPacket {
+  const selectedForms = Array.isArray(record.selected_forms)
+    ? record.selected_forms.filter((item): item is string => typeof item === "string")
+    : [];
+  const missingFields = Array.isArray(record.missing_fields)
+    ? record.missing_fields.filter((item): item is string => typeof item === "string")
+    : [];
+
+  return {
+    packetId: Number(record.packet_id ?? record.id ?? Date.now()),
+    doctorId: Number(record.doctor_id ?? 0),
+    doctorName:
+      (typeof record.doctor_name === "string" && record.doctor_name) ||
+      "Unknown doctor",
+    email: (typeof record.email === "string" && record.email) || "",
+    status: (typeof record.status === "string" && record.status) || "UNKNOWN",
+    selectedForms,
+    generatedAt: typeof record.generated_at === "string" ? record.generated_at : null,
+    missingFields,
+    downloadBaseUrl:
+      (typeof record.download_base_url === "string" && record.download_base_url) ||
       "",
   };
 }
@@ -710,6 +750,59 @@ function InviteRow({
   );
 }
 
+function formatFormCode(value: string) {
+  return value.replace(/^HLTH_/, "HLTH ").replace(/_/g, " ");
+}
+
+function DoctorFormPacketRow({
+  packet,
+  onDownload,
+}: {
+  packet: DoctorFormPacket;
+  onDownload: (packet: DoctorFormPacket, formCode: string) => void;
+}) {
+  const forms = packet.selectedForms.length > 0 ? packet.selectedForms : ["HLTH_2870", "HLTH_2950"];
+
+  return (
+    <div className="rounded-2xl border border-border bg-card px-5 py-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" />
+            <p className="truncate text-sm font-semibold text-foreground">{packet.doctorName}</p>
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold uppercase text-blue-700">
+              {packet.status}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {packet.email || "No email"} · Submitted {formatDateTime(packet.generatedAt ?? "")}
+          </p>
+          {packet.missingFields.length > 0 ? (
+            <p className="mt-2 text-xs text-amber-700">
+              Needs review: {packet.missingFields.join(", ")}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {forms.map((formCode) => (
+            <Button
+              key={`${packet.packetId}-${formCode}`}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={() => onDownload(packet, formCode)}
+            >
+              <Download className="h-3.5 w-3.5" />
+              {formatFormCode(formCode)}
+            </Button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DoctorRow({
   doctor,
   onProfile,
@@ -1104,6 +1197,7 @@ export default function DoctorsPage() {
   const hasSession = Boolean(session?.accessToken);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
+  const [formPackets, setFormPackets] = useState<DoctorFormPacket[]>([]);
   const [profileDoctorId, setProfileDoctorId] = useState<number | null>(null);
   const [profileSummary, setProfileSummary] = useState<Doctor | null>(null);
   const [profileDoctor, setProfileDoctor] = useState<DoctorDetailsRecord | null>(null);
@@ -1117,16 +1211,21 @@ export default function DoctorsPage() {
   const loadDoctorsPage = useCallback(async () => {
     if (!hasSession) return;
     try {
-      const [doctorRecords, inviteRecords] = await Promise.all([
+      const [doctorRecords, inviteRecords, formPacketRecords] = await Promise.all([
         fetchClinicDoctors(accessToken),
         fetchClinicDoctorInvites(accessToken),
+        fetchClinicDoctorFormPackets(accessToken),
       ]);
 
       const doctorList = (doctorRecords as Record<string, unknown>[]).map(toDoctor);
       const inviteList = (inviteRecords as Record<string, unknown>[]).map(toInvite);
+      const packetList = formPacketRecords.items.map((record) =>
+        toDoctorFormPacket(record as Record<string, unknown>),
+      );
 
       setDoctors(doctorList);
       setInvites(inviteList);
+      setFormPackets(packetList);
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load doctors.");
@@ -1241,6 +1340,30 @@ export default function DoctorsPage() {
       await resendClinicDoctorInvite(session.accessToken, inviteId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not resend the invite.");
+    }
+  }
+
+  async function handleDownloadPacketForm(packet: DoctorFormPacket, formCode: string) {
+    if (!accessToken || !packet.downloadBaseUrl) return;
+
+    try {
+      const response = await fetch(`${packet.downloadBaseUrl}/${formCode}/download`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok) {
+        throw new Error("Could not download the submitted form.");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${packet.doctorName || "doctor"}-${formCode}.pdf`.replace(/\s+/g, "-");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not download the submitted form.");
     }
   }
 
@@ -1366,6 +1489,27 @@ export default function DoctorsPage() {
               </div>
             </section>
           )}
+
+          <section className="mb-6">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Submitted doctor forms
+            </h2>
+            {formPackets.length > 0 ? (
+              <div className="space-y-2">
+                {formPackets.map((packet) => (
+                  <DoctorFormPacketRow
+                    key={packet.packetId}
+                    packet={packet}
+                    onDownload={handleDownloadPacketForm}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border bg-card px-5 py-4 text-sm text-muted-foreground">
+                No doctor-submitted setup forms yet.
+              </div>
+            )}
+          </section>
 
           <InviteForm onInvite={handleInvite} />
 

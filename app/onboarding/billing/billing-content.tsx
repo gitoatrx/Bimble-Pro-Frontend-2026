@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
@@ -19,19 +19,15 @@ export default function BillingContent() {
   const isSuccess = searchParams.get("success") === "1";
   const isCancelled = searchParams.get("cancelled") === "1";
   const clinicCode = searchParams.get("clinic_code") ?? searchParams.get("clinicCode");
-  const clinicId = searchParams.get("clinic_id") ?? searchParams.get("clinicId");
 
   // Redirect bare /onboarding/billing with no status param back to signup
-  const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!isSuccess && !isCancelled) {
       router.replace("/onboarding");
-    } else {
-      setReady(true);
     }
   }, [isSuccess, isCancelled, router]);
 
-  if (!ready) {
+  if (!isSuccess && !isCancelled) {
     return null;
   }
 

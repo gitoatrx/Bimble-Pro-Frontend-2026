@@ -14,6 +14,7 @@ type RequestConfig<TBody> = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: TBody;
   headers?: HeadersInit;
+  signal?: AbortSignal;
 };
 
 export async function apiRequest<TResponse, TBody = undefined>({
@@ -21,6 +22,7 @@ export async function apiRequest<TResponse, TBody = undefined>({
   method = "GET",
   body,
   headers,
+  signal,
 }: RequestConfig<TBody>) {
   const response = await fetch(endpoint, {
     method,
@@ -29,6 +31,7 @@ export async function apiRequest<TResponse, TBody = undefined>({
       ...headers,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
   });
 
   const responseData = await response.json().catch(() => null);
@@ -40,6 +43,11 @@ export async function apiRequest<TResponse, TBody = undefined>({
       "message" in responseData &&
       typeof responseData.message === "string"
         ? responseData.message
+        : responseData &&
+            typeof responseData === "object" &&
+            "detail" in responseData &&
+            typeof responseData.detail === "string"
+          ? responseData.detail
         : "Request failed.";
 
     throw new ApiRequestError(message, response.status, responseData);

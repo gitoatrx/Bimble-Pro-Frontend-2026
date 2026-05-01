@@ -175,6 +175,7 @@ function DoctorLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite_token")?.trim() ?? "";
+  const nextPath = searchParams.get("next")?.trim() ?? "";
 
   const [step, setStep] = useState<LoginStep>("credentials");
   const [formData, setFormData] = useState<DoctorLoginFormData>(emptyForm);
@@ -227,7 +228,7 @@ function DoctorLoginContent() {
       emrLaunchUrl: finalResponse.emr_launch_url ?? undefined,
     });
 
-    router.replace("/doctor/dashboard");
+    router.replace(nextPath.startsWith("/doctor/") ? nextPath : "/doctor/dashboard");
   }
 
   function updateField(field: keyof DoctorLoginFormData, value: string) {

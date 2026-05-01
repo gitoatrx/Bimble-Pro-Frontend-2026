@@ -234,6 +234,11 @@ export function ClinicForgotPasswordWizard({
             <label htmlFor="reset-otp" className="block text-sm font-medium text-foreground">
               Reset code
             </label>
+            {maskedEmail ? (
+              <p className="text-sm text-muted-foreground">
+                We sent the reset code to {maskedEmail}.
+              </p>
+            ) : null}
             <Input
               id="reset-otp"
               inputMode="numeric"

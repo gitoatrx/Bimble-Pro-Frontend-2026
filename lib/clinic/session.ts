@@ -12,6 +12,7 @@ const CLINIC_SELECTED_PLAN_KEY = "bimble:clinic:selected-plan";
 const CLINIC_SIGNUP_RESULT_KEY = "bimble:clinic:signup-result";
 export const CLINIC_LOGIN_SESSION_KEY = "bimble:clinic:login-session";
 export const CLINIC_ONBOARDING_COMPLETE_KEY = "bimble:clinic:onboarding-complete";
+export const CLINIC_SESSION_UPDATED_EVENT = "bimble:clinic:session-updated";
 
 export type StoredClinicOnboardingState = {
   step: OnboardingStepKey;
@@ -249,6 +250,9 @@ export function storeClinicLoginSession(session: ClinicLoginSession) {
     ...session,
     expiresAt: session.expiresAt ?? decodeJwtExpiryIso(session.accessToken) ?? undefined,
   });
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(CLINIC_SESSION_UPDATED_EVENT));
+  }
 }
 
 export function readClinicLoginSession() {

@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent, ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { ArrowLeft, CheckCircle2, Printer, Save, Search } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
+import { SignaturePad } from "@/components/doctor/doctor-form-shared";
 import { Button } from "@/components/ui/button";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import {
@@ -103,102 +104,6 @@ function addDays(dateValue: string, days: number) {
   const date = new Date(`${dateValue}T00:00:00`);
   date.setDate(date.getDate() + Math.max(days, 1) - 1);
   return dateInputValue(date);
-}
-
-function SignaturePad({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawingRef = useRef(false);
-
-  const commit = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    onChange(canvas.toDataURL("image/png"));
-  }, [onChange]);
-
-  const prepareCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.lineWidth = 4;
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    context.strokeStyle = "#0f2545";
-  }, []);
-
-  const point = (event: PointerEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
-      y: ((event.clientY - rect.top) / rect.height) * canvas.height,
-    };
-  };
-
-  const clear = () => {
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
-    prepareCanvas();
-    onChange("");
-  };
-
-  useEffect(() => {
-    prepareCanvas();
-  }, [prepareCanvas]);
-
-  return (
-    <div className="rounded-2xl border border-border bg-background p-2">
-      <canvas
-        ref={canvasRef}
-        width={720}
-        height={170}
-        className="h-36 w-full touch-none rounded-xl bg-white"
-        onPointerDown={(event) => {
-          drawingRef.current = true;
-          event.currentTarget.setPointerCapture(event.pointerId);
-          const context = event.currentTarget.getContext("2d");
-          const start = point(event);
-          context?.beginPath();
-          context?.moveTo(start.x, start.y);
-        }}
-        onPointerMove={(event) => {
-          if (!drawingRef.current) return;
-          const context = event.currentTarget.getContext("2d");
-          const next = point(event);
-          context?.lineTo(next.x, next.y);
-          context?.stroke();
-        }}
-        onPointerUp={(event) => {
-          drawingRef.current = false;
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId);
-          }
-          commit();
-        }}
-        onPointerCancel={(event) => {
-          drawingRef.current = false;
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId);
-          }
-          commit();
-        }}
-        onPointerLeave={() => {
-          if (!drawingRef.current) return;
-          drawingRef.current = false;
-          commit();
-        }}
-      />
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">{value ? "Signature captured" : "Please sign in the box above."}</span>
-        <Button type="button" variant="outline" size="sm" onClick={clear}>
-          Clear
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 function Field({
@@ -499,27 +404,26 @@ export default function DoctorAppointmentTreatmentPage() {
       return;
     }
 
-    const controller = new AbortController();
+    let active = true;
     const timeout = window.setTimeout(async () => {
       setSearching(true);
       try {
-        const response = await searchDoctorDrugs(session.accessToken, trimmed, {
-          signal: controller.signal,
-        });
+        const response = await searchDoctorDrugs(session.accessToken, trimmed);
+        if (!active) return;
         setDrugResults(response.drugs ?? []);
       } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") return;
+        if (!active || (err instanceof DOMException && err.name === "AbortError")) return;
         setDrugResults([]);
       } finally {
-        if (!controller.signal.aborted) {
+        if (active) {
           setSearching(false);
         }
       }
-    }, 150);
+    }, 300);
 
     return () => {
+      active = false;
       window.clearTimeout(timeout);
-      controller.abort();
     };
   }, [query, selectedDrug?.name]);
 

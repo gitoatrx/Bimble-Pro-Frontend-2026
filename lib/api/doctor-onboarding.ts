@@ -7,11 +7,15 @@ export type DoctorHlth2870Signature = {
 };
 
 export type DoctorHlth2870Request = {
+  locum_name?: string;
+  locum_practitioner_number?: string;
   msp_billing_number: string;
   principal_practitioner_name: string;
   principal_practitioner_number: string;
+  principal_practitioner_payment_number?: string;
   effective_date: string;
   cancel_date: string;
+  date_signed?: string;
   signature: DoctorHlth2870Signature;
 };
 
@@ -31,11 +35,17 @@ export type DoctorHlth2870Response = {
 };
 
 export type DoctorHlth2870SavedValues = {
+  locum_name: string | null;
+  locum_practitioner_number: string | null;
   msp_billing_number: string | null;
   principal_practitioner_name: string | null;
   principal_practitioner_number: string | null;
+  principal_practitioner_payment_number: string | null;
   effective_date: string | null;
   cancel_date: string | null;
+  date_signed: string | null;
+  pay_signature_data_url?: string | null;
+  pay_signature_label?: string | null;
   signature: {
     signature_data_url: string | null;
     signature_label: string | null;

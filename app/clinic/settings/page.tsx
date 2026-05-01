@@ -12,7 +12,7 @@ import { Hl7HealthCareProviderSetupSection } from "@/components/clinic/hl7-healt
 import { PhysicianChangeInformationSection } from "@/components/clinic/physician-change-information-form";
 import { MspFacilityNumberApplicationSection } from "@/components/clinic/msp-facility-number-application";
 import { TeleplanServiceApplicationSection } from "@/components/clinic/teleplan-service-application";
-import { readClinicLoginSession } from "@/lib/clinic/session";
+import { readClinicLoginSession, storeClinicLoginSession } from "@/lib/clinic/session";
 import {
   fetchClinicSettingsCredentials,
   fetchClinicSettingsProfile,
@@ -323,7 +323,8 @@ function CredentialsSettings() {
       fields.currentPassword.trim() !== "" &&
       fields.currentPin.trim() !== "" &&
       fields.newPassword.length >= 8 &&
-      fields.newPassword === fields.confirmPassword
+      fields.newPassword === fields.confirmPassword &&
+      (fields.newPin.trim() === "" || fields.newPin.trim().length === 4)
     );
   }
 
@@ -403,6 +404,13 @@ function CredentialsSettings() {
             current_pin: fields.currentPin,
             new_password: fields.newPassword,
             new_pin: fields.newPin || undefined,
+          });
+          setFields({
+            currentPassword: "",
+            currentPin: "",
+            newPassword: "",
+            confirmPassword: "",
+            newPin: "",
           });
         }}
         label="Update credentials"
@@ -504,13 +512,22 @@ function ClinicProfileSettings() {
   async function handleSave() {
     if (!session?.accessToken) return;
 
-    await updateClinicSettingsProfile(session.accessToken, {
+    const updated = await updateClinicSettingsProfile(session.accessToken, {
       display_name: fields.displayName,
       phone: fields.phone,
       email: fields.email,
       address: fields.address,
       city: fields.city,
       province: fields.province,
+    });
+    const record = updated as Record<string, unknown>;
+    const clinicName =
+      (typeof record.display_name === "string" && record.display_name) ||
+      (typeof record.clinic_name === "string" && record.clinic_name) ||
+      fields.displayName;
+    storeClinicLoginSession({
+      ...session,
+      clinicName,
     });
   }
 

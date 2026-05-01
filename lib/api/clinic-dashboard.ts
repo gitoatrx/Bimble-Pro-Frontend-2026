@@ -50,6 +50,20 @@ export type ClinicPoolAppointment = {
 };
 export type ClinicDoctorRecord = Record<string, unknown>;
 export type ClinicDoctorInviteRecord = Record<string, unknown>;
+export type ClinicDoctorFormPacketRecord = {
+  packet_id: number;
+  doctor_id: number;
+  doctor_name: string;
+  email: string;
+  status: string;
+  selected_forms: string[];
+  generated_at: string | null;
+  missing_fields: string[];
+  download_base_url: string;
+};
+export type ClinicDoctorFormPacketsResponse = {
+  items: ClinicDoctorFormPacketRecord[];
+};
 export type ClinicServiceMappingRecord = Record<string, unknown>;
 export type ClinicAvailabilityRecord = Record<string, unknown>;
 export type ClinicAnalyticsRecord = Record<string, unknown>;
@@ -1153,6 +1167,13 @@ export async function fetchClinicDoctorInvites(accessToken: string) {
   });
 }
 
+export async function fetchClinicDoctorFormPackets(accessToken: string) {
+  return apiRequest<ClinicDoctorFormPacketsResponse>({
+    endpoint: API_ENDPOINTS.clinicMeDoctorSetupFormPackets,
+    headers: authHeaders(accessToken),
+  });
+}
+
 export async function deleteClinicDoctorInvite(
   accessToken: string,
   inviteId: string | number,
@@ -1388,6 +1409,17 @@ export async function updateClinicSettingsCredentials(
     endpoint: API_ENDPOINTS.clinicMeSettingsCredentials,
     method: "PATCH",
     body: payload,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicOscarLaunch(accessToken: string) {
+  return apiRequest<{
+    app_url: string;
+    bootstrap_url: string;
+    emr_launch_url: string;
+  }>({
+    endpoint: API_ENDPOINTS.clinicMeOscarLaunch,
     headers: authHeaders(accessToken),
   });
 }

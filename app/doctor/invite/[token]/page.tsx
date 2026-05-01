@@ -245,11 +245,16 @@ export default function DoctorInviteAcceptPage() {
           </div>
           <h1 className="mb-2 text-xl font-bold text-foreground">You&apos;re all set!</h1>
           <p className="mb-6 text-sm text-muted-foreground">
-            Your doctor account has been created. You can now log in with your email and
-            password.
+            Your doctor account has been created. Log in now to review and submit the
+            HLTH 2870 and HLTH 2950 forms sent by the clinic.
           </p>
-          <Button className="w-full" onClick={() => router.push("/doctor/login")}>
-            Go to Doctor Login
+          <Button
+            className="w-full"
+            onClick={() =>
+              router.push(`/doctor/login?next=${encodeURIComponent("/doctor/onboarding?stage=hlth_2870")}`)
+            }
+          >
+            Log in and open forms
           </Button>
         </div>
       </div>

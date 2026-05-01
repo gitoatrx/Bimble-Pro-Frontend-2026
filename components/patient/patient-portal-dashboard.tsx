@@ -43,7 +43,12 @@ import {
   fetchPatientServices,
   updatePatientProfile,
 } from "@/lib/api/patient";
-import { fetchBimblePharmacies, fetchPatientIntakeSlots } from "@/lib/api/patient-intake";
+import {
+  fetchBimblePharmacies,
+  fetchPatientIntakeSlots,
+  fetchPharmacyDeliveryEstimate,
+  resolvePatientLocationCoordinates,
+} from "@/lib/api/patient-intake";
 import type { PatientBimblePharmacy } from "@/lib/api/patient-intake";
 import { clearPatientLoginSession, readPatientLoginSession } from "@/lib/patient/session";
 import { serviceReasonOptionsFromServices } from "@/lib/service-reason-options";
@@ -298,6 +303,19 @@ function getBrowserCoordinates(): Promise<{ lat: number; lng: number } | null> {
   });
 }
 
+function buildPortalPatientLocationQuery(profile: PatientProfile | null, draft: ProfileDraft) {
+  const parts = [
+    draft.address_line_1 || profile?.address_line_1,
+    draft.city || profile?.city,
+    draft.province || profile?.province,
+    draft.postal_code || profile?.postal_code,
+  ]
+    .filter(Boolean)
+    .map((part) => stripCountrySuffix(String(part)).trim())
+    .filter(Boolean);
+  return parts.join(", ");
+}
+
 export function PatientPortalDashboard() {
   const router = useRouter();
   const rescheduleDateInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -336,6 +354,9 @@ export function PatientPortalDashboard() {
   const [pharmacySearch, setPharmacySearch] = useState("");
   const [isLoadingBimblePharmacies, setIsLoadingBimblePharmacies] = useState(false);
   const [bimblePharmacyError, setBimblePharmacyError] = useState("");
+  const [bookingPharmacyCoords, setBookingPharmacyCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [preferredDeliveryEtaLabel, setPreferredDeliveryEtaLabel] = useState<string | null>(null);
+  const [isLoadingPreferredDeliveryEta, setIsLoadingPreferredDeliveryEta] = useState(false);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [availableTimes, setAvailableTimes] = useState<string[]>(TIME_SLOTS);
   const [isBooking, setIsBooking] = useState(false);
@@ -409,6 +430,7 @@ export function PatientPortalDashboard() {
     () => bimblePharmacies.find((option) => option.id === selectedNearbyPharmacyId) ?? null,
     [bimblePharmacies, selectedNearbyPharmacyId],
   );
+  const nearestBimblePharmacy = useMemo(() => bimblePharmacies[0] ?? null, [bimblePharmacies]);
   const filteredBimblePharmacies = useMemo(() => {
     const query = pharmacySearch.trim().toLowerCase();
     if (!query) return bimblePharmacies;
@@ -525,13 +547,29 @@ export function PatientPortalDashboard() {
     let cancelled = false;
 
     async function loadBimbleList() {
-      if (!bookingOpen || bookingStep !== "pharmacy" || bookingDraft.pharmacy_choice !== "preferred") return;
+      if (
+        !bookingOpen ||
+        bookingStep !== "pharmacy" ||
+        (bookingDraft.pharmacy_choice !== "preferred" && bookingDraft.pharmacy_choice !== "bimble")
+      ) {
+        return;
+      }
       setBimblePharmacyError("");
       setIsLoadingBimblePharmacies(true);
 
       try {
-        const coords = await getBrowserCoordinates();
+        let coords = await getBrowserCoordinates();
+        if (!coords) {
+          const locationQuery = buildPortalPatientLocationQuery(profile, profileDraft);
+          if (locationQuery) {
+            const resolved = await resolvePatientLocationCoordinates(locationQuery);
+            if (resolved) {
+              coords = { lat: resolved.lat, lng: resolved.lng };
+            }
+          }
+        }
         if (cancelled) return;
+        setBookingPharmacyCoords(coords);
         const response = await fetchBimblePharmacies(coords?.lat, coords?.lng);
         if (cancelled) return;
         const pharmacies = response.pharmacies ?? [];
@@ -556,7 +594,53 @@ export function PatientPortalDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [bookingDraft.pharmacy_choice, bookingOpen, bookingStep]);
+  }, [bookingDraft.pharmacy_choice, bookingOpen, bookingStep, profile, profileDraft]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPreferredDeliveryEstimate() {
+      setPreferredDeliveryEtaLabel(null);
+      if (
+        !bookingOpen ||
+        bookingStep !== "pharmacy" ||
+        bookingDraft.pharmacy_choice !== "preferred" ||
+        !bookingPharmacyCoords ||
+        !selectedBimblePharmacy ||
+        selectedBimblePharmacy.latitude == null ||
+        selectedBimblePharmacy.longitude == null
+      ) {
+        setIsLoadingPreferredDeliveryEta(false);
+        return;
+      }
+
+      setIsLoadingPreferredDeliveryEta(true);
+      try {
+        const estimate = await fetchPharmacyDeliveryEstimate({
+          patientLat: bookingPharmacyCoords.lat,
+          patientLng: bookingPharmacyCoords.lng,
+          pharmacyLat: selectedBimblePharmacy.latitude,
+          pharmacyLng: selectedBimblePharmacy.longitude,
+        });
+        if (!cancelled) {
+          setPreferredDeliveryEtaLabel(estimate.delivery_eta_label);
+        }
+      } catch {
+        if (!cancelled) {
+          setPreferredDeliveryEtaLabel(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingPreferredDeliveryEta(false);
+        }
+      }
+    }
+
+    void loadPreferredDeliveryEstimate();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingDraft.pharmacy_choice, bookingOpen, bookingPharmacyCoords, bookingStep, selectedBimblePharmacy]);
 
   async function refreshPortalData() {
     if (!session) return;
@@ -584,6 +668,9 @@ export function PatientPortalDashboard() {
     setProblemSearchQuery("");
     setBimblePharmacies([]);
     setBimblePharmacyError("");
+    setBookingPharmacyCoords(null);
+    setPreferredDeliveryEtaLabel(null);
+    setIsLoadingPreferredDeliveryEta(false);
     setPharmacySearch("");
     setBookingStep("problem");
     setBookingMessage("");
@@ -625,6 +712,20 @@ export function PatientPortalDashboard() {
       preferred_pharmacy_postal_code: option.postal_code || "",
       preferred_pharmacy_phone: option.phone || "",
     }));
+  }
+
+  function chooseBimblePharmacy() {
+    setBookingDraft((current) => ({
+      ...current,
+      pharmacy_choice: "bimble",
+      preferred_pharmacy_name: nearestBimblePharmacy?.name || "",
+      preferred_pharmacy_address: nearestBimblePharmacy ? stripCountrySuffix(nearestBimblePharmacy.address) : "",
+      preferred_pharmacy_city: nearestBimblePharmacy?.city || "",
+      preferred_pharmacy_postal_code: nearestBimblePharmacy?.postal_code || "",
+      preferred_pharmacy_phone: nearestBimblePharmacy?.phone || "",
+    }));
+    setBimblePharmacyError("");
+    setPharmacySearch("");
   }
 
   function validateBookingStep(step: BookingStep) {
@@ -2027,12 +2128,7 @@ export function PatientPortalDashboard() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <button
                         type="button"
-                        onClick={() =>
-                          setBookingDraft((current) => ({
-                            ...current,
-                            pharmacy_choice: "bimble",
-                          }))
-                        }
+                        onClick={chooseBimblePharmacy}
                         className={cn(
                           "rounded-[24px] border p-5 text-left shadow-sm transition-all",
                           bookingDraft.pharmacy_choice === "bimble"
@@ -2045,9 +2141,11 @@ export function PatientPortalDashboard() {
                         </div>
                         <div className="text-base font-semibold text-slate-900">Bimble pharmacy</div>
                         <p className="mt-2 text-sm text-slate-600">
-                          {bookingDraft.fulfillment === "delivery"
-                            ? "Fastest option for delivery."
-                            : "Fastest option for pickup."}
+                          {bookingDraft.pharmacy_choice === "bimble" && isLoadingBimblePharmacies
+                            ? "Calculating delivery time..."
+                            : nearestBimblePharmacy?.delivery_eta_label
+                              ? `Estimated delivery: ${nearestBimblePharmacy.delivery_eta_label}`
+                              : "Select to calculate delivery time"}
                         </p>
                       </button>
 
@@ -2077,7 +2175,13 @@ export function PatientPortalDashboard() {
                         </div>
                         <div className="text-base font-semibold text-slate-900">Your preferred pharmacy</div>
                         <p className="mt-2 text-sm text-slate-600">
-                          Use the patient&apos;s existing pharmacy for pickup or delivery.
+                          {selectedBimblePharmacy
+                            ? isLoadingPreferredDeliveryEta
+                              ? "Calculating delivery time..."
+                              : preferredDeliveryEtaLabel
+                                ? `Estimated delivery: ${preferredDeliveryEtaLabel}`
+                                : "Delivery time unavailable"
+                            : "Choose a pharmacy to see delivery time"}
                         </p>
                       </button>
                     </div>
@@ -2134,7 +2238,11 @@ export function PatientPortalDashboard() {
                                         ) : null}
                                       </div>
                                       <div className="shrink-0 text-xs font-semibold text-sky-700">
-                                        {option.distance_label || "Nearby"}
+                                        {selected
+                                          ? isLoadingPreferredDeliveryEta
+                                            ? "Calculating"
+                                            : preferredDeliveryEtaLabel || "ETA unavailable"
+                                          : option.distance_label || "Nearby"}
                                       </div>
                                     </div>
                                     </button>
@@ -2156,8 +2264,8 @@ export function PatientPortalDashboard() {
                         <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-slate-700">
                           <Clock className="mr-2 inline h-4 w-4 text-sky-700" />
                           {bookingDraft.fulfillment === "delivery"
-                            ? selectedBimblePharmacy?.delivery_eta_label
-                              ? `We will deliver your order in ${selectedBimblePharmacy.delivery_eta_label}.`
+                            ? nearestBimblePharmacy?.delivery_eta_label
+                              ? `We will deliver your order in ${nearestBimblePharmacy.delivery_eta_label}.`
                               : "We will deliver your order as quickly as possible."
                             : "Bimble pharmacy is the fastest pickup option."}
                         </div>

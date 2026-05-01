@@ -140,11 +140,15 @@ type DoctorHlth2991FormState = {
 type FieldErrorState<T extends string> = Partial<Record<T, string>>;
 
 const initialStep1FormState: DoctorHlth2870FormState = {
+  locum_name: "",
+  locum_practitioner_number: "",
   msp_billing_number: "",
   principal_practitioner_name: "",
   principal_practitioner_number: "",
+  principal_practitioner_payment_number: "",
   effective_date: "",
   cancel_date: "",
+  date_signed: "",
   signature_label: "",
 };
 
@@ -999,13 +1003,20 @@ export function DoctorOnboardingWizard({
         if (!cancelled && savedValues) {
           setStep1Form((current) => ({
             ...current,
+            locum_name: savedValues.locum_name ?? current.locum_name,
+            locum_practitioner_number:
+              savedValues.locum_practitioner_number ?? current.locum_practitioner_number,
             msp_billing_number: savedValues.msp_billing_number ?? current.msp_billing_number,
             principal_practitioner_name:
               savedValues.principal_practitioner_name ?? current.principal_practitioner_name,
             principal_practitioner_number:
               savedValues.principal_practitioner_number ?? current.principal_practitioner_number,
+            principal_practitioner_payment_number:
+              savedValues.principal_practitioner_payment_number ??
+              current.principal_practitioner_payment_number,
             effective_date: savedValues.effective_date ?? current.effective_date,
             cancel_date: savedValues.cancel_date ?? current.cancel_date,
+            date_signed: savedValues.date_signed ?? current.date_signed,
             signature_label: savedValues.signature.signature_label ?? current.signature_label,
           }));
           if (savedValues.signature.signature_data_url) {
@@ -1513,11 +1524,16 @@ export function DoctorOnboardingWizard({
 
     try {
       const payload: DoctorHlth2870Request = {
+        locum_name: (step1Form.locum_name ?? "").trim(),
+        locum_practitioner_number: (step1Form.locum_practitioner_number ?? "").trim(),
         msp_billing_number: step1Form.msp_billing_number.trim(),
         principal_practitioner_name: step1Form.principal_practitioner_name.trim(),
         principal_practitioner_number: step1Form.principal_practitioner_number.trim(),
+        principal_practitioner_payment_number:
+          (step1Form.principal_practitioner_payment_number ?? "").trim(),
         effective_date: step1Form.effective_date,
         cancel_date: step1Form.cancel_date,
+        date_signed: step1Form.date_signed,
         signature: {
           signature_data_url: step1SignatureDataUrl,
           signature_label: step1Form.signature_label.trim(),
@@ -1929,6 +1945,28 @@ export function DoctorOnboardingWizard({
           >
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
+                <FormLabel htmlFor="locum_name">Locum doctor name</FormLabel>
+                <Input
+                  id="locum_name"
+                  value={step1Form.locum_name ?? ""}
+                  onChange={(event) => setStep1Field("locum_name", event.target.value)}
+                  placeholder="Dr Mat Mardock"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <FormLabel htmlFor="locum_practitioner_number">Locum practitioner number</FormLabel>
+                <Input
+                  id="locum_practitioner_number"
+                  value={step1Form.locum_practitioner_number ?? ""}
+                  onChange={(event) =>
+                    setStep1Field("locum_practitioner_number", event.target.value)
+                  }
+                  placeholder="12345"
+                />
+              </div>
+
+              <div className="grid gap-2">
                 <FormLabel htmlFor="msp_billing_number">MSP billing number</FormLabel>
                 <Input
                   id="msp_billing_number"
@@ -1970,6 +2008,20 @@ export function DoctorOnboardingWizard({
                 ) : null}
               </div>
 
+              <div className="grid gap-2">
+                <FormLabel htmlFor="principal_practitioner_payment_number">
+                  Principal payment number
+                </FormLabel>
+                <Input
+                  id="principal_practitioner_payment_number"
+                  value={step1Form.principal_practitioner_payment_number ?? ""}
+                  onChange={(event) =>
+                    setStep1Field("principal_practitioner_payment_number", event.target.value)
+                  }
+                  placeholder="PAY123"
+                />
+              </div>
+
               <div className="grid gap-4 md:grid-cols-2 md:col-span-2">
                 <div className="grid gap-2">
                   <FormLabel htmlFor="effective_date">Effective date</FormLabel>
@@ -1982,6 +2034,16 @@ export function DoctorOnboardingWizard({
                   {step1Errors.effective_date ? (
                     <p className="text-xs text-destructive">{step1Errors.effective_date}</p>
                   ) : null}
+                </div>
+
+                <div className="grid gap-2">
+                  <FormLabel htmlFor="date_signed">Date signed</FormLabel>
+                  <Input
+                    id="date_signed"
+                    type="date"
+                    value={step1Form.date_signed ?? ""}
+                    onChange={(event) => setStep1Field("date_signed", event.target.value)}
+                  />
                 </div>
 
                 <div className="grid gap-2">

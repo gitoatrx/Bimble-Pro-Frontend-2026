@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ClinicFlowShell } from "@/components/clinic-access/clinic-flow-shell";
 import { PatientLoginCard } from "@/components/patient/patient-login-card";
 import { PatientOtpCard } from "@/components/patient/patient-otp-card";
@@ -27,7 +26,7 @@ import { readPatientLoginSession, storePatientLoginSession } from "@/lib/patient
 
 type LoginStep = "identify" | "otp" | "profile";
 
-export default function PatientPortalLoginPage() {
+function PatientPortalLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mode = searchParams.get("mode");
@@ -324,5 +323,13 @@ export default function PatientPortalLoginPage() {
         )}
       </div>
     </ClinicFlowShell>
+  );
+}
+
+export default function PatientPortalLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <PatientPortalLoginContent />
+    </Suspense>
   );
 }

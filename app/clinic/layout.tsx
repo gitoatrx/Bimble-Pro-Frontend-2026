@@ -22,9 +22,14 @@ import {
   clearClinicLoginSession,
   CLINIC_LOGIN_SESSION_KEY,
   CLINIC_ONBOARDING_COMPLETE_KEY,
+  CLINIC_SESSION_UPDATED_EVENT,
   readClinicLoginSession,
 } from "@/lib/clinic/session";
-import { fetchClinicPool, fetchClinicSetupState } from "@/lib/api/clinic-dashboard";
+import {
+  fetchClinicOscarLaunch,
+  fetchClinicPool,
+  fetchClinicSetupState,
+} from "@/lib/api/clinic-dashboard";
 import { cn } from "@/lib/utils";
 
 // ── Nav items ─────────────────────────────────────────────────────
@@ -63,10 +68,12 @@ function subscribeToClinicStorage(onStoreChange: () => void) {
   const handleChange = () => onStoreChange();
   window.addEventListener("storage", handleChange);
   window.addEventListener("bimble:clinic:onboarding-complete", handleChange);
+  window.addEventListener(CLINIC_SESSION_UPDATED_EVENT, handleChange);
 
   return () => {
     window.removeEventListener("storage", handleChange);
     window.removeEventListener("bimble:clinic:onboarding-complete", handleChange);
+    window.removeEventListener(CLINIC_SESSION_UPDATED_EVENT, handleChange);
   };
 }
 
@@ -462,31 +469,44 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
       return;
     }
 
-    let launchUrl = clinicSession.appUrl;
-    const bootstrapUrl = clinicSession.bootstrapUrl;
-    if (bootstrapUrl) {
-      try {
-        const parsed = new URL(bootstrapUrl);
-        const username = parsed.searchParams.get("username") || "";
-        const password = parsed.searchParams.get("password") || "";
-        const pin = parsed.searchParams.get("pin") || "";
-
-        if (username && password && pin) {
-          const loginUrl = new URL("login.do", parsed);
-          loginUrl.searchParams.set("username", username);
-          loginUrl.searchParams.set("password", password);
-          loginUrl.searchParams.set("pin", pin);
-          loginUrl.searchParams.set("pin2", pin);
-          loginUrl.searchParams.set("submit", "Login");
-          loginUrl.searchParams.set("propname", "oscar_mcmaster");
-          launchUrl = loginUrl.toString();
-        }
-      } catch {
-        // Fall back to the next available launch path below.
+    const oscarWindow = window.open("about:blank", "_blank");
+    const fallbackUrl =
+      clinicSession.emrLaunchUrl || clinicSession.bootstrapUrl || "";
+    const showLaunchError = () => {
+      const message =
+        "OSCAR auto-login is not configured for this clinic. Please update the clinic provisioning/bootstrap settings.";
+      if (oscarWindow) {
+        oscarWindow.document.title = "OSCAR launch unavailable";
+        oscarWindow.document.body.innerHTML = `<div style="font-family: system-ui, sans-serif; padding: 32px; color: #0f172a;"><h1 style="font-size: 20px;">OSCAR launch unavailable</h1><p>${message}</p></div>`;
+      } else {
+        window.alert(message);
       }
-    }
+    };
 
-    window.open(launchUrl, "_blank", "noopener,noreferrer");
+    fetchClinicOscarLaunch(clinicSession.accessToken)
+      .then((response) => {
+        const launchUrl = response.emr_launch_url || response.bootstrap_url || fallbackUrl;
+        if (!launchUrl) {
+          showLaunchError();
+          return;
+        }
+        if (oscarWindow) {
+          oscarWindow.location.href = launchUrl;
+        } else {
+          window.location.href = launchUrl;
+        }
+      })
+      .catch(() => {
+        if (fallbackUrl.includes("myoscar_login_tester.jsp")) {
+          if (oscarWindow) {
+            oscarWindow.location.href = fallbackUrl;
+          } else {
+            window.location.href = fallbackUrl;
+          }
+        } else {
+          showLaunchError();
+        }
+      });
   }
 
   return (
