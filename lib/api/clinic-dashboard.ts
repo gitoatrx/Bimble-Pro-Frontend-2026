@@ -34,6 +34,10 @@ export type ClinicPoolAppointment = {
   chief_complaint: string | null;
   notes: string | null;
   prescription_notes: string | null;
+  has_prescription?: boolean;
+  prescription_count?: number;
+  rx_written?: boolean;
+  clinical_status?: string;
   visit_type?: string | null;
   fulfillment?: string | null;
   pharmacy_choice?: string | null;
@@ -57,8 +61,14 @@ export type ClinicDoctorFormPacketRecord = {
   doctor_name: string;
   email: string;
   status: string;
+  consent_confirmed?: boolean;
   selected_forms: string[];
+  forms?: Array<{
+    form_code: string;
+    download_url: string;
+  }>;
   generated_at: string | null;
+  submitted_at?: string | null;
   missing_fields: string[];
   download_base_url: string;
 };
@@ -89,6 +99,28 @@ export type ClinicAppointmentRescheduleSlot = {
   appointment_time: string;
   doctor_id: number;
   doctor_name: string;
+};
+export type ClinicAppointmentPrescription = {
+  id: number;
+  prescription_id?: number;
+  appointment_id: number;
+  patient_id?: number;
+  patient_name: string;
+  doctor_name?: string | null;
+  medication: string;
+  drug_name?: string | null;
+  dosage: string;
+  instructions?: string | null;
+  quantity?: string | null;
+  repeats?: number | null;
+  written_at: string;
+  written_at_label: string;
+  status: string;
+  record_status?: string;
+  document_url?: string | null;
+};
+export type ClinicAppointmentPrescriptionsResponse = {
+  prescriptions: ClinicAppointmentPrescription[];
 };
 export type ClinicPortalRequest = {
   request_id: number;
@@ -1024,6 +1056,16 @@ export async function fetchClinicAppointment(
 ) {
   return apiRequest<ClinicAppointmentRecord>({
     endpoint: `${API_ENDPOINTS.clinicMeAppointments}/${appointmentId}`,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchClinicAppointmentPrescriptions(
+  accessToken: string,
+  appointmentId: string | number,
+) {
+  return apiRequest<ClinicAppointmentPrescriptionsResponse>({
+    endpoint: `${API_ENDPOINTS.clinicMeAppointments}/${appointmentId}/prescriptions`,
     headers: authHeaders(accessToken),
   });
 }

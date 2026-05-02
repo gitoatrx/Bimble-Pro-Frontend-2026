@@ -70,6 +70,10 @@ export type DoctorAppointment = {
   chief_complaint: string | null;
   notes: string | null;
   prescription_notes: string | null;
+  has_prescription?: boolean;
+  prescription_count?: number;
+  rx_written?: boolean;
+  clinical_status?: string;
   visit_type?: string | null;
   fulfillment?: string | null;
   pharmacy_choice?: string | null;
@@ -276,16 +280,29 @@ export type DoctorPatientsResponse = {
 
 export type DoctorPrescription = {
   id: number;
+  prescription_id?: number;
   appointment_id: number;
+  patient_id?: number;
   patient_name: string;
   medication: string;
+  drug_name?: string | null;
   dosage: string;
+  instructions?: string | null;
+  quantity?: string | null;
+  repeats?: number | null;
   written_at: string;
   written_at_label: string;
   status: string;
+  record_status?: string;
+  download_url?: string | null;
+  document_url?: string | null;
 };
 
 export type DoctorPrescriptionsResponse = {
+  prescriptions: DoctorPrescription[];
+};
+
+export type DoctorAppointmentPrescriptionsResponse = {
   prescriptions: DoctorPrescription[];
 };
 
@@ -357,6 +374,13 @@ export async function fetchDoctorAppointments(
 export async function fetchDoctorAppointment(accessToken: string, appointmentId: number) {
   return apiRequest<{ appointment: DoctorAppointment }>({
     endpoint: `${API_ENDPOINTS.doctorMeAppointments}/${appointmentId}`,
+    headers: authHeaders(accessToken),
+  });
+}
+
+export async function fetchDoctorAppointmentPrescriptions(accessToken: string, appointmentId: number) {
+  return apiRequest<DoctorAppointmentPrescriptionsResponse>({
+    endpoint: `${API_ENDPOINTS.doctorMeAppointments}/${appointmentId}/prescriptions`,
     headers: authHeaders(accessToken),
   });
 }
@@ -479,8 +503,9 @@ export async function fetchDoctorPatients(accessToken: string, query?: string) {
 
 export async function fetchDoctorPrescriptions(accessToken: string) {
   return apiRequest<DoctorPrescriptionsResponse>({
-    endpoint: API_ENDPOINTS.doctorMePrescriptions,
+    endpoint: withQuery(API_ENDPOINTS.doctorMePrescriptions, { t: Date.now().toString() }),
     headers: authHeaders(accessToken),
+    cache: "no-store",
   });
 }
 

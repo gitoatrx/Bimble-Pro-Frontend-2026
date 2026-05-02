@@ -9,6 +9,7 @@ import {
   CalendarCheck2,
   ClipboardList,
   ExternalLink,
+  FileText,
   LayoutDashboard,
   LogOut,
   NotebookPen,
@@ -57,6 +58,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/clinic/doctors",                 label: "Doctors",        Icon: Stethoscope,     requiresOnboarding: true  },
   { href: "/clinic/doctors/schedule",        label: "Availability",   Icon: ClipboardList,   requiresOnboarding: true  },
   { href: "/clinic/analytics",              label: "Analytics",      Icon: BarChart3,       requiresOnboarding: true  },
+  { href: "/clinic/submitted-forms",         label: "Submitted Forms", Icon: FileText,        requiresOnboarding: true  },
   { href: "/clinic/settings",               label: "Settings",       Icon: Settings,        requiresOnboarding: true  },
 ];
 

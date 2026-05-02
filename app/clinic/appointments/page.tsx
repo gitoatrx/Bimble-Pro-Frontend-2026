@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Clock, Loader2, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Eye, FileText, Loader2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
 import {
@@ -13,15 +13,18 @@ import {
   assignClinicAppointmentDoctor,
   cancelClinicAppointment,
   fetchClinicAppointmentAvailableDoctors,
+  fetchClinicAppointmentPrescriptions,
   fetchClinicAppointmentRescheduleOptions,
   fetchClinicAppointmentsByDate,
   fetchClinicAppointmentsByRange,
   fetchClinicDoctors,
   rescheduleClinicAppointment,
   type AppointmentFollowUp,
+  type ClinicAppointmentPrescription,
   type ClinicAppointmentRescheduleSlot,
 } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
+import { useRealtimeRefresh } from "@/lib/realtime";
 
 type Appointment = {
   id: number;
@@ -29,6 +32,7 @@ type Appointment = {
   patientStatus: "active" | "inactive";
   service: string;
   status: string;
+  hasPrescription: boolean;
   doctor: string | null;
   assignedDoctorId: number | null;
   time: string;
@@ -72,6 +76,11 @@ function normalizeAppointment(record: Record<string, unknown>): Appointment {
       (typeof record.status === "string" && record.status) ||
       (typeof record.appointment_status === "string" && record.appointment_status) ||
       "QUEUED",
+    hasPrescription:
+      record.has_prescription === true ||
+      record.rx_written === true ||
+      Number(record.prescription_count ?? 0) > 0 ||
+      record.clinical_status === "RX_WRITTEN",
     doctor:
       (typeof record.doctor === "string" && record.doctor) ||
       (typeof record.assigned_doctor === "string" && record.assigned_doctor) ||
@@ -153,6 +162,7 @@ function FollowUpPanel({ followUp }: { followUp: AppointmentFollowUp }) {
 
 const STATUS_COLORS: Record<string, string> = {
   IN_PROGRESS: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  RX_WRITTEN: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
   ASSIGNED: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
   QUEUED: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   COMPLETED: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
@@ -192,6 +202,7 @@ function CalendarStrip({
   onSelect,
   onPrev,
   onNext,
+  onJumpToDate,
 }: {
   weekStart: string;
   selectedKey: string;
@@ -199,12 +210,13 @@ function CalendarStrip({
   onSelect: (key: string) => void;
   onPrev: () => void;
   onNext: () => void;
+  onJumpToDate: (key: string) => void;
 }) {
   const days = getDayKeys(weekStart);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button
           onClick={onPrev}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -217,12 +229,27 @@ function CalendarStrip({
             year: "numeric",
           })}
         </span>
-        <button
-          onClick={onNext}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={selectedKey}
+            onChange={(event) => onJumpToDate(event.target.value)}
+            className="h-9 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary"
+          />
+          <button
+            type="button"
+            onClick={() => onJumpToDate(todayKey())}
+            className="h-9 rounded-xl border border-border bg-background px-3 text-xs font-semibold text-foreground transition hover:bg-accent"
+          >
+            Today
+          </button>
+          <button
+            onClick={onNext}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-7 gap-1">
@@ -300,6 +327,9 @@ export default function AppointmentsCalendarPage() {
   const [rescheduleSelections, setRescheduleSelections] = useState<Record<number, string>>({});
   const [rescheduleLoadingId, setRescheduleLoadingId] = useState<number | null>(null);
   const [reschedulePendingId, setReschedulePendingId] = useState<number | null>(null);
+  const [openPrescriptionIds, setOpenPrescriptionIds] = useState<number[]>([]);
+  const [prescriptionsByAppointment, setPrescriptionsByAppointment] = useState<Record<number, ClinicAppointmentPrescription[]>>({});
+  const [loadingPrescriptionId, setLoadingPrescriptionId] = useState<number | null>(null);
 
   const loadAppointments = useCallback(async () => {
     if (!hasSession) {
@@ -427,6 +457,11 @@ export default function AppointmentsCalendarPage() {
       active = false;
     };
   }, [hasSession, loadAppointments]);
+
+  useRealtimeRefresh(loadAppointments, {
+    enabled: hasSession,
+    paths: ["/appointments", "/pool", "/requests", "/prescriptions"],
+  });
 
   async function handleAssignDoctor(appointmentId: number) {
     if (!accessToken) {
@@ -569,6 +604,72 @@ export default function AppointmentsCalendarPage() {
     }
   }
 
+  function jumpToDate(dateKey: string) {
+    if (!dateKey) return;
+    setLoading(true);
+    setSelectedKey(dateKey);
+    setWeekStart(dateKey);
+  }
+
+  async function loadAppointmentPrescriptions(appointment: Appointment) {
+    if (!accessToken) {
+      setAssignError("You are not logged in. Please sign in again.");
+      return;
+    }
+    setLoadingPrescriptionId(appointment.id);
+    setAssignError("");
+    try {
+      const response = await fetchClinicAppointmentPrescriptions(accessToken, appointment.id);
+      setPrescriptionsByAppointment((current) => ({
+        ...current,
+        [appointment.id]: response.prescriptions ?? [],
+      }));
+    } catch (err) {
+      setAssignError(err instanceof Error ? err.message : "Could not load prescriptions for this appointment.");
+    } finally {
+      setLoadingPrescriptionId((current) => (current === appointment.id ? null : current));
+    }
+  }
+
+  async function togglePrescriptions(appointment: Appointment) {
+    const isOpen = openPrescriptionIds.includes(appointment.id);
+    setOpenPrescriptionIds((current) =>
+      isOpen ? current.filter((id) => id !== appointment.id) : [...current, appointment.id],
+    );
+    if (!isOpen && prescriptionsByAppointment[appointment.id] === undefined) {
+      await loadAppointmentPrescriptions(appointment);
+    }
+  }
+
+  async function openPrescriptionDocument(prescription: ClinicAppointmentPrescription) {
+    const documentUrl = prescription.document_url;
+    if (!accessToken || !documentUrl) {
+      setAssignError("Could not open the prescription document.");
+      return;
+    }
+
+    const viewer = window.open("", "_blank");
+    if (!viewer) {
+      setAssignError("Could not open the prescription. Please allow popups and try again.");
+      return;
+    }
+
+    try {
+      const response = await fetch(documentUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok) throw new Error("Could not open prescription document.");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      viewer.document.title = prescription.medication || "Prescription";
+      viewer.location.href = url;
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      viewer.close();
+      setAssignError(err instanceof Error ? err.message : "Could not open prescription document.");
+    }
+  }
+
   const appointmentsByDate = useMemo(() => {
     const map = new Map<string, Appointment[]>();
 
@@ -629,6 +730,7 @@ export default function AppointmentsCalendarPage() {
           setLoading(true);
           setWeekStart((k) => offsetKey(k, 7));
         }}
+        onJumpToDate={jumpToDate}
       />
 
       <div className="mt-6">
@@ -683,9 +785,63 @@ export default function AppointmentsCalendarPage() {
                   <div className="flex-shrink-0">
                     <StatusBadge status={appt.status} />
                   </div>
+                  {appt.hasPrescription ? (
+                    <span className="inline-flex flex-shrink-0 items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                      {appointmentLabel("RX_WRITTEN")}
+                    </span>
+                  ) : null}
                 </div>
 
                 {appt.followUp ? <FollowUpPanel followUp={appt.followUp} /> : null}
+
+                {appt.hasPrescription ? (
+                  <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/50 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => void togglePrescriptions(appt)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      {openPrescriptionIds.includes(appt.id) ? "Hide prescription" : "View prescription"}
+                    </button>
+
+                    {openPrescriptionIds.includes(appt.id) ? (
+                      <div className="mt-3 space-y-2">
+                        {loadingPrescriptionId === appt.id ? (
+                          <p className="text-xs font-medium text-emerald-700">Loading prescriptions...</p>
+                        ) : (prescriptionsByAppointment[appt.id] ?? []).length > 0 ? (
+                          (prescriptionsByAppointment[appt.id] ?? []).map((prescription) => (
+                            <div
+                              key={prescription.id}
+                              className="flex flex-col gap-2 rounded-xl border border-emerald-100 bg-background px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-foreground">{prescription.medication}</p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {prescription.written_at_label || "Written"}
+                                  {prescription.doctor_name ? ` · ${prescription.doctor_name}` : ""}
+                                  {prescription.dosage ? ` · ${prescription.dosage}` : ""}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void openPrescriptionDocument(prescription)}
+                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground transition hover:text-primary"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                View
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-xs font-medium text-emerald-700">
+                            No prescription document found for this appointment.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {!["CANCELLED", "COMPLETED", "NO_SHOW"].includes(appt.status) ? (
                   <div className="mt-4 flex flex-wrap gap-2 border-t border-border/70 pt-4">

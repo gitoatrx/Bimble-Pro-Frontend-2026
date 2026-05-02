@@ -989,6 +989,14 @@ export function DoctorOnboardingWizard({
     }
   }, [optionalMode, router, stage]);
 
+  function acknowledgeRequiredForms(destination: "/doctor/settings" | "/doctor/dashboard") {
+    if (doctorId) {
+      markDoctorOnboardingComplete(doctorId);
+      clearDoctorOnboardingStage(doctorId);
+    }
+    router.push(destination);
+  }
+
   useEffect(() => {
     if (stage !== "hlth_2870" || !accessToken) {
       return;
@@ -1869,6 +1877,58 @@ export function DoctorOnboardingWizard({
                 </Button>
               </div>
             ) : null}
+          </div>
+        </DoctorSection>
+      </DoctorPageShell>
+    );
+  }
+
+  if (!optionalMode) {
+    return (
+      <DoctorPageShell>
+        <DoctorSection
+          eyebrow="Doctor onboarding"
+          title="Required clinic forms"
+          description="This clinic requires HLTH 2870 and HLTH 2950 before your setup can be finalized."
+        >
+          <div className="space-y-6">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-5">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 text-blue-600" />
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-blue-950">Two forms need your signature</p>
+                  <p className="text-sm leading-6 text-blue-900">
+                    The clinic needs HLTH 2870 and HLTH 2950 returned with your confirmation and signature. Other
+                    forms are available later from Settings when you need them for a specific service.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-sm font-semibold text-foreground">HLTH 2870</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Assignment of payment due to practitioner under MSP.
+                </p>
+              </div>
+              <div className="rounded-lg border border-border bg-card p-4">
+                <p className="text-sm font-semibold text-foreground">HLTH 2950</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Practitioner attachment to MSP facility number for business cost premium.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button type="button" className="gap-2" onClick={() => acknowledgeRequiredForms("/doctor/settings")}>
+                Open settings
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button type="button" variant="outline" onClick={() => acknowledgeRequiredForms("/doctor/dashboard")}>
+                Go to dashboard
+              </Button>
+            </div>
           </div>
         </DoctorSection>
       </DoctorPageShell>

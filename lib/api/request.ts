@@ -15,6 +15,7 @@ type RequestConfig<TBody> = {
   body?: TBody;
   headers?: HeadersInit;
   signal?: AbortSignal;
+  cache?: RequestCache;
 };
 
 export async function apiRequest<TResponse, TBody = undefined>({
@@ -23,6 +24,7 @@ export async function apiRequest<TResponse, TBody = undefined>({
   body,
   headers,
   signal,
+  cache,
 }: RequestConfig<TBody>) {
   const response = await fetch(endpoint, {
     method,
@@ -32,6 +34,7 @@ export async function apiRequest<TResponse, TBody = undefined>({
     },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal,
+    cache,
   });
 
   const responseData = await response.json().catch(() => null);

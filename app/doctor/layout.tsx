@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
   CalendarDays,
-  ClipboardList,
   ExternalLink,
   LayoutDashboard,
   LogOut,
@@ -53,7 +52,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/doctor/pool",          label: "Pool",          Icon: Zap             },
   { href: "/doctor/appointments",  label: "Appointments",  Icon: CalendarDays    },
   { href: "/doctor/patients",      label: "Patients",      Icon: Users           },
-  { href: "/doctor/prescriptions", label: "Prescriptions", Icon: ClipboardList   },
   { href: "/doctor/schedule",      label: "My Schedule",   Icon: Stethoscope     },
   { href: "/doctor/settings",      label: "Settings",      Icon: Settings        },
 ];

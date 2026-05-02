@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarCheck2, Clock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
 import { fetchClinicToday } from "@/lib/api/clinic-dashboard";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { formatCanadaPacificDateKey, getCanadaPacificDateKey } from "@/lib/time-zone";
+import { useRealtimeRefresh } from "@/lib/realtime";
 
 type Appointment = {
   id: number;
@@ -14,6 +15,7 @@ type Appointment = {
   patientStatus: "active" | "inactive";
   service: string;
   status: string;
+  hasPrescription: boolean;
   doctor: string | null;
   time: string;
 };
@@ -37,6 +39,11 @@ function normalizeAppointment(record: Record<string, unknown>): Appointment {
       (typeof record.status === "string" && record.status) ||
       (typeof record.appointment_status === "string" && record.appointment_status) ||
       "QUEUED",
+    hasPrescription:
+      record.has_prescription === true ||
+      record.rx_written === true ||
+      Number(record.prescription_count ?? 0) > 0 ||
+      record.clinical_status === "RX_WRITTEN",
     doctor:
       (typeof record.doctor === "string" && record.doctor) ||
       (typeof record.assigned_doctor === "string" && record.assigned_doctor) ||
@@ -51,6 +58,7 @@ function normalizeAppointment(record: Record<string, unknown>): Appointment {
 
 const STATUS_COLORS: Record<string, string> = {
   IN_PROGRESS: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  RX_WRITTEN: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
   ASSIGNED: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
   QUEUED: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   COMPLETED: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
@@ -103,6 +111,11 @@ function AppointmentRow({ appt }: { appt: Appointment }) {
       <div className="flex-shrink-0">
         <StatusBadge status={appt.status} />
       </div>
+      {appt.hasPrescription ? (
+        <span className="inline-flex flex-shrink-0 items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+          {appointmentLabel("RX_WRITTEN")}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -117,6 +130,16 @@ export default function TodayAppointmentsPage() {
     hasSession ? "" : "You are not logged in. Please sign in again.",
   );
 
+  const loadToday = useCallback(async () => {
+    if (!hasSession) return;
+    const data = await fetchClinicToday(accessToken);
+    const record = data as Record<string, unknown>;
+    const list = Array.isArray(record)
+      ? record
+      : (record.appointments ?? record.items ?? record.data ?? []);
+    setAppointments((list as Record<string, unknown>[]).map(normalizeAppointment));
+  }, [accessToken, hasSession]);
+
   useEffect(() => {
     if (!hasSession) {
       return;
@@ -127,7 +150,6 @@ export default function TodayAppointmentsPage() {
     fetchClinicToday(accessToken)
       .then((data) => {
         if (!active) return;
-
         const record = data as Record<string, unknown>;
         const list = Array.isArray(record)
           ? record
@@ -146,6 +168,11 @@ export default function TodayAppointmentsPage() {
       active = false;
     };
   }, [accessToken, hasSession]);
+
+  useRealtimeRefresh(loadToday, {
+    enabled: hasSession,
+    paths: ["/appointments", "/pool", "/requests", "/prescriptions"],
+  });
 
   const today = formatCanadaPacificDateKey(getCanadaPacificDateKey(), {
     weekday: "long",

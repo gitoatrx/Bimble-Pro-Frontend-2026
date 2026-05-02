@@ -25,6 +25,7 @@ import { useRealtimeRefresh } from "@/lib/realtime";
 
 const STATUS_COLORS: Record<string, string> = {
   IN_PROGRESS: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  RX_WRITTEN: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
   ASSIGNED: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
   QUEUED: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   COMPLETED: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
@@ -100,6 +101,11 @@ function QueueRow({
         >
           {appointmentLabel(appointment.status)}
         </span>
+        {appointment.has_prescription ? (
+          <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+            {appointmentLabel("RX_WRITTEN")}
+          </span>
+        ) : null}
         <Button
           size="sm"
           onClick={() => onSeePatient(appointment)}
@@ -164,7 +170,7 @@ export default function DoctorDashboardPage() {
   }, [loadData]);
 
   useRealtimeRefresh(loadData, {
-    paths: ["/doctors/me", "/appointments", "/pool", "/patient-intake"],
+    paths: ["/doctors/me", "/appointments", "/pool", "/patient-intake", "/prescriptions"],
   });
 
   const handleSeePatient = useCallback(

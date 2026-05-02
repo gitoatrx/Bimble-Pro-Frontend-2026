@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Stethoscope, UserRoundCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FileText, Stethoscope, UserRoundCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { cn } from "@/lib/utils";
@@ -14,9 +14,11 @@ import {
 } from "@/lib/time-zone";
 import {
   fetchDoctorAppointments,
+  fetchDoctorAppointmentPrescriptions,
   startDoctorAppointment,
   type AppointmentFollowUp,
   type DoctorAppointment,
+  type DoctorPrescription,
 } from "@/lib/api/doctor-dashboard";
 import { useRealtimeRefresh } from "@/lib/realtime";
 
@@ -32,6 +34,7 @@ const TODAY = todayKey();
 
 const STATUS_COLORS: Record<string, string> = {
   IN_PROGRESS: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
+  RX_WRITTEN: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
   ASSIGNED: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
   QUEUED: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
   COMPLETED: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
@@ -68,6 +71,9 @@ export default function DoctorAppointmentsPage() {
   const [error, setError] = useState("");
   const [startingAppointmentId, setStartingAppointmentId] = useState<number | null>(null);
   const [openFollowUpIds, setOpenFollowUpIds] = useState<number[]>([]);
+  const [openPrescriptionIds, setOpenPrescriptionIds] = useState<number[]>([]);
+  const [prescriptionsByAppointment, setPrescriptionsByAppointment] = useState<Record<number, DoctorPrescription[]>>({});
+  const [loadingPrescriptionId, setLoadingPrescriptionId] = useState<number | null>(null);
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => offsetKey(weekStart, index)), [weekStart]);
 
@@ -100,7 +106,7 @@ export default function DoctorAppointmentsPage() {
   }, [loadAppointments]);
 
   useRealtimeRefresh(loadAppointments, {
-    paths: ["/appointments", "/pool", "/requests"],
+    paths: ["/appointments", "/pool", "/requests", "/prescriptions"],
   });
 
   const byDate = useMemo(() => {
@@ -118,6 +124,73 @@ export default function DoctorAppointmentsPage() {
       current.includes(appointmentId) ? current.filter((id) => id !== appointmentId) : [...current, appointmentId],
     );
   }, []);
+
+  const jumpToDate = useCallback((dateKey: string) => {
+    if (!dateKey) return;
+    setSelectedKey(dateKey);
+    setWeekStart(dateKey);
+  }, []);
+
+  const loadAppointmentPrescriptions = useCallback(async (appointment: DoctorAppointment) => {
+    const session = readDoctorLoginSession();
+    if (!session?.accessToken) {
+      setError("You are not logged in.");
+      return;
+    }
+    setLoadingPrescriptionId(appointment.id);
+    setError("");
+    try {
+      const response = await fetchDoctorAppointmentPrescriptions(session.accessToken, appointment.id);
+      setPrescriptionsByAppointment((current) => ({
+        ...current,
+        [appointment.id]: response.prescriptions ?? [],
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load prescriptions for this appointment.");
+    } finally {
+      setLoadingPrescriptionId(null);
+    }
+  }, []);
+
+  const togglePrescriptions = useCallback(
+    async (appointment: DoctorAppointment) => {
+      const isOpen = openPrescriptionIds.includes(appointment.id);
+      setOpenPrescriptionIds((current) =>
+        isOpen ? current.filter((id) => id !== appointment.id) : [...current, appointment.id],
+      );
+      if (!isOpen && prescriptionsByAppointment[appointment.id] === undefined) {
+        await loadAppointmentPrescriptions(appointment);
+      }
+    },
+    [loadAppointmentPrescriptions, openPrescriptionIds, prescriptionsByAppointment],
+  );
+
+  async function openPrescriptionDocument(prescription: DoctorPrescription) {
+    const session = readDoctorLoginSession();
+    const downloadUrl = prescription.download_url || prescription.document_url;
+    if (!session?.accessToken || !downloadUrl) return;
+
+    const viewer = window.open("", "_blank");
+    if (!viewer) {
+      setError("Could not open the prescription. Please allow popups and try again.");
+      return;
+    }
+
+    try {
+      const response = await fetch(downloadUrl, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      if (!response.ok) throw new Error("Could not open prescription document.");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      viewer.document.title = prescription.medication || "Prescription";
+      viewer.location.href = url;
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      viewer.close();
+      setError(err instanceof Error ? err.message : "Could not open prescription document.");
+    }
+  }
 
   const handleSeePatient = useCallback(
     async (appointment: DoctorAppointment) => {
@@ -148,7 +221,7 @@ export default function DoctorAppointmentsPage() {
     <DoctorPageShell eyebrow="Schedule" title="Appointments">
       <DoctorSection title="Week view">
         <div className="rounded-[1.5rem] border border-border/70 bg-background p-3.5">
-          <div className="mb-3.5 flex items-center justify-between gap-3">
+          <div className="mb-3.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               onClick={() => setWeekStart((current) => offsetKey(current, -7))}
               className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground transition-colors hover:text-foreground"
@@ -161,12 +234,27 @@ export default function DoctorAppointmentsPage() {
                 year: "numeric",
               })}
             </p>
-            <button
-              onClick={() => setWeekStart((current) => offsetKey(current, 7))}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={selectedKey}
+                onChange={(event) => jumpToDate(event.target.value)}
+                className="h-10 rounded-2xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={() => jumpToDate(TODAY)}
+                className="h-10 rounded-2xl border border-border bg-background px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
+              >
+                Today
+              </button>
+              <button
+                onClick={() => setWeekStart((current) => offsetKey(current, 7))}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-background text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-7 gap-1.5">
@@ -268,6 +356,11 @@ export default function DoctorAppointmentsPage() {
                       >
                         {appointmentLabel(appointment.status)}
                       </span>
+                      {appointment.has_prescription ? (
+                        <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          {appointmentLabel("RX_WRITTEN")}
+                        </span>
+                      ) : null}
                     </div>
                     <button
                       type="button"
@@ -299,6 +392,50 @@ export default function DoctorAppointmentsPage() {
                       >
                         {openFollowUpIds.includes(appointment.id) ? "Hide follow-up" : "Show follow-up"}
                       </button>
+                    </div>
+                  ) : null}
+                  {appointment.has_prescription ? (
+                    <div className="w-full sm:basis-full">
+                      <button
+                        type="button"
+                        onClick={() => void togglePrescriptions(appointment)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        {openPrescriptionIds.includes(appointment.id) ? "Hide prescription" : "View prescription"}
+                      </button>
+                      {openPrescriptionIds.includes(appointment.id) ? (
+                        <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/50 px-3 py-3">
+                          {loadingPrescriptionId === appointment.id ? (
+                            <p className="text-xs font-medium text-emerald-700">Loading prescriptions...</p>
+                          ) : (prescriptionsByAppointment[appointment.id] ?? []).length > 0 ? (
+                            <div className="space-y-2">
+                              {(prescriptionsByAppointment[appointment.id] ?? []).map((prescription) => (
+                                <div key={prescription.id} className="flex flex-col gap-2 rounded-xl border border-emerald-100 bg-background px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-semibold text-foreground">{prescription.medication}</p>
+                                    <p className="truncate text-[11px] text-muted-foreground">
+                                      {prescription.written_at_label || "Written"}{prescription.dosage ? ` · ${prescription.dosage}` : ""}
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => void openPrescriptionDocument(prescription)}
+                                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground transition hover:text-primary"
+                                    >
+                                      <Eye className="h-3.5 w-3.5" />
+                                      View
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs font-medium text-emerald-700">No prescription document found for this appointment.</p>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

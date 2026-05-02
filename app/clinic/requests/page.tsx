@@ -24,6 +24,16 @@ function requestSupportsDocumentUpload(requestType: string) {
   return requestType === "PRESCRIPTION" || requestType === "LAB_REPORT";
 }
 
+function requestIsOpen(status?: string | null) {
+  return ["SUBMITTED", "IN_REVIEW"].includes((status || "").trim().toUpperCase());
+}
+
+function removeDraft(drafts: Record<number, string>, requestId: number) {
+  const nextDrafts = { ...drafts };
+  delete nextDrafts[requestId];
+  return nextDrafts;
+}
+
 function formatSlot(date?: string | null, time?: string | null) {
   if (!date && !time) return "Not available";
   return [date || "Date pending", time || "Time pending"].join(" · ");
@@ -47,10 +57,11 @@ export default function ClinicRequestsPage() {
 
     try {
       const response = await fetchClinicRequests(session.accessToken);
-      setRequests(response.requests ?? []);
+      const openRequests = (response.requests ?? []).filter((request) => requestIsOpen(request.status));
+      setRequests(openRequests);
       setResponseDrafts(
         Object.fromEntries(
-          (response.requests ?? []).map((request) => [request.request_id, request.clinic_response ?? ""]),
+          openRequests.map((request) => [request.request_id, request.clinic_response ?? ""]),
         ),
       );
       setError("");
@@ -98,9 +109,15 @@ export default function ClinicRequestsPage() {
         status,
         clinicResponse: responseDrafts[requestId]?.trim() || undefined,
       });
-      setRequests((current) =>
-        current.map((request) => (request.request_id === requestId ? response.request : request)),
-      );
+      setRequests((current) => {
+        if (!requestIsOpen(response.request.status)) {
+          return current.filter((request) => request.request_id !== requestId);
+        }
+        return current.map((request) => (request.request_id === requestId ? response.request : request));
+      });
+      if (!requestIsOpen(response.request.status)) {
+        setResponseDrafts((current) => removeDraft(current, requestId));
+      }
       setSuccessMessage(
         status === "FULFILLED"
           ? "Request accepted and the patient can now see your update."
@@ -133,9 +150,15 @@ export default function ClinicRequestsPage() {
 
     try {
       const response = await uploadClinicRequestAttachment(session.accessToken, requestId, file);
-      setRequests((current) =>
-        current.map((request) => (request.request_id === requestId ? response.request : request)),
-      );
+      setRequests((current) => {
+        if (!requestIsOpen(response.request.status)) {
+          return current.filter((request) => request.request_id !== requestId);
+        }
+        return current.map((request) => (request.request_id === requestId ? response.request : request));
+      });
+      if (!requestIsOpen(response.request.status)) {
+        setResponseDrafts((current) => removeDraft(current, requestId));
+      }
       setSuccessMessage("Document uploaded and the request has been accepted.");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to upload the document.");

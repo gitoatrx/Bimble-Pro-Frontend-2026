@@ -132,6 +132,7 @@ export const APPOINTMENT_STATUS_LABELS: Record<string, string> = {
   QUEUED: "Waiting",
   ASSIGNED: "Doctor Assigned",
   IN_PROGRESS: "In Consultation",
+  RX_WRITTEN: "Rx Written",
   COMPLETED: "Seen",
   CANCELLED: "Cancelled",
   NO_SHOW: "Didn't Show Up",
