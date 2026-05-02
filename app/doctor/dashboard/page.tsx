@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { ExternalLink, RefreshCw, Stethoscope, UserRoundCheck } from "lucide-react";
+import { Stethoscope, UserRoundCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
@@ -233,7 +233,6 @@ export default function DoctorDashboardPage() {
   const [today, setToday] = useState<DoctorTodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
   const [startingAppointmentId, setStartingAppointmentId] = useState<number | null>(null);
   const [openFollowUpIds, setOpenFollowUpIds] = useState<number[]>([]);
 
@@ -256,7 +255,6 @@ export default function DoctorDashboardPage() {
       setError(err instanceof Error ? err.message : "Failed to load doctor dashboard.");
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [session?.accessToken]);
 
@@ -318,7 +316,7 @@ export default function DoctorDashboardPage() {
   };
 
   return (
-    <DoctorPageShell eyebrow="Today" title="Today">
+    <DoctorPageShell eyebrow="Today" title="Live queue">
       <DoctorSection
         title={summary?.doctor_name || "Doctor summary"}
         description={summary ? `${summary.clinic_name} · ${summary.email}` : "Live doctor summary and OSCAR shortcut."}
@@ -330,23 +328,6 @@ export default function DoctorDashboardPage() {
           <StatCard label="Seen today" value={counts.seen_today ?? 0} />
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => { setRefreshing(true); void loadData(); }} disabled={loading || refreshing}>
-            <RefreshCw className={cn("h-4 w-4", (loading || refreshing) && "animate-spin")} />
-            Refresh
-          </Button>
-          {summary?.app_url ? (
-            <a
-              href={summary.app_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Open OSCAR
-            </a>
-          ) : null}
-        </div>
       </DoctorSection>
 
       <DoctorSection title={`Up next · ${formatTodayLabel(today?.date ?? summary?.today?.date)}`}>

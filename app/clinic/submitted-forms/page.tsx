@@ -9,6 +9,7 @@ import {
 import { readClinicLoginSession } from "@/lib/clinic/session";
 
 type SubmittedFormPacket = {
+  doctorId: number;
   packetId: number;
   doctorName: string;
   email: string;
@@ -34,6 +35,7 @@ function normalizePacket(record: ClinicDoctorFormPacketRecord): SubmittedFormPac
       }));
 
   return {
+    doctorId: Number(record.doctor_id ?? 0),
     packetId: Number(record.packet_id),
     doctorName: record.doctor_name || "Unknown doctor",
     email: record.email || "",
@@ -59,6 +61,11 @@ function formatFormCode(value: string) {
   return value.replace(/^HLTH_/, "HLTH ").replace(/_/g, " ");
 }
 
+function getDoctorGroupKey(packet: SubmittedFormPacket) {
+  if (packet.doctorId) return `doctor:${packet.doctorId}`;
+  return `doctor:${packet.doctorName}:${packet.email}`;
+}
+
 export default function SubmittedFormsPage() {
   const session = readClinicLoginSession();
   const accessToken = session?.accessToken ?? "";
@@ -68,6 +75,42 @@ export default function SubmittedFormsPage() {
   const [error, setError] = useState(
     hasSession ? "" : "You are not logged in. Please sign in again.",
   );
+
+  const groupedPackets = React.useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        doctorId: number;
+        doctorName: string;
+        email: string;
+        packets: SubmittedFormPacket[];
+      }
+    >();
+
+    for (const packet of packets) {
+      const key = getDoctorGroupKey(packet);
+      const current = groups.get(key);
+      if (current) {
+        current.packets.push(packet);
+      } else {
+        groups.set(key, {
+          doctorId: packet.doctorId,
+          doctorName: packet.doctorName,
+          email: packet.email,
+          packets: [packet],
+        });
+      }
+    }
+
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      packets: [...group.packets].sort((a, b) => {
+        const left = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+        const right = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+        return right - left;
+      }),
+    }));
+  }, [packets]);
 
   useEffect(() => {
     if (!hasSession) return;
@@ -167,58 +210,77 @@ export default function SubmittedFormsPage() {
         <div className="rounded-2xl border border-border bg-card px-5 py-4 text-sm text-muted-foreground">
           Loading submitted forms...
         </div>
-      ) : packets.length > 0 ? (
+      ) : groupedPackets.length > 0 ? (
         <div className="space-y-2">
-          {packets.map((packet) => (
-            <div
-              key={packet.packetId}
-              className="rounded-2xl border border-border bg-card px-5 py-4"
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-primary" />
+          {groupedPackets.map((group) => (
+            <div key={getDoctorGroupKey(group.packets[0])} className="rounded-2xl border border-border bg-card px-5 py-4">
+              <div className="flex items-start gap-2">
+                <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-semibold text-foreground">
-                      {packet.doctorName}
+                      {group.doctorName}
                     </p>
                     <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold uppercase text-blue-700">
                       Doctor
                     </span>
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-600">
-                      {packet.status}
+                      {group.packets.length} form{group.packets.length === 1 ? "" : "s"}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {packet.email || "No email"} · {formatSubmittedAt(packet.submittedAt)}
+                    {group.email || "No email"} · {group.packets.length} packet{group.packets.length === 1 ? "" : "s"}
                   </p>
-                  {packet.missingFields.length > 0 ? (
-                    <p className="mt-2 text-xs text-amber-700">
-                      Needs review: {packet.missingFields.join(", ")}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {packet.forms.map((form) => (
-                    <React.Fragment key={`${packet.packetId}-${form.formCode}`}>
-                    <button
-                      key={`${packet.packetId}-${form.formCode}`}
-                      type="button"
-                      onClick={() => void handleView(form)}
-                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      View {formatFormCode(form.formCode)}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDownload(packet, form)}
-                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Download
-                    </button>
-                    </React.Fragment>
-                  ))}
+
+                  <div className="mt-4 space-y-2">
+                    {group.packets.map((packet) => (
+                      <div
+                        key={packet.packetId}
+                        className="rounded-xl border border-border/70 bg-background px-4 py-3"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-600">
+                                {packet.status}
+                              </span>
+                              <p className="text-xs text-muted-foreground">
+                                {formatSubmittedAt(packet.submittedAt)}
+                              </p>
+                            </div>
+                            {packet.missingFields.length > 0 ? (
+                              <p className="mt-2 text-xs text-amber-700">
+                                Needs review: {packet.missingFields.join(", ")}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {packet.forms.map((form) => (
+                              <React.Fragment key={`${packet.packetId}-${form.formCode}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleView(form)}
+                                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                  View {formatFormCode(form.formCode)}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleDownload(packet, form)}
+                                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                  Download
+                                </button>
+                              </React.Fragment>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

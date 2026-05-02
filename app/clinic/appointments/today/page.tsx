@@ -230,6 +230,11 @@ function AppointmentRow({ appt }: { appt: Appointment }) {
           {appt.status !== "ASSIGNED" ? (
             <StatusBadge status={appt.status} />
           ) : null}
+          {appt.hasPrescription ? (
+            <span className="inline-flex flex-shrink-0 items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+              {appointmentLabel("RX_WRITTEN")}
+            </span>
+          ) : null}
           {appt.followUp ? (
             <button
               type="button"
@@ -242,11 +247,6 @@ function AppointmentRow({ appt }: { appt: Appointment }) {
         </div>
       </div>
       {appt.followUp && showFollowUp ? <FollowUpPanel followUp={appt.followUp} /> : null}
-      {appt.hasPrescription ? (
-        <span className="inline-flex flex-shrink-0 items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-          {appointmentLabel("RX_WRITTEN")}
-        </span>
-      ) : null}
     </div>
   );
 }
