@@ -952,7 +952,7 @@ export default function AppointmentsCalendarPage() {
 
                 {appt.followUp && expandedFollowUpId === appt.id ? <FollowUpPanel followUp={appt.followUp} /> : null}
 
-                {!["CANCELLED", "COMPLETED", "NO_SHOW"].includes(appt.status) ? (
+                {!["CANCELLED", "COMPLETED", "NO_SHOW", "IN_PROGRESS"].includes(appt.status) ? (
                   <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
                     <div className="min-w-0 flex-1">
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">

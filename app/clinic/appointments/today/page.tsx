@@ -198,8 +198,8 @@ function AppointmentRow({ appt }: { appt: Appointment }) {
   const patientDetails = formatPatientDetails(appt, { labelIdentifiers: true });
 
   return (
-    <div>
-      <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-5 py-4 transition-colors hover:bg-accent/30">
+    <div className="rounded-2xl border border-border bg-card transition-colors hover:bg-accent/20">
+      <div className="flex items-center gap-3 px-5 py-4">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
             {appt.patientName.charAt(0)}
@@ -246,7 +246,11 @@ function AppointmentRow({ appt }: { appt: Appointment }) {
           ) : null}
         </div>
       </div>
-      {appt.followUp && showFollowUp ? <FollowUpPanel followUp={appt.followUp} /> : null}
+      {appt.followUp && showFollowUp ? (
+        <div className="px-5 pb-4">
+          <FollowUpPanel followUp={appt.followUp} />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -402,9 +402,6 @@ export default function DoctorAppointmentsPage() {
                       </div>
                     </div>
                   <div className="flex flex-wrap items-center gap-2 self-start sm:justify-end">
-                    <span className="inline-flex items-center rounded-full bg-muted/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      {appointment.time}
-                    </span>
                     {appointment.status !== "ASSIGNED" ? (
                       <span
                         className={cn(
