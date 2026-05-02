@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Clock, Eye, FileText, Loader2, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, FileText, Loader2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
 import { formatPatientDetails, shouldShowPatientDetails } from "@/lib/appointment-details";
@@ -394,6 +394,7 @@ export default function AppointmentsCalendarPage() {
   const [rescheduleSelections, setRescheduleSelections] = useState<Record<number, string>>({});
   const [rescheduleLoadingId, setRescheduleLoadingId] = useState<number | null>(null);
   const [reschedulePendingId, setReschedulePendingId] = useState<number | null>(null);
+  const [expandedFollowUpId, setExpandedFollowUpId] = useState<number | null>(null);
   const [openPrescriptionIds, setOpenPrescriptionIds] = useState<number[]>([]);
   const [prescriptionsByAppointment, setPrescriptionsByAppointment] = useState<Record<number, ClinicAppointmentPrescription[]>>({});
   const [loadingPrescriptionId, setLoadingPrescriptionId] = useState<number | null>(null);
@@ -867,8 +868,6 @@ export default function AppointmentsCalendarPage() {
                     </span>
                   ) : null}
                 </div>
-
-                {appt.followUp ? <FollowUpPanel followUp={appt.followUp} /> : null}
 
                 {appt.hasPrescription ? (
                   <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/50 px-4 py-3">

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { appointmentLabel } from "@/lib/doctor/types";
 import { formatPatientDetails, shouldShowPatientDetails } from "@/lib/appointment-details";
 import {
   readDoctorLoginSession,
@@ -87,14 +88,17 @@ function QueueRow({
   appointment,
   highlight = false,
   isStarting = false,
+  followUpOpen = false,
   onSeePatient,
+  onToggleFollowUp,
 }: {
   appointment: DoctorAppointment;
   highlight?: boolean;
   isStarting?: boolean;
+  followUpOpen?: boolean;
   onSeePatient: (appointment: DoctorAppointment) => void;
+  onToggleFollowUp: (appointmentId: number) => void;
 }) {
-  const [showFollowUp, setShowFollowUp] = useState(false);
   const patient = appointment.patient && typeof appointment.patient === "object" ? appointment.patient : null;
   const firstString = (...values: Array<unknown>) =>
     values.find((value) => typeof value === "string" && value.trim()) as string | undefined;
@@ -108,10 +112,7 @@ function QueueRow({
             (typeof patient?.age === "number" ? patient.age : null) ??
             (typeof patient?.age === "string" && patient.age ? Number(patient.age) : null),
           patientGender:
-            appointment.patient_gender ??
-            appointment.gender ??
-            firstString(patient?.gender, patient?.sex) ??
-            null,
+            appointment.patient_gender ?? appointment.gender ?? firstString(patient?.gender, patient?.sex) ?? null,
           patientSex: appointment.patient_sex ?? firstString(patient?.sex) ?? null,
           gender: appointment.gender ?? firstString(patient?.gender) ?? null,
           patientDateOfBirth:
@@ -125,9 +126,7 @@ function QueueRow({
             null,
           visitType: appointment.visit_type ?? firstString(patient?.visit_type) ?? null,
           phoneNumber:
-            appointment.phone_number ??
-            firstString(patient?.phone, patient?.phone_number, patient?.telephone_number) ??
-            null,
+            appointment.phone_number ?? firstString(patient?.phone, patient?.phone_number, patient?.telephone_number) ?? null,
           patientPhoneNumber:
             appointment.patient_phone_number ??
             firstString(patient?.phone, patient?.phone_number, patient?.telephone_number) ??
@@ -135,8 +134,8 @@ function QueueRow({
           email: appointment.email ?? firstString(patient?.email, patient?.email_address) ?? null,
           patientEmail: appointment.patient_email ?? firstString(patient?.email, patient?.email_address) ?? null,
           phn:
-            firstString(patient?.phn, patient?.health_number, patient?.medical_record_number) ??
             appointment.phn ??
+            firstString(patient?.phn, patient?.health_number, patient?.medical_record_number) ??
             null,
         },
         { labelIdentifiers: true },
@@ -146,51 +145,75 @@ function QueueRow({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-2xl border px-3 py-3 sm:flex-row sm:items-center",
+        "flex flex-col gap-3 rounded-2xl border px-3 py-3",
         highlight ? "border-primary/30 bg-primary/5" : "border-border bg-background",
       )}
     >
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-        {appointment.patient_name.charAt(0)}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 gap-4">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+            {appointment.patient_name.charAt(0)}
+          </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-foreground">{appointment.patient_name}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {appointment.chief_complaint ?? ""}
+          </p>
+            {patientDetails.length > 0 ? (
+              <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                {patientDetails.map((detail) => (
+                  <span key={detail}>{detail}</span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto sm:justify-end">
+          {appointment.status !== "ASSIGNED" ? (
+            <span
+              className={cn(
+                "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
+                STATUS_COLORS[appointment.status] ?? "bg-muted text-muted-foreground",
+              )}
+            >
+              {appointmentLabel(appointment.status)}
+            </span>
+          ) : null}
+          {appointment.has_prescription ? (
+            <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+              {appointmentLabel("RX_WRITTEN")}
+            </span>
+          ) : null}
+          <Button
+            size="sm"
+            onClick={() => onSeePatient(appointment)}
+            disabled={isStarting}
+            className="h-8 rounded-full px-3 text-xs"
+          >
+            {isStarting ? (
+              <Stethoscope className="h-3.5 w-3.5 animate-pulse" />
+            ) : (
+              <UserRoundCheck className="h-3.5 w-3.5" />
+            )}
+            See patient
+          </Button>
+          {appointment.follow_up ? (
+            <button
+              type="button"
+              onClick={() => onToggleFollowUp(appointment.id)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
+            >
+              {followUpOpen ? "Hide follow-up" : "View follow-up"}
+            </button>
+          ) : null}
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-foreground">{appointment.patient_name}</p>
-        <p className="truncate text-xs text-muted-foreground">
-          {appointment.user_friendly_service_name || appointment.service_name}
-        </p>
-      </div>
-      <div className="flex flex-col items-start gap-2 sm:items-end">
-        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-          {appointment.time}
-        </span>
-        <span
-          className={cn(
-            "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
-            STATUS_COLORS[appointment.status] ?? "bg-muted text-muted-foreground",
-          )}
-        >
-          {appointmentLabel(appointment.status)}
-        </span>
-        {appointment.has_prescription ? (
-          <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-            {appointmentLabel("RX_WRITTEN")}
-          </span>
-        ) : null}
-        <Button
-          size="sm"
-          onClick={() => onSeePatient(appointment)}
-          disabled={isStarting}
-          className="h-8 rounded-full px-3 text-xs"
-        >
-          {isStarting ? (
-            <Stethoscope className="h-3.5 w-3.5 animate-pulse" />
-          ) : (
-            <UserRoundCheck className="h-3.5 w-3.5" />
-          )}
-          See patient
-        </Button>
-      </div>
-      {appointment.follow_up && showFollowUp ? <FollowUpPanel followUp={appointment.follow_up} /> : null}
+      {appointment.follow_up && followUpOpen ? (
+        <div className="w-full sm:pl-14">
+          <FollowUpPanel followUp={appointment.follow_up} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -212,6 +235,7 @@ export default function DoctorDashboardPage() {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [startingAppointmentId, setStartingAppointmentId] = useState<number | null>(null);
+  const [openFollowUpIds, setOpenFollowUpIds] = useState<number[]>([]);
 
   const loadData = useCallback(async () => {
     if (!session?.accessToken) {
@@ -276,6 +300,12 @@ export default function DoctorDashboardPage() {
     [router],
   );
 
+  const toggleFollowUp = useCallback((appointmentId: number) => {
+    setOpenFollowUpIds((current) =>
+      current.includes(appointmentId) ? current.filter((id) => id !== appointmentId) : [...current, appointmentId],
+    );
+  }, []);
+
   const active = (today?.appointments ?? []).filter(
     (appointment) => appointment.status === "IN_PROGRESS" || appointment.status === "ASSIGNED",
   );
@@ -336,7 +366,9 @@ export default function DoctorDashboardPage() {
                 appointment={appointment}
                 highlight={index === 0}
                 isStarting={startingAppointmentId === appointment.id}
+                followUpOpen={openFollowUpIds.includes(appointment.id)}
                 onSeePatient={handleSeePatient}
+                onToggleFollowUp={toggleFollowUp}
               />
             ))}
           </div>

@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Eye, FileText, Stethoscope, UserRoundCheck }
 import { useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { cn } from "@/lib/utils";
+import { appointmentLabel } from "@/lib/doctor/types";
 import { formatPatientDetails, shouldShowPatientDetails } from "@/lib/appointment-details";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import {
@@ -401,10 +402,10 @@ export default function DoctorAppointmentsPage() {
                       </div>
                     </div>
                   <div className="flex flex-wrap items-center gap-2 self-start sm:justify-end">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center rounded-full bg-muted/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        {appointment.time}
-                      </span>
+                    <span className="inline-flex items-center rounded-full bg-muted/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      {appointment.time}
+                    </span>
+                    {appointment.status !== "ASSIGNED" ? (
                       <span
                         className={cn(
                           "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium",
@@ -413,12 +414,12 @@ export default function DoctorAppointmentsPage() {
                       >
                         {appointmentLabel(appointment.status)}
                       </span>
-                      {appointment.has_prescription ? (
-                        <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                          {appointmentLabel("RX_WRITTEN")}
-                        </span>
-                      ) : null}
-                    </div>
+                    ) : null}
+                    {appointment.has_prescription ? (
+                      <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                        {appointmentLabel("RX_WRITTEN")}
+                      </span>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => void handleSeePatient(appointment)}
@@ -432,24 +433,21 @@ export default function DoctorAppointmentsPage() {
                       )}
                       See patient
                     </button>
+                    {appointment.follow_up ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleFollowUp(appointment.id)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 transition hover:bg-sky-100"
+                      >
+                        {openFollowUpIds.includes(appointment.id) ? "Hide follow-up" : "View follow-up"}
+                      </button>
+                    ) : null}
                   </div>
                   {appointment.follow_up ? (
-                    <div className="w-full sm:basis-full">
+                    <div className="w-full sm:basis-full sm:pl-14">
                       {openFollowUpIds.includes(appointment.id) ? (
                         <FollowUpPanel followUp={appointment.follow_up} />
                       ) : null}
-                    </div>
-                  ) : null}
-                  {appointment.follow_up ? (
-                    <div className="w-full sm:basis-full">
-                      <button
-                        type="button"
-                        onClick={() => void togglePrescriptions(appointment)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                        {openPrescriptionIds.includes(appointment.id) ? "Hide prescription" : "View prescription"}
-                      </button>
                     </div>
                   ) : null}
                   {appointment.has_prescription ? (

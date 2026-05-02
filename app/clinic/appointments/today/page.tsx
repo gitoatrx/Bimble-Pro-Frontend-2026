@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarCheck2, Clock, User } from "lucide-react";
+import { CalendarCheck2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
 import { fetchClinicToday, type AppointmentFollowUp } from "@/lib/api/clinic-dashboard";
@@ -241,6 +241,7 @@ function AppointmentRow({ appt }: { appt: Appointment }) {
           ) : null}
         </div>
       </div>
+      {appt.followUp && showFollowUp ? <FollowUpPanel followUp={appt.followUp} /> : null}
       {appt.hasPrescription ? (
         <span className="inline-flex flex-shrink-0 items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
           {appointmentLabel("RX_WRITTEN")}
