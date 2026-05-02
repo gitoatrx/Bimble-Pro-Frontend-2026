@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Clock, Eye, FileText, Loader2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { appointmentLabel } from "@/lib/doctor/types";
+import { formatPatientDetails, shouldShowPatientDetails } from "@/lib/appointment-details";
 import {
   formatCanadaPacificDateKey,
   getCanadaPacificDateKey,
@@ -30,7 +31,16 @@ type Appointment = {
   id: number;
   patientName: string;
   patientStatus: "active" | "inactive";
+  patientAge: number | null;
+  patientGender: string | null;
+  patientSex: string | null;
+  patientDateOfBirth: string | null;
+  phoneNumber: string | null;
+  email: string | null;
+  visitType: string | null;
+  phn: string | null;
   service: string;
+  chiefComplaint: string;
   status: string;
   hasPrescription: boolean;
   doctor: string | null;
@@ -58,20 +68,77 @@ function offsetKey(base: string, offset: number): string {
 
 function normalizeAppointment(record: Record<string, unknown>): Appointment {
   const followUp = normalizeFollowUp(record.follow_up);
+  const patient =
+    record.patient && typeof record.patient === "object"
+      ? (record.patient as Record<string, unknown>)
+      : null;
+
+  const firstString = (...values: Array<unknown>) =>
+    values.find((value) => typeof value === "string" && value.trim()) as string | undefined;
+
   return {
     id: Number(record.id ?? record.appointment_id ?? Date.now()),
     patientName:
       (typeof record.patient_name === "string" && record.patient_name) ||
+      firstString(patient?.name, patient?.first_name, patient?.full_name) ||
       (typeof record.patientName === "string" && record.patientName) ||
       "Unknown patient",
     patientStatus:
       typeof record.patient_status === "string" && record.patient_status.toLowerCase() === "inactive"
         ? "inactive"
         : "active",
+    patientAge:
+      typeof record.patient_age === "number"
+        ? record.patient_age
+        : typeof record.patient_age === "string" && record.patient_age
+          ? Number(record.patient_age)
+          : typeof patient?.age === "number"
+            ? (patient.age as number)
+            : typeof patient?.age === "string" && patient.age
+              ? Number(patient.age)
+          : null,
+    patientGender:
+      (typeof record.patient_gender === "string" && record.patient_gender) ||
+      (typeof record.gender === "string" && record.gender) ||
+      firstString(patient?.gender, patient?.sex) ||
+      null,
+    patientSex:
+      (typeof record.patient_sex === "string" && record.patient_sex) ||
+      firstString(patient?.sex) ||
+      null,
+    patientDateOfBirth:
+      (typeof record.patient_date_of_birth === "string" && record.patient_date_of_birth) ||
+      (typeof record.formatted_date_of_birth === "string" && record.formatted_date_of_birth) ||
+      (typeof record.dob_label === "string" && record.dob_label) ||
+      firstString(patient?.formatted_date_of_birth, patient?.date_of_birth_label, patient?.dob_label, patient?.dob) ||
+      null,
+    phoneNumber:
+      (typeof record.phone_number === "string" && record.phone_number) ||
+      (typeof record.patient_phone_number === "string" && record.patient_phone_number) ||
+      firstString(patient?.phone, patient?.phone_number, patient?.telephone_number) ||
+      null,
+    email:
+      (typeof record.email === "string" && record.email) ||
+      (typeof record.patient_email === "string" && record.patient_email) ||
+      firstString(patient?.email, patient?.email_address) ||
+      null,
+    visitType:
+      (typeof record.visit_type === "string" && record.visit_type) ||
+      firstString(patient?.visit_type) ||
+      null,
+    phn:
+      (typeof record.phn === "string" && record.phn) ||
+      (typeof record.health_number === "string" && record.health_number) ||
+      (typeof record.medical_record_number === "string" && record.medical_record_number) ||
+      firstString(patient?.phn, patient?.health_number, patient?.medical_record_number) ||
+      null,
     service:
       (typeof record.service === "string" && record.service) ||
       (typeof record.service_name === "string" && record.service_name) ||
       "Appointment",
+    chiefComplaint:
+      (typeof record.chief_complaint === "string" && record.chief_complaint) ||
+      "",
     status:
       (typeof record.status === "string" && record.status) ||
       (typeof record.appointment_status === "string" && record.appointment_status) ||
@@ -751,24 +818,31 @@ export default function AppointmentsCalendarPage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {dayAppointments.map((appt) => (
-              <div
-                key={appt.id}
-                className="rounded-2xl border border-border bg-card px-5 py-4 transition-colors hover:bg-accent/30"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex w-20 flex-shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    {appt.time}
-                  </div>
-
+              {dayAppointments.map((appt) => (
+                <div
+                  key={appt.id}
+                  className="rounded-2xl border border-border bg-card px-5 py-4 transition-colors hover:bg-accent/30"
+                >
+                <div className="flex items-center gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-2.5">
                     <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                       {appt.patientName.charAt(0)}
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-foreground">{appt.patientName}</p>
-                      <p className="truncate text-xs text-muted-foreground">{appt.service}</p>
+                      <p className="truncate text-xs text-muted-foreground">{appt.chiefComplaint}</p>
+                      {shouldShowPatientDetails(appt.status) ? (
+                        (() => {
+                          const patientDetails = formatPatientDetails(appt, { labelIdentifiers: true });
+                          return patientDetails.length > 0 ? (
+                            <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                              {patientDetails.map((detail) => (
+                                <span key={detail}>{detail}</span>
+                              ))}
+                            </div>
+                          ) : null;
+                        })()
+                      ) : null}
                     </div>
                     {appt.patientStatus === "inactive" && (
                       <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
@@ -777,13 +851,15 @@ export default function AppointmentsCalendarPage() {
                     )}
                   </div>
 
-                  <div className="hidden w-32 flex-shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:flex">
-                    <User className="h-3.5 w-3.5" />
-                    <span className="truncate">{appt.doctor ?? "Unassigned"}</span>
-                  </div>
+                  <div className="ml-auto flex flex-shrink-0 items-center gap-2 sm:gap-1.5">
+                    <div className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+                      <User className="h-3.5 w-3.5" />
+                      <span className="truncate">{appt.doctor ?? "Unassigned"}</span>
+                    </div>
 
-                  <div className="flex-shrink-0">
-                    <StatusBadge status={appt.status} />
+                    {appt.status !== "ASSIGNED" ? (
+                      <StatusBadge status={appt.status} />
+                    ) : null}
                   </div>
                   {appt.hasPrescription ? (
                     <span className="inline-flex flex-shrink-0 items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
@@ -844,7 +920,18 @@ export default function AppointmentsCalendarPage() {
                 ) : null}
 
                 {!["CANCELLED", "COMPLETED", "NO_SHOW"].includes(appt.status) ? (
-                  <div className="mt-4 flex flex-wrap gap-2 border-t border-border/70 pt-4">
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {appt.followUp ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedFollowUpId((current) => (current === appt.id ? null : appt.id))
+                        }
+                        className="inline-flex h-10 items-center justify-center rounded-xl border border-sky-200 px-4 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
+                      >
+                        {expandedFollowUpId === appt.id ? "Hide follow-up" : "View follow-up"}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => void handleOpenReschedule(appt)}
@@ -864,8 +951,10 @@ export default function AppointmentsCalendarPage() {
                   </div>
                 ) : null}
 
+                {appt.followUp && expandedFollowUpId === appt.id ? <FollowUpPanel followUp={appt.followUp} /> : null}
+
                 {!["CANCELLED", "COMPLETED", "NO_SHOW"].includes(appt.status) ? (
-                  <div className="mt-4 flex flex-col gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center">
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
                     <div className="min-w-0 flex-1">
                       <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         {appt.assignedDoctorId ? "Reassign doctor" : "Assign doctor"}
@@ -895,7 +984,7 @@ export default function AppointmentsCalendarPage() {
                       type="button"
                       onClick={() => void handleAssignDoctor(appt.id)}
                       disabled={assignPendingId === appt.id}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:shrink-0"
                     >
                       {assignPendingId === appt.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />

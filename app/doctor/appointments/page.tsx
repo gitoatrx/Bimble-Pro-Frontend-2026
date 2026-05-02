@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Eye, FileText, Stethoscope, UserRoundCheck }
 import { useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { cn } from "@/lib/utils";
-import { appointmentLabel } from "@/lib/doctor/types";
+import { formatPatientDetails, shouldShowPatientDetails } from "@/lib/appointment-details";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import {
   formatCanadaPacificDateKey,
@@ -327,22 +327,79 @@ export default function DoctorAppointmentsPage() {
             </div>
           ) : (
             <div className="space-y-2.5">
-              {dayAppts.map((appointment) => (
-                <div
-                  key={appointment.id}
-                  className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card px-3 py-3 transition-all hover:border-primary/30 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between"
-                >
-                  <div className="flex min-w-0 gap-4">
-                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-xs font-semibold text-primary">
-                      {appointment.patient_name.charAt(0)}
+              {dayAppts.map((appointment) => {
+                const patient = appointment.patient && typeof appointment.patient === "object" ? appointment.patient : null;
+                const firstString = (...values: Array<unknown>) =>
+                  values.find((value) => typeof value === "string" && value.trim()) as string | undefined;
+                const patientDetails = shouldShowPatientDetails(appointment.status)
+                  ? formatPatientDetails(
+                      {
+                        status: appointment.status,
+                        time: appointment.time,
+                        patientAge:
+                          appointment.patient_age ??
+                          (typeof patient?.age === "number" ? patient.age : null) ??
+                          (typeof patient?.age === "string" && patient.age ? Number(patient.age) : null),
+                        patientGender:
+                          appointment.patient_gender ??
+                          appointment.gender ??
+                          firstString(patient?.gender, patient?.sex) ??
+                          null,
+                        patientSex: appointment.patient_sex ?? firstString(patient?.sex) ?? null,
+                        gender: appointment.gender ?? firstString(patient?.gender) ?? null,
+                        patientDateOfBirth:
+                          appointment.patient_date_of_birth ??
+                          firstString(
+                            patient?.formatted_date_of_birth,
+                            patient?.date_of_birth_label,
+                            patient?.dob_label,
+                            patient?.dob,
+                          ) ??
+                          null,
+                        visitType: appointment.visit_type ?? firstString(patient?.visit_type) ?? null,
+                        phoneNumber:
+                          appointment.phone_number ??
+                          firstString(patient?.phone, patient?.phone_number, patient?.telephone_number) ??
+                          null,
+                        patientPhoneNumber:
+                          appointment.patient_phone_number ??
+                          firstString(patient?.phone, patient?.phone_number, patient?.telephone_number) ??
+                          null,
+                        email: appointment.email ?? firstString(patient?.email, patient?.email_address) ?? null,
+                        patientEmail:
+                          appointment.patient_email ?? firstString(patient?.email, patient?.email_address) ?? null,
+                        phn:
+                          appointment.phn ??
+                          firstString(patient?.phn, patient?.health_number, patient?.medical_record_number) ??
+                          null,
+                      },
+                      { labelIdentifiers: true },
+                    )
+                  : [];
+
+                return (
+                  <div
+                    key={appointment.id}
+                    className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card px-3 py-3 transition-all hover:border-primary/30 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between"
+                  >
+                    <div className="flex min-w-0 gap-4">
+                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-xs font-semibold text-primary">
+                        {appointment.patient_name.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground">{appointment.patient_name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {appointment.chief_complaint ?? ""}
+                        </p>
+                        {patientDetails.length > 0 ? (
+                          <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                            {patientDetails.map((detail) => (
+                              <span key={detail}>{detail}</span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">{appointment.patient_name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {appointment.user_friendly_service_name || appointment.service_name}
-                      </p>
-                    </div>
-                  </div>
                   <div className="flex flex-wrap items-center gap-2 self-start sm:justify-end">
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center rounded-full bg-muted/70 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
@@ -387,10 +444,11 @@ export default function DoctorAppointmentsPage() {
                     <div className="w-full sm:basis-full">
                       <button
                         type="button"
-                        onClick={() => toggleFollowUp(appointment.id)}
-                        className="inline-flex items-center rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-muted"
+                        onClick={() => void togglePrescriptions(appointment)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100"
                       >
-                        {openFollowUpIds.includes(appointment.id) ? "Hide follow-up" : "Show follow-up"}
+                        <FileText className="h-3.5 w-3.5" />
+                        {openPrescriptionIds.includes(appointment.id) ? "Hide prescription" : "View prescription"}
                       </button>
                     </div>
                   ) : null}
@@ -439,7 +497,8 @@ export default function DoctorAppointmentsPage() {
                     </div>
                   ) : null}
                 </div>
-              ))}
+              );
+            })}
             </div>
           )}
         </DoctorSection>

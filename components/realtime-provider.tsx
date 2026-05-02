@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { readClinicLoginSession } from "@/lib/clinic/session";
 import { readDoctorLoginSession } from "@/lib/doctor/session";
 import { readPatientLoginSession } from "@/lib/patient/session";
+import { buildRealtimeUrl } from "@/lib/realtime-url";
 
 export type BimbleRealtimeEvent = {
   type: string;
@@ -18,6 +19,17 @@ export type BimbleRealtimeEvent = {
 };
 
 export const BIMBLE_REALTIME_EVENT = "bimble:realtime";
+export const BIMBLE_REALTIME_STATUS_EVENT = "bimble:realtime:status";
+
+type RealtimeConnectionState = "idle" | "connecting" | "open" | "closed" | "error";
+
+type BimbleRealtimeStatusEvent = {
+  state: RealtimeConnectionState;
+  url: string;
+  code?: number;
+  reason?: string;
+  error?: string;
+};
 
 function getSessionToken(pathname: string) {
   if (pathname.startsWith("/clinic")) {
@@ -30,21 +42,6 @@ function getSessionToken(pathname: string) {
     return readPatientLoginSession()?.accessToken ?? "";
   }
   return "";
-}
-
-function buildRealtimeUrl(accessToken: string) {
-  const configured = process.env.NEXT_PUBLIC_BIMBLE_WS_URL?.trim();
-  if (configured) {
-    const url = new URL(configured);
-    url.searchParams.set("access_token", accessToken);
-    return url.toString();
-  }
-
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const hostname = window.location.hostname || "localhost";
-  const url = new URL(`${protocol}//${hostname}:8000/api/v1/realtime/ws`);
-  url.searchParams.set("access_token", accessToken);
-  return url.toString();
 }
 
 function isPublicAuthPage(pathname: string) {
@@ -60,6 +57,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const retryTimerRef = useRef<number | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const reconnectDelayRef = useRef(1000);
   const accessToken = useMemo(() => getSessionToken(pathname), [pathname]);
 
   useEffect(() => {
@@ -69,20 +67,67 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
 
     let closed = false;
 
+    function dispatchStatus(status: BimbleRealtimeStatusEvent) {
+      if (typeof window === "undefined") {
+        return;
+      }
+
+      window.dispatchEvent(
+        new CustomEvent<BimbleRealtimeStatusEvent>(BIMBLE_REALTIME_STATUS_EVENT, {
+          detail: status,
+        }),
+      );
+    }
+
+    function scheduleReconnect() {
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current);
+      }
+
+      const delay = reconnectDelayRef.current;
+      retryTimerRef.current = window.setTimeout(() => {
+        reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
+        connect();
+      }, delay);
+    }
+
     function connect() {
       if (closed) return;
-      const socket = new WebSocket(buildRealtimeUrl(accessToken));
+      const url = buildRealtimeUrl(accessToken);
+      const socket = new WebSocket(url);
       socketRef.current = socket;
+      dispatchStatus({ state: "connecting", url });
+
+      socket.onopen = () => {
+        reconnectDelayRef.current = 1000;
+        dispatchStatus({ state: "open", url });
+      };
 
       socket.onmessage = (message) => {
-        let event: BimbleRealtimeEvent;
+        let event: BimbleRealtimeEvent | null = null;
         try {
-          event = JSON.parse(message.data) as BimbleRealtimeEvent;
+          const parsed = JSON.parse(message.data) as unknown;
+          if (parsed && typeof parsed === "object") {
+            event = parsed as BimbleRealtimeEvent;
+          }
         } catch {
+          event = null;
+        }
+
+        if (!event || typeof event.type !== "string" || typeof event.path !== "string") {
           return;
         }
 
-        if (event.type !== "data.changed") return;
+        const eventType = event.type.trim().toLowerCase();
+        const shouldRefresh =
+          eventType === "data.changed" ||
+          eventType === "data.updated" ||
+          eventType === "resource.changed" ||
+          eventType === "resource.updated" ||
+          eventType.endsWith(".changed") ||
+          eventType.endsWith(".updated");
+
+        if (!shouldRefresh) return;
 
         window.dispatchEvent(
           new CustomEvent<BimbleRealtimeEvent>(BIMBLE_REALTIME_EVENT, {
@@ -91,10 +136,15 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         );
       };
 
+      socket.onerror = () => {
+        dispatchStatus({ state: "error", url, error: "WebSocket connection error" });
+      };
+
       socket.onclose = () => {
         socketRef.current = null;
+        dispatchStatus({ state: "closed", url });
         if (!closed) {
-          retryTimerRef.current = window.setTimeout(connect, 3000);
+          scheduleReconnect();
         }
       };
     }

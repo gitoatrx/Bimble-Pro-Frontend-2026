@@ -26,6 +26,7 @@ import {
   CLINIC_SESSION_UPDATED_EVENT,
   readClinicLoginSession,
 } from "@/lib/clinic/session";
+import { BIMBLE_REALTIME_EVENT } from "@/components/realtime-provider";
 import {
   fetchClinicOscarLaunch,
   fetchClinicPool,
@@ -449,11 +450,11 @@ export default function ClinicLayout({ children }: { children: React.ReactNode }
       }
     }
 
-    window.addEventListener("bimble:realtime", handleRealtime);
+    window.addEventListener(BIMBLE_REALTIME_EVENT, handleRealtime);
 
     return () => {
       active = false;
-      window.removeEventListener("bimble:realtime", handleRealtime);
+      window.removeEventListener(BIMBLE_REALTIME_EVENT, handleRealtime);
     };
   }, [pathname, resolvedOnboardingComplete, session?.accessToken]);
 

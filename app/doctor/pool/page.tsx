@@ -134,7 +134,7 @@ export default function DoctorPoolPage() {
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MessageSquareText className="h-3.5 w-3.5 flex-shrink-0" />
                       <span className="truncate">
-                        {appointment.chief_complaint || appointment.user_friendly_service_name || appointment.service_name}
+                        {appointment.chief_complaint ?? ""}
                       </span>
                     </div>
                     {(appointment.appointment_date || appointment.appointment_time || appointment.fulfillment) ? (

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { appointmentLabel } from "@/lib/doctor/types";
+import { formatPatientDetails, shouldShowPatientDetails } from "@/lib/appointment-details";
 import {
   readDoctorLoginSession,
   readDoctorSessionSnapshot,
@@ -17,6 +17,7 @@ import {
   fetchDoctorSummary,
   fetchDoctorToday,
   startDoctorAppointment,
+  type AppointmentFollowUp,
   type DoctorAppointment,
   type DoctorSummary,
   type DoctorTodayResponse,
@@ -62,6 +63,26 @@ function StatCard({
   );
 }
 
+function FollowUpPanel({ followUp }: { followUp: AppointmentFollowUp }) {
+  return (
+    <div className="mt-3 rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Patient follow-up</p>
+      {followUp.status === "SKIPPED" ? (
+        <p className="mt-2 text-sm text-slate-600">Patient skipped the optional follow-up questions.</p>
+      ) : (
+        <div className="mt-2 grid gap-2">
+          {followUp.answers.map((item) => (
+            <div key={`${item.id}-${item.question}`} className="text-sm">
+              <span className="font-medium text-slate-900">{item.question}</span>
+              <span className="text-slate-600"> {item.answer}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QueueRow({
   appointment,
   highlight = false,
@@ -73,6 +94,55 @@ function QueueRow({
   isStarting?: boolean;
   onSeePatient: (appointment: DoctorAppointment) => void;
 }) {
+  const [showFollowUp, setShowFollowUp] = useState(false);
+  const patient = appointment.patient && typeof appointment.patient === "object" ? appointment.patient : null;
+  const firstString = (...values: Array<unknown>) =>
+    values.find((value) => typeof value === "string" && value.trim()) as string | undefined;
+  const patientDetails = shouldShowPatientDetails(appointment.status)
+    ? formatPatientDetails(
+        {
+          status: appointment.status,
+          time: appointment.time,
+          patientAge:
+            appointment.patient_age ??
+            (typeof patient?.age === "number" ? patient.age : null) ??
+            (typeof patient?.age === "string" && patient.age ? Number(patient.age) : null),
+          patientGender:
+            appointment.patient_gender ??
+            appointment.gender ??
+            firstString(patient?.gender, patient?.sex) ??
+            null,
+          patientSex: appointment.patient_sex ?? firstString(patient?.sex) ?? null,
+          gender: appointment.gender ?? firstString(patient?.gender) ?? null,
+          patientDateOfBirth:
+            appointment.patient_date_of_birth ??
+            firstString(
+              patient?.formatted_date_of_birth,
+              patient?.date_of_birth_label,
+              patient?.dob_label,
+              patient?.dob,
+            ) ??
+            null,
+          visitType: appointment.visit_type ?? firstString(patient?.visit_type) ?? null,
+          phoneNumber:
+            appointment.phone_number ??
+            firstString(patient?.phone, patient?.phone_number, patient?.telephone_number) ??
+            null,
+          patientPhoneNumber:
+            appointment.patient_phone_number ??
+            firstString(patient?.phone, patient?.phone_number, patient?.telephone_number) ??
+            null,
+          email: appointment.email ?? firstString(patient?.email, patient?.email_address) ?? null,
+          patientEmail: appointment.patient_email ?? firstString(patient?.email, patient?.email_address) ?? null,
+          phn:
+            firstString(patient?.phn, patient?.health_number, patient?.medical_record_number) ??
+            appointment.phn ??
+            null,
+        },
+        { labelIdentifiers: true },
+      )
+    : [];
+
   return (
     <div
       className={cn(
@@ -120,6 +190,7 @@ function QueueRow({
           See patient
         </Button>
       </div>
+      {appointment.follow_up && showFollowUp ? <FollowUpPanel followUp={appointment.follow_up} /> : null}
     </div>
   );
 }

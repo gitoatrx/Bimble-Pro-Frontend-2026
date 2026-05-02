@@ -847,60 +847,7 @@ export default function ClinicOnboardingPage() {
                     onChange={(event) => void handleImportFileSelected(event.target.files?.[0] ?? null)}
                   />
                 </label>
-                {importFilename ? (
-                  <span className="text-xs font-medium text-slate-500">{importFilename}</span>
-                ) : null}
               </div>
-
-              <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">
-                Upload the same file OSCAR accepts on its native Import Demographic screen:
-                <span className="font-semibold text-slate-900"> .xml</span> or
-                <span className="font-semibold text-slate-900"> .zip containing .xml</span>.
-                The package is staged before payment and parsed after provisioning.
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Package</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-950">
-                    {oscarImportPackage ? oscarImportPackage.fileFormat.toUpperCase() : "Not uploaded"}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Errors</div>
-                  <div className="mt-1 text-xl font-semibold text-slate-950">{parsedImport.errors.length}</div>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Destination</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-950">Bimble + OSCAR</div>
-                </div>
-              </div>
-
-              {parsedImport.errors.length > 0 ? (
-                <div className="max-h-36 overflow-y-auto rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                  {parsedImport.errors.slice(0, 8).map((error) => (
-                    <div key={error}>{error}</div>
-                  ))}
-                  {parsedImport.errors.length > 8 ? (
-                    <div>And {parsedImport.errors.length - 8} more errors.</div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {oscarImportPackage ? (
-                <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                  <div className="grid grid-cols-[1.4fr_0.8fr_1fr] gap-3 border-b border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                    <span>File</span>
-                    <span>Type</span>
-                    <span>Size</span>
-                  </div>
-                  <div className="grid grid-cols-[1.4fr_0.8fr_1fr] gap-3 px-3 py-2 text-sm text-slate-700">
-                    <span className="font-medium text-slate-950">{oscarImportPackage.fileName}</span>
-                    <span>{oscarImportPackage.fileFormat.toUpperCase()}</span>
-                    <span>{Math.max(1, Math.round(oscarImportPackage.fileSize / 1024))} KB</span>
-                  </div>
-                </div>
-              ) : null}
 
               <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
                 <input
