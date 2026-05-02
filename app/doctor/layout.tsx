@@ -16,6 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
+import { BIMBLE_REALTIME_EVENT } from "@/components/realtime-provider";
 import { DoctorSpecialtyGate } from "@/components/doctor/doctor-specialty-gate";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
@@ -262,11 +263,11 @@ export default function DoctorLayout({ children }: { children: React.ReactNode }
       }
     }
 
-    window.addEventListener("bimble:realtime", handleRealtime);
+    window.addEventListener(BIMBLE_REALTIME_EVENT, handleRealtime);
 
     return () => {
       active = false;
-      window.removeEventListener("bimble:realtime", handleRealtime);
+      window.removeEventListener(BIMBLE_REALTIME_EVENT, handleRealtime);
     };
   }, [isPublic, pathname, session?.accessToken, session?.doctorId]);
 

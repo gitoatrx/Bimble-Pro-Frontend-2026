@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { DoctorPageShell, DoctorSection } from "@/components/doctor/doctor-page-shell";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { appointmentLabel } from "@/lib/doctor/types";
+import { formatPatientDetails, shouldShowPatientDetails } from "@/lib/appointment-details";
 import {
   readDoctorLoginSession,
   readDoctorSessionSnapshot,
@@ -17,20 +17,12 @@ import {
   fetchDoctorSummary,
   fetchDoctorToday,
   startDoctorAppointment,
+  type AppointmentFollowUp,
   type DoctorAppointment,
   type DoctorSummary,
   type DoctorTodayResponse,
 } from "@/lib/api/doctor-dashboard";
 import { useRealtimeRefresh } from "@/lib/realtime";
-
-const STATUS_COLORS: Record<string, string> = {
-  IN_PROGRESS: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  ASSIGNED: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300",
-  QUEUED: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-  COMPLETED: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-  NO_SHOW: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
-  CANCELLED: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
-};
 
 function formatTodayLabel(value?: string) {
   if (!value) return "Today";
@@ -61,6 +53,26 @@ function StatCard({
   );
 }
 
+function FollowUpPanel({ followUp }: { followUp: AppointmentFollowUp }) {
+  return (
+    <div className="mt-3 rounded-2xl border border-sky-100 bg-sky-50/60 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Patient follow-up</p>
+      {followUp.status === "SKIPPED" ? (
+        <p className="mt-2 text-sm text-slate-600">Patient skipped the optional follow-up questions.</p>
+      ) : (
+        <div className="mt-2 grid gap-2">
+          {followUp.answers.map((item) => (
+            <div key={`${item.id}-${item.question}`} className="text-sm">
+              <span className="font-medium text-slate-900">{item.question}</span>
+              <span className="text-slate-600"> {item.answer}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QueueRow({
   appointment,
   highlight = false,
@@ -72,48 +84,105 @@ function QueueRow({
   isStarting?: boolean;
   onSeePatient: (appointment: DoctorAppointment) => void;
 }) {
+  const [showFollowUp, setShowFollowUp] = useState(false);
+  const patient = appointment.patient && typeof appointment.patient === "object" ? appointment.patient : null;
+  const firstString = (...values: Array<unknown>) =>
+    values.find((value) => typeof value === "string" && value.trim()) as string | undefined;
+  const patientDetails = shouldShowPatientDetails(appointment.status)
+    ? formatPatientDetails(
+        {
+          status: appointment.status,
+          time: appointment.time,
+          patientAge:
+            appointment.patient_age ??
+            (typeof patient?.age === "number" ? patient.age : null) ??
+            (typeof patient?.age === "string" && patient.age ? Number(patient.age) : null),
+          patientGender:
+            appointment.patient_gender ??
+            appointment.gender ??
+            firstString(patient?.gender, patient?.sex) ??
+            null,
+          patientSex: appointment.patient_sex ?? firstString(patient?.sex) ?? null,
+          gender: appointment.gender ?? firstString(patient?.gender) ?? null,
+          patientDateOfBirth:
+            appointment.patient_date_of_birth ??
+            firstString(
+              patient?.formatted_date_of_birth,
+              patient?.date_of_birth_label,
+              patient?.dob_label,
+              patient?.dob,
+            ) ??
+            null,
+          visitType: appointment.visit_type ?? firstString(patient?.visit_type) ?? null,
+          phoneNumber:
+            appointment.phone_number ??
+            firstString(patient?.phone, patient?.phone_number, patient?.telephone_number) ??
+            null,
+          patientPhoneNumber:
+            appointment.patient_phone_number ??
+            firstString(patient?.phone, patient?.phone_number, patient?.telephone_number) ??
+            null,
+          email: appointment.email ?? firstString(patient?.email, patient?.email_address) ?? null,
+          patientEmail: appointment.patient_email ?? firstString(patient?.email, patient?.email_address) ?? null,
+          phn:
+            firstString(patient?.phn, patient?.health_number, patient?.medical_record_number) ??
+            appointment.phn ??
+            null,
+        },
+        { labelIdentifiers: true },
+      )
+    : [];
+
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-3 rounded-2xl border px-3 py-3 sm:flex-row sm:items-center",
-        highlight ? "border-primary/30 bg-primary/5" : "border-border bg-background",
-      )}
-    >
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-        {appointment.patient_name.charAt(0)}
+    <div>
+      <div
+        className={cn(
+          "flex flex-col gap-3 rounded-2xl border px-3 py-3 sm:flex-row sm:items-center",
+          highlight ? "border-primary/30 bg-primary/5" : "border-border bg-background",
+        )}
+      >
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+          {appointment.patient_name.charAt(0)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">{appointment.patient_name}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {appointment.chief_complaint ?? ""}
+          </p>
+          {patientDetails.length > 0 ? (
+            <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+              {patientDetails.map((detail) => (
+                <span key={detail}>{detail}</span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <Button
+            size="sm"
+            onClick={() => onSeePatient(appointment)}
+            disabled={isStarting}
+            className="h-8 rounded-full px-3 text-xs"
+          >
+            {isStarting ? (
+              <Stethoscope className="h-3.5 w-3.5 animate-pulse" />
+            ) : (
+              <UserRoundCheck className="h-3.5 w-3.5" />
+            )}
+            See patient
+          </Button>
+          {appointment.follow_up ? (
+            <button
+              type="button"
+              onClick={() => setShowFollowUp((current) => !current)}
+              className="inline-flex items-center rounded-full border border-sky-200 px-3 py-1 text-xs font-semibold text-sky-700 transition hover:bg-sky-50"
+            >
+              {showFollowUp ? "Hide follow-up" : "View follow-up"}
+            </button>
+          ) : null}
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-foreground">{appointment.patient_name}</p>
-        <p className="truncate text-xs text-muted-foreground">
-          {appointment.user_friendly_service_name || appointment.service_name}
-        </p>
-      </div>
-      <div className="flex flex-col items-start gap-2 sm:items-end">
-        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-          {appointment.time}
-        </span>
-        <span
-          className={cn(
-            "inline-flex rounded-full px-2.5 py-1 text-xs font-medium",
-            STATUS_COLORS[appointment.status] ?? "bg-muted text-muted-foreground",
-          )}
-        >
-          {appointmentLabel(appointment.status)}
-        </span>
-        <Button
-          size="sm"
-          onClick={() => onSeePatient(appointment)}
-          disabled={isStarting}
-          className="h-8 rounded-full px-3 text-xs"
-        >
-          {isStarting ? (
-            <Stethoscope className="h-3.5 w-3.5 animate-pulse" />
-          ) : (
-            <UserRoundCheck className="h-3.5 w-3.5" />
-          )}
-          See patient
-        </Button>
-      </div>
+      {appointment.follow_up && showFollowUp ? <FollowUpPanel followUp={appointment.follow_up} /> : null}
     </div>
   );
 }

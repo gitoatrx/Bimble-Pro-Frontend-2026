@@ -8,6 +8,51 @@ import { readDoctorLoginSession } from "@/lib/doctor/session";
 import { fetchDoctorPatients, type DoctorPatient } from "@/lib/api/doctor-dashboard";
 import { useRealtimeRefresh } from "@/lib/realtime";
 
+function formatAgeFromDob(dob: string): number | null {
+  if (!dob) return null;
+  const birthDate = new Date(dob);
+  if (Number.isNaN(birthDate.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - birthDate.getFullYear();
+  const monthDiff = now.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+  return age >= 0 ? age : null;
+}
+
+function firstText(...values: Array<string | null | undefined>): string {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+function formatGender(value: string | null | undefined): string {
+  if (!value) return "";
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function formatPatientSummary(patient: DoctorPatient): string {
+  const parts: string[] = [];
+  const age = formatAgeFromDob(patient.dob) ?? patient.patient_age ?? patient.age ?? null;
+  const gender = formatGender(firstText(patient.patient_gender, patient.gender));
+  const phn = firstText(patient.phn, patient.health_number, patient.medical_record_number);
+
+  if (age !== null) parts.push(`Age ${age}`);
+  if (gender) parts.push(`Gender ${gender}`);
+  if (phn) parts.push(`PHN ${phn}`);
+  if (patient.total_visits > 0) {
+    parts.push(`${patient.total_visits} visit${patient.total_visits !== 1 ? "s" : ""}`);
+  }
+
+  return parts.join(" · ");
+}
+
 export default function DoctorPatientsPage() {
   const [query, setQuery] = useState("");
   const [patients, setPatients] = useState<DoctorPatient[]>([]);
@@ -97,7 +142,7 @@ export default function DoctorPatientsPage() {
                     </span>
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Born {patient.dob_label} · {patient.total_visits} visit{patient.total_visits !== 1 ? "s" : ""}
+                    {formatPatientSummary(patient)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border/70 bg-background px-3 py-2.5 text-left sm:min-w-[160px] sm:text-right">

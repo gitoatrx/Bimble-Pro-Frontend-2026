@@ -434,6 +434,7 @@ export function PatientPortalDashboard() {
 
   const showProfileEmail = Boolean(profile?.email?.trim());
   const showProfilePhn = Boolean(profile?.phn?.trim());
+  const showProfileGender = Boolean(profile?.gender?.trim());
 
   const navigation: PortalNavItem[] = [
     {
@@ -549,7 +550,7 @@ export function PatientPortalDashboard() {
         first_name: normalizeNameInput(nextProfile.first_name ?? ""),
         last_name: normalizeNameInput(nextProfile.last_name ?? ""),
         phone: limitDigits(nextProfile.phone ?? "", 10),
-        date_of_birth: formatIsoDateToDisplay(nextProfile.date_of_birth),
+        date_of_birth: nextProfile.formatted_date_of_birth ?? "",
         phn: limitDigits(nextProfile.phn ?? "", 10),
         email: nextProfile.email ?? "",
         address_line_1: stripCountrySuffix(nextProfile.address_line_1 ?? ""),
@@ -883,7 +884,7 @@ export function PatientPortalDashboard() {
         first_name: normalizeNameInput(updated.first_name ?? ""),
         last_name: normalizeNameInput(updated.last_name ?? ""),
         phone: limitDigits(updated.phone ?? "", 10),
-        date_of_birth: formatIsoDateToDisplay(updated.date_of_birth),
+        date_of_birth: updated.formatted_date_of_birth ?? "",
         phn: limitDigits(updated.phn ?? "", 10),
         email: updated.email ?? "",
         address_line_1: updated.address_line_1 ?? "",
@@ -1647,22 +1648,37 @@ export function PatientPortalDashboard() {
                   <div className="text-xs text-rose-600">{profileFormErrors.date_of_birth}</div>
                 ) : null}
               </label>
-              {showProfilePhn ? (
-                <label className="grid gap-2 text-sm text-slate-700">
-                  PHN
-                  <Input
-                    value={profileDraft.phn}
-                    onChange={(event) => updateProfileField("phn", event.target.value)}
-                    className={getProfileInputClassName("phn")}
-                    aria-invalid={Boolean(profileFormErrors.phn)}
-                    inputMode="numeric"
-                    maxLength={10}
-                  />
-                  {profileFormErrors.phn ? (
-                    <div className="text-xs text-rose-600">{profileFormErrors.phn}</div>
-                  ) : null}
-                </label>
-              ) : null}
+              <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
+                {showProfilePhn ? (
+                  <label className="grid gap-2 text-sm text-slate-700">
+                    PHN
+                    <Input
+                      value={profileDraft.phn}
+                      onChange={(event) => updateProfileField("phn", event.target.value)}
+                      className={getProfileInputClassName("phn")}
+                      aria-invalid={Boolean(profileFormErrors.phn)}
+                      inputMode="numeric"
+                      maxLength={10}
+                    />
+                    {profileFormErrors.phn ? (
+                      <div className="text-xs text-rose-600">{profileFormErrors.phn}</div>
+                    ) : null}
+                  </label>
+                ) : (
+                  <div className="grid gap-2 text-sm text-slate-700">
+                    PHN
+                    <div className="rounded-2xl border border-border/70 bg-slate-50 px-4 py-3 text-slate-500">
+                      Not available
+                    </div>
+                  </div>
+                )}
+                <div className="grid gap-2 text-sm text-slate-700">
+                  Gender
+                  <div className="rounded-2xl border border-border/70 bg-white px-4 py-3 text-slate-900">
+                    {showProfileGender ? profile?.gender : "Not available"}
+                  </div>
+                </div>
+              </div>
               <div className="grid gap-4 sm:col-span-2 sm:grid-cols-2">
                 <label className="grid gap-2 text-sm text-slate-700">
                   Address

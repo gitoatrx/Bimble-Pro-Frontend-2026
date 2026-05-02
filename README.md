@@ -34,3 +34,13 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Realtime
+
+The frontend expects a backend websocket endpoint that accepts an `access_token` query parameter and emits JSON change events.
+
+- Preferred websocket env: `NEXT_PUBLIC_BIMBLE_WS_URL`
+- Fallback API base env: `NEXT_PUBLIC_BIMBLE_API_BASE_URL`
+- Default websocket path: `/api/v1/realtime/ws`
+
+The client listens for events with `type` values such as `data.changed` and uses the `path` field to decide which appointment, clinic pool, or doctor views should refetch.
