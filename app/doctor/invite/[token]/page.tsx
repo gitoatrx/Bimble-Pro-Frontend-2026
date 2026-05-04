@@ -48,6 +48,7 @@ export default function DoctorInviteAcceptPage() {
   const [rejected, setRejected] = useState(false);
   const [rejectMessage, setRejectMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showPin, setShowPin] = useState(false);
 
   useEffect(() => {
@@ -484,14 +485,25 @@ export default function DoctorInviteAcceptPage() {
             >
               Confirm password
             </label>
-            <Input
-              id="confirm_password"
-              type="password"
-              placeholder="Re-enter your password"
-              value={form.confirm_password}
-              onChange={set("confirm_password")}
-              required
-            />
+            <div className="relative">
+              <Input
+                id="confirm_password"
+                type={showConfirmPassword ? "text" : "password"}
+                placeholder="Re-enter your password"
+                value={form.confirm_password}
+                onChange={set("confirm_password")}
+                required
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((current) => !current)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-1.5">
