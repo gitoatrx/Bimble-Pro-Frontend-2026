@@ -716,20 +716,6 @@ export function PatientPortalDashboard() {
     paths: ["/patient-portal", "/appointments", "/requests", "/pool"],
   });
 
-  useEffect(() => {
-    if (followUpAppointment || !appointments?.current?.length) return;
-    const nextAppointment = appointments.current.find(
-      (appointment) =>
-        ["QUEUED", "ASSIGNED", "IN_PROGRESS"].includes(appointment.status) &&
-        !appointment.follow_up,
-    );
-    if (nextAppointment) {
-      setFollowUpAppointment(nextAppointment);
-      setFollowUpAnswers({});
-      setFollowUpMessage("");
-    }
-  }, [appointments, followUpAppointment]);
-
   function resetBookingFlow() {
     setBookingDraft(emptyBookingDraft);
     setProblemMenuOpen(false);
@@ -913,7 +899,7 @@ export function PatientPortalDashboard() {
     setBookingMessage("");
 
     try {
-      await createPatientPoolAppointment(session.accessToken, {
+      const createdAppointment = await createPatientPoolAppointment(session.accessToken, {
         service_id: bookingDraft.service_id ? Number(bookingDraft.service_id) : undefined,
         chief_complaint: [bookingDraft.problem_label, bookingDraft.chief_complaint_details.trim()]
           .filter(Boolean)
@@ -934,6 +920,9 @@ export function PatientPortalDashboard() {
       await refreshPortalData();
       resetBookingFlow();
       setBookingOpen(false);
+      setFollowUpAppointment(createdAppointment);
+      setFollowUpAnswers({});
+      setFollowUpMessage("");
       setBookingMessage("Appointment request added to the shared pool successfully.");
     } catch (error) {
       setBookingMessage(
