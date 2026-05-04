@@ -60,7 +60,10 @@ async function submitDoctorVerifyOtp(otpToken: string, otpCode: string) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string }).detail ?? "Verification failed. Please try again.");
+    const message =
+      (err as { detail?: string; message?: string }).detail ??
+      (err as { detail?: string; message?: string }).message;
+    throw new Error(message ?? "Verification failed. Please try again.");
   }
   return res.json();
 }
@@ -81,7 +84,13 @@ async function submitDoctorSelectClinic(selectionToken: string, clinicSlug: stri
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ selection_token: selectionToken, clinic_slug: clinicSlug }),
   });
-  if (!res.ok) throw new Error("Could not select clinic. Please try again.");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const message =
+      (err as { detail?: string; message?: string }).detail ??
+      (err as { detail?: string; message?: string }).message;
+    throw new Error(message ?? "Could not select clinic. Please try again.");
+  }
   return res.json();
 }
 

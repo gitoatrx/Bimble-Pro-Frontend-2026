@@ -33,6 +33,7 @@ import {
   inviteClinicDoctor,
   updateClinicDoctorStatus,
   resendClinicDoctorInvite,
+  updateClinicDoctorInviteMembershipStatus,
 } from "@/lib/api/clinic-dashboard";
 import { useRealtimeRefresh } from "@/lib/realtime";
 
@@ -60,6 +61,9 @@ type PendingInvite = {
   email: string;
   status: "PENDING" | "ACCEPTED" | "REJECTED" | "EXPIRED" | "REVOKED";
   sentAt: string;
+  doctorId: number | null;
+  doctorName: string;
+  membershipStatus: "ACTIVE" | "SUSPENDED" | null;
 };
 
 type DoctorFormPacket = {
@@ -194,6 +198,19 @@ function toInvite(record: Record<string, unknown>): PendingInvite {
       (typeof record.sent_at === "string" && record.sent_at) ||
       (typeof record.created_at === "string" && record.created_at) ||
       "",
+    doctorId: firstNumber(record.doctor_id, record.platform_doctor_id),
+    doctorName:
+      (typeof record.doctor_name === "string" && record.doctor_name) ||
+      (typeof record.name === "string" && record.name) ||
+      "",
+    membershipStatus:
+      typeof record.membership_status === "string" &&
+      record.membership_status.toUpperCase() === "SUSPENDED"
+        ? "SUSPENDED"
+        : typeof record.membership_status === "string" &&
+            record.membership_status.toUpperCase() === "ACTIVE"
+          ? "ACTIVE"
+          : null,
   };
 }
 
@@ -222,7 +239,7 @@ function toDoctorFormPacket(record: Record<string, unknown>): DoctorFormPacket {
   };
 }
 
-function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
+function InviteForm({ onInvite }: { onInvite: (invite: PendingInvite) => void }) {
   const [email, setEmail] = useState("");
   const [showClinicPaidDraft, setShowClinicPaidDraft] = useState(false);
   const [showFacilityAttachmentDraft, setShowFacilityAttachmentDraft] = useState(false);
@@ -369,11 +386,11 @@ function InviteForm({ onInvite }: { onInvite: (email: string) => void }) {
     setSuccess("");
 
     try {
-      await inviteClinicDoctor(session.accessToken, {
+      const invite = await inviteClinicDoctor(session.accessToken, {
         email: trimmed,
         form_drafts: buildFormDrafts(),
       });
-      onInvite(trimmed);
+      onInvite(toInvite(invite as Record<string, unknown>));
       setEmail("");
       setShowClinicPaidDraft(false);
       setShowFacilityAttachmentDraft(false);
@@ -683,11 +700,13 @@ function InviteRow({
   invite,
   onDelete,
   onResend,
+  onToggleSuspension,
   showActions = true,
 }: {
   invite: PendingInvite;
   onDelete: (inviteId: number) => void;
   onResend: (inviteId: number) => void;
+  onToggleSuspension?: (invite: PendingInvite) => void;
   showActions?: boolean;
 }) {
   const statusConfig = {
@@ -719,8 +738,11 @@ function InviteRow({
         <Mail className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="truncate text-sm font-medium text-foreground">{invite.email}</p>
+        <p className="truncate text-sm font-medium text-foreground">
+          {invite.doctorName || invite.email}
+        </p>
         <p className="text-xs text-muted-foreground">
+          {invite.doctorName ? `${invite.email} · ` : ""}
           {invite.sentAt ? `Invited ${invite.sentAt}` : "Pending invite"}
         </p>
       </div>
@@ -728,6 +750,35 @@ function InviteRow({
         <Clock className="h-3 w-3" />
         {statusConfig.label}
       </span>
+      {invite.status === "ACCEPTED" && invite.membershipStatus && onToggleSuspension ? (
+        <>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
+              invite.membershipStatus === "SUSPENDED"
+                ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"
+                : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+            )}
+          >
+            {invite.membershipStatus === "SUSPENDED" ? "Suspended" : "Active"}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onToggleSuspension(invite)}
+            className={cn(
+              "h-8 gap-1.5 rounded-full px-3 text-xs",
+              invite.membershipStatus === "SUSPENDED"
+                ? "border-green-200 text-green-700 hover:bg-green-50"
+                : "border-rose-200 text-rose-700 hover:bg-rose-50",
+            )}
+          >
+            <UserMinus className="h-3.5 w-3.5" />
+            {invite.membershipStatus === "SUSPENDED" ? "Unsuspend" : "Suspend"}
+          </Button>
+        </>
+      ) : null}
       {showActions && (
         <>
           <button
@@ -1254,16 +1305,13 @@ export default function DoctorsPage() {
   const rejectedInvites = invites.filter((invite) => invite.status === "REJECTED");
   const inactiveDoctors = doctors.filter((d) => d.status === "INACTIVE");
 
-  function handleInvite(email: string) {
+  function handleInvite(invite: PendingInvite) {
     setInvites((current) => {
-      const exists = current.find((item) => item.email === email);
+      const exists = current.find((item) => item.email === invite.email);
       if (exists) {
-        return current.map((item) => (item.email === email ? { ...item, status: "PENDING" } : item));
+        return current.map((item) => (item.email === invite.email ? invite : item));
       }
-      return [
-        ...current,
-        { inviteId: Date.now(), email, status: "PENDING", sentAt: new Date().toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" }) },
-      ];
+      return [invite, ...current];
     });
   }
 
@@ -1337,9 +1385,39 @@ export default function DoctorsPage() {
     if (!session?.accessToken) return;
 
     try {
-      await resendClinicDoctorInvite(session.accessToken, inviteId);
+      const invite = await resendClinicDoctorInvite(session.accessToken, inviteId);
+      const nextInvite = toInvite(invite as Record<string, unknown>);
+      setInvites((current) =>
+        current.map((item) => (item.inviteId === inviteId ? nextInvite : item)),
+      );
+      setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not resend the invite.");
+    }
+  }
+
+  async function handleToggleInviteSuspension(invite: PendingInvite) {
+    const session = readClinicLoginSession();
+    if (!session?.accessToken) return;
+
+    const nextStatus = invite.membershipStatus === "SUSPENDED" ? "ACTIVE" : "SUSPENDED";
+    try {
+      const updated = await updateClinicDoctorInviteMembershipStatus(
+        session.accessToken,
+        invite.inviteId,
+        nextStatus,
+      );
+      const nextInvite = toInvite(updated as Record<string, unknown>);
+      setInvites((current) =>
+        current.map((item) => (item.inviteId === invite.inviteId ? nextInvite : item)),
+      );
+      setError("");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : `Could not ${nextStatus === "SUSPENDED" ? "suspend" : "unsuspend"} the doctor.`,
+      );
     }
   }
 
@@ -1464,6 +1542,7 @@ export default function DoctorsPage() {
                     invite={invite}
                     onDelete={handleDeleteInvite}
                     onResend={handleResendInvite}
+                    onToggleSuspension={handleToggleInviteSuspension}
                     showActions={false}
                   />
                 ))}

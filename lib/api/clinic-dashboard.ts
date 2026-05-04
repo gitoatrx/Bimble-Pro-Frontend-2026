@@ -1248,6 +1248,19 @@ export async function resendClinicDoctorInvite(
   });
 }
 
+export async function updateClinicDoctorInviteMembershipStatus(
+  accessToken: string,
+  inviteId: string | number,
+  status: "ACTIVE" | "SUSPENDED",
+) {
+  return apiRequest<ClinicDoctorInviteRecord, { status: "ACTIVE" | "SUSPENDED" }>({
+    endpoint: `${API_ENDPOINTS.clinicMeDoctorInvites}/${inviteId}/membership-status`,
+    method: "PATCH",
+    body: { status },
+    headers: authHeaders(accessToken),
+  });
+}
+
 export async function fetchClinicAvailability(
   accessToken: string,
   query: {
